@@ -1,11 +1,13 @@
 Require Import Kami.AllNotations ProcKami.FU.
 Require Import List.
 Require Import ProcKami.RiscvIsaSpec.Insts.Mem.MemFuncs.
+Require Import RecordUpdate.RecordUpdate.
 
 Section Mem.
   Context `{procParams: ProcParams}.
 
   Local Open Scope kami_expr.
+  Local Open Scope record_set.
 
   Definition Mem: FUEntry :=
     {| fuName := "mem" ;

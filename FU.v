@@ -4,6 +4,7 @@
   and include units such as the fetch, decode, and memory elements.
 *)
 Require Import Kami.AllNotations.
+Require Import RecordUpdate.RecordUpdate.
 
 Import ListNotations.
 

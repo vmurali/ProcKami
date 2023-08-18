@@ -17,6 +17,7 @@ Require Import FpuKami.ModDivSqrt.
 Require Import ProcKami.FU.
 Require Import ProcKami.RiscvIsaSpec.Insts.Fpu.FpuFuncs.
 Require Import List.
+Require Import RecordUpdate.RecordUpdate.
 Import ListNotations.
 
 Section Fpu.
@@ -24,6 +25,7 @@ Section Fpu.
   Context `{fpuParams : FpuParams}.
 
   Open Scope kami_expr.
+  Local Open Scope record_set.
 
   Section ty.
     Variable ty : Kind -> Type.

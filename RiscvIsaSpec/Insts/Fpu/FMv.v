@@ -14,6 +14,7 @@ Require Import FpuKami.Classify.
 Require Import FpuKami.ModDivSqrt.
 Require Import ProcKami.FU.
 Require Import List.
+Require Import RecordUpdate.RecordUpdate.
 Import ListNotations.
 
 Section Fpu.
@@ -21,6 +22,7 @@ Section Fpu.
   Context `{fpu_params : FpuParams}.
 
   Open Scope kami_expr.
+  Local Open Scope record_set.
 
   Definition FMvInputType
     :  Kind

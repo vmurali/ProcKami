@@ -16,6 +16,7 @@ Require Import FpuKami.Round.
 Require Import ProcKami.FU.
 Require Import ProcKami.RiscvIsaSpec.Insts.Fpu.FpuFuncs.
 Require Import List.
+Require Import RecordUpdate.RecordUpdate.
 Import ListNotations.
 
 Section Fpu.
@@ -33,6 +34,7 @@ Section Fpu.
   Local Definition double_Flen := double_expWidthMinus2 + 1 + 1 + (double_sigWidthMinus2 + 1 + 1).
 
   Open Scope kami_expr.
+  Local Open Scope record_set.
 
   Definition Float_double
     :  FUEntry

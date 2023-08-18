@@ -1,6 +1,7 @@
 Require Import Kami.AllNotations ProcKami.FU ProcKami.Div.
 Require Import ProcKami.RiscvIsaSpec.Insts.Alu.AluFuncs.
 Require Import List.
+Require Import RecordUpdate.RecordUpdate.
 
 Section Alu.
   Context `{procParams: ProcParams}.
@@ -19,6 +20,7 @@ Section Alu.
          }.
 
   Local Open Scope kami_expr.
+  Local Open Scope record_set.
 
   Section ty.
     Variable ty: Kind -> Type.

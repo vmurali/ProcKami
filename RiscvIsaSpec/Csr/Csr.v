@@ -366,16 +366,16 @@ Section csrs.
            csrAddr := CsrIdWidth 'h"300";
            csrViews
            := let hasFloat := existsb (fun '(Build_SupportedExt x _ _) =>
-                                         (x =? "F") ||
-                                         (x =? "D"))%bool
+                                         (x =? "F")%string ||
+                                         (x =? "D")%string)%bool
                                         InitExtsAll in
                 let hasFloatInit := existsb (fun '(Build_SupportedExt x y _) =>
-                                               (((x =? "F") ||
-                                                 (x =? "D")) && y))%bool
+                                               (((x =? "F")%string ||
+                                                 (x =? "D")%string) && y))%bool
                                             InitExtsAll in
                 let hasFloatEdit := existsb (fun '(Build_SupportedExt x _ z) =>
-                                               (((x =? "F") ||
-                                                 (x =? "D")) && z))%bool
+                                               (((x =? "F")%string ||
+                                                 (x =? "D")%string) && z))%bool
                                         InitExtsAll in
                 let fsInit := ConstBit (natToWord 2 (if hasFloatInit then 1 else 0)) in
                 let fs := if hasFloatEdit

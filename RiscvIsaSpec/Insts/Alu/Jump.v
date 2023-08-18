@@ -1,5 +1,6 @@
 Require Import Kami.AllNotations ProcKami.FU ProcKami.Div.
 Require Import List.
+Require Import RecordUpdate.RecordUpdate.
 
 Section Alu.
   Context `{procParams: ProcParams}.
@@ -70,6 +71,7 @@ Section Alu.
   End Ty.
 
   Local Open Scope kami_expr.
+  Local Open Scope record_set.
 
   Definition Jump: FUEntry
     := {|

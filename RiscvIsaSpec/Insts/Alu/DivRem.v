@@ -1,6 +1,7 @@
 Require Import Kami.AllNotations ProcKami.FU ProcKami.Div.
 Require Import ProcKami.RiscvIsaSpec.Insts.Alu.AluFuncs.
 Require Import List.
+Require Import RecordUpdate.RecordUpdate.
 
 Section Alu.
   Context `{procParams: ProcParams}.
@@ -54,6 +55,8 @@ Section Alu.
            (((pos x) == pos (y)) || (y == $0))
            (pos x).
   End Ty.
+
+  Local Open Scope record_set.
 
   Definition DivRem : FUEntry
     := {|

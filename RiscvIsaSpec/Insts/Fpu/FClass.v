@@ -15,6 +15,7 @@ Require Import FpuKami.ModDivSqrt.
 Require Import ProcKami.FU.
 Require Import ProcKami.RiscvIsaSpec.Insts.Fpu.FpuFuncs.
 Require Import List.
+Require Import RecordUpdate.RecordUpdate.
 Import ListNotations.
 
 Section Fpu.

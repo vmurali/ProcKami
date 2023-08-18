@@ -7,6 +7,7 @@
 Require Import Kami.AllNotations.
 Require Import ProcKami.FU.
 Require Import List.
+Require Import RecordUpdate.RecordUpdate.
 Import ListNotations.
 
 Section zicsr.
@@ -25,6 +26,7 @@ Section zicsr.
          }%kami_struct.
 
   Local Open Scope kami_expr.
+  Local Open Scope record_set.
 
   Local Definition ZicsrOutputXform
     (ty : Kind -> Type)

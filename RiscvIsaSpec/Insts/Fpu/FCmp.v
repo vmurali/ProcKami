@@ -15,6 +15,7 @@ Require Import FpuKami.ModDivSqrt.
 Require Import ProcKami.FU.
 Require Import ProcKami.RiscvIsaSpec.Insts.Fpu.FpuFuncs.
 Require Import List.
+Require Import RecordUpdate.RecordUpdate.
 Import ListNotations.
 
 Section Fpu.
@@ -25,6 +26,7 @@ Section Fpu.
     Variable ty : Kind -> Type.
 
     Open Scope kami_expr.
+    Local Open Scope record_set.
 
     Definition csr_invalid_mask : FflagsValue @# ty := Const ty ('b("10000")).
 

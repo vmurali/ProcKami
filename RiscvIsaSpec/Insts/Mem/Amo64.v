@@ -1,6 +1,7 @@
 Require Import Kami.AllNotations ProcKami.FU.
 Require Import ProcKami.RiscvIsaSpec.Insts.Mem.MemFuncs.
 Require Import List.
+Require Import RecordUpdate.RecordUpdate.
 Import ListNotations.
 
 Section Mem.
@@ -10,6 +11,7 @@ Section Mem.
     Variable ty: Kind -> Type.
 
     Local Open Scope kami_expr.
+    Local Open Scope record_set.
 
     Definition Amo64: FUEntry :=
       {| fuName := "amo64" ;
