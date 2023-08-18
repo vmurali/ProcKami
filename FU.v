@@ -483,7 +483,7 @@ Section Params.
   
   Section Xlen.
     Definition ImplXlens' :=
-      filter (fun x => ((Nat.pow 2 (S x)) <=? Xlen_over_8) && negb (0 =? x)%nat) supported_xlens.
+      filter (fun x => ((Nat.pow 2 (S x)) <=? Xlen_over_8)%nat && negb (0 =? x)%nat) supported_xlens.
 
     Definition maxXlen := (Nat.log2_up Xlen_over_8 - 1).
 

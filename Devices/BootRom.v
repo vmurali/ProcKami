@@ -24,23 +24,25 @@ Section device.
                      pmaReadable   := true;
                      pmaWriteable  := false;
                      pmaExecutable := true;
-                     pmaMisaligned := true
+                     pmaMisaligned := true;
                    |})
                 [0; 1; 2; 3];
        baseAmo := AmoNone;
        baseRegFiles := {| rfIsWrMask := true;
                           rfNum := Rlen_over_8;
                           rfDataArray := "bootRomFile";
-                          rfRead := Sync false [{| readReqName := "bootRomReadReq";
-                                                   readResName := "bootRomReadRes";
-                                                   readRegName := "bootRomReadReg" |}];
+                          rfRead := Async ["bootRomRead"];
                           rfWrite := "bootRomWrite";
                           rfIdxNum := (Nat.pow 2 LgMemSz);
                           rfData := (Bit 8);
                           rfInit := RFFile true true "boot_rom" 0 (Nat.pow 2 LgMemSz) (fun _ => wzero _) |} :: nil;
-       baseRegs := nil;
+       baseRegs := makeModule_regs (Register "bootRomReadReg" : Array Rlen_over_8 (Bit 8) <- Default)%kami;
        write := (fun _ _ => Ret $$false);
-       readReq := (fun ty addr => ReadReqRf "bootRomReadReq" (SignExtendTruncLsb LgMemSz addr : Bit LgMemSz); Retv);
-       readRes := (fun ty => (Call readData : Array Rlen_over_8 (Bit 8) <- "bootRomReadRes"();
+       readReq := (fun ty addr =>
+                     Call val: Array Rlen_over_8 (Bit 8) <-
+                                 "bootRomRead" (SignExtendTruncLsb LgMemSz addr : Bit LgMemSz);
+                     Write "bootRomReadReg" : (Array Rlen_over_8 (Bit 8)) <- #val;
+                     Retv);
+       readRes := (fun ty => (Read readData : Array Rlen_over_8 (Bit 8) <- "bootRomReadReg";
                               Ret ((Valid (pack #readData)): Maybe Data @# ty))); |}.
 End device.
