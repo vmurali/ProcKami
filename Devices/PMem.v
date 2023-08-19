@@ -27,7 +27,7 @@ Section device.
                           rfData := (Bit 8);
                           rfInit := RFFile true true "testfile" 0 (Nat.pow 2 LgMemSz) (fun _ => wzero _) |} :: nil;
        baseRegs := makeModule_regs (Register "pMemReadReg" : Array Rlen_over_8 (Bit 8) <- Default)%kami;
-       baseAmo := AmoNone;
+       baseAmo := AmoArith;
        write := (fun ty req =>
                    LET writeRq
                    :  WriteRqMask LgMemSz Rlen_over_8 (Bit 8)
