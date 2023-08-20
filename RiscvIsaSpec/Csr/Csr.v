@@ -1158,26 +1158,6 @@ Section csrs.
                 ];
            csrAccess := accessMModeOnly
          |};
-         {|
-           csrName  := "mcycle";
-           csrAddr  := CsrIdWidth 'h"b00";
-           csrViews
-             := let fields := [ @csrFieldAny _ "mcycle" (Bit 64) (Bit 64) (Some (ConstBit (wzero 64))) ] in
-                repeatCsrView 2
-                  (@csrViewDefaultReadXform _ fields)
-                  (@csrViewDefaultWriteXform _ fields);
-           csrAccess := accessMModeOnly
-         |};
-         {|
-           csrName  := "minstret";
-           csrAddr  := CsrIdWidth 'h"b02";
-           csrViews
-             := let fields := [ @csrFieldAny _ "minstret" (Bit 64) (Bit 64) (Some (ConstBit (wzero 64)))] in
-                repeatCsrView 2
-                  (@csrViewDefaultReadXform _ fields)
-                  (@csrViewDefaultWriteXform _ fields);
-           csrAccess := accessMModeOnly
-         |};
          nilCsr "mhpmcounter3" (CsrIdWidth 'h"b03") accessMModeOnly;
          nilCsr "mhpmcounter4" (CsrIdWidth 'h"b04") accessMModeOnly;
          nilCsr "mhpmcounter5" (CsrIdWidth 'h"b05") accessMModeOnly;
