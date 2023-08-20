@@ -39,7 +39,7 @@ Definition supportedExts
         Build_SupportedExt "Zifencei" true false
     ].
 
-Definition allow_misaligned      := false.
+Definition allow_misaligned      := true.
 Definition allow_inst_misaligned := true.
 Definition misaligned_access     := false.
 
