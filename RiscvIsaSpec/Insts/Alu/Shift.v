@@ -43,30 +43,8 @@ Section Alu.
                       "res" ::= #res
                     } : ShiftOutputType @# _));
        fuInsts := 
-                  {| instName     := "slli32" ; 
-                     xlens        :=  (Xlen32 :: nil);
-                     extensions   := "I" :: nil;
-                     ext_ctxt_off := nil;
-                     uniqId       := fieldVal instSizeField ('b"11") ::
-                                              fieldVal opcodeField ('b"00100") ::
-                                              fieldVal funct3Field ('b"001") ::
-                                              fieldVal funct7Field ('b"0000000") ::
-                                              nil ;
-                     inputXform   := (fun ty (cfg_pkt : ContextCfgPkt @# ty) gcpin => LETE gcp: ExecContextPkt <- gcpin;
-                                                   RetE ((STRUCT {
-                                                            "xlen" ::= cfg_pkt @% "xlen";
-                                                            "right?" ::= $$ false ;
-                                                            "arith?" ::= $$ false ;
-                                                            "arg1" ::= xlen_sign_extend Xlen (cfg_pkt @% "xlen") (#gcp @% "reg1");
-                                                            "arg2" ::= unsafeTruncLsb 6 (imm (#gcp @% "inst"))
-                                                         }): ShiftInputType @# _)) ;
-                     outputXform  := (fun ty (resultExpr : ShiftOutputType ## _) => LETE result <- resultExpr;
-                                                          RetE (intRegTag (xlen_sign_extend Rlen (#result @% "xlen") (#result @% "res")))) ;
-                     optMemParams  := None ;
-                     instHints    := falseHints<|hasRs1 := true|><|hasRd := true|>
-                  |} ::
-                  {| instName     := "slli64" ; 
-                     xlens        :=  (Xlen64 :: nil);
+                  {| instName     := "slli" ; 
+                     xlens        := xlens_all;
                      extensions   := "I" :: nil;
                      ext_ctxt_off := nil;
                      uniqId       := fieldVal instSizeField ('b"11") ::

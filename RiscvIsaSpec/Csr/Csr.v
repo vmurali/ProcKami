@@ -222,9 +222,9 @@ Section csrs.
                   (@csrViewDefaultWriteXform _ fields);
            csrAccess := accessAny
          |};
-         simpleCsr "mcycle" (CsrIdWidth 'h"c00") (Some (ConstBit (wzero 64))) (fun ty => accessCounter "CY");
+         simpleCsr "mcycle" (CsrIdWidth 'h"c00") (Some (ConstBit (wzero 64))) accessMModeOnly;
          readonlyCsr "mtime" (CsrIdWidth 'h"c01") accessAny (Some (ConstBit (wzero 64)));
-         simpleCsr "minstret" (CsrIdWidth 'h"c02") (Some (ConstBit (wzero 64))) (fun ty => accessCounter "IR");
+         simpleCsr "minstret" (CsrIdWidth 'h"c02") (Some (ConstBit (wzero 64))) accessMModeOnly;
          {|
            csrName := "cycleh";
            csrAddr := CsrIdWidth 'h"c80";
