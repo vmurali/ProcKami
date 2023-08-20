@@ -4,7 +4,6 @@ Require Import Kami.AllNotations.
 Require Import ProcKami.FU.
 Require Import ProcKami.MemOpsFuncs.
 
-
 Import ListNotations.
 
 Section memops.
@@ -204,7 +203,7 @@ Section memops.
       memOpSize := 2;
       memOpAmoClass := AmoArith;
       memOpRegValue := memRegValueFn (fun _ mem => RetE (sign_extend_trunc 32 Rlen mem));
-      memOpWriteValue := memWriteValueFn (fun _ reg mem => RetE (IF reg > mem then reg else mem))
+      memOpWriteValue := memWriteValueFn (fun _ reg mem => RetE (IF (ZeroExtendTruncLsb 32 reg) > (ZeroExtendTruncLsb 32 mem) then reg else mem))
     |};
     {|
       memOpName := AmoSwapD;
