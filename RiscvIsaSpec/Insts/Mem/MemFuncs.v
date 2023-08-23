@@ -84,7 +84,7 @@ Section Mem.
               };
          LETC fullException
            :  Exception
-           <- if misaligned_access
+           <- if has_misaligned_access_exception
                 then $LoadAccessFault
                 else $LoadAddrMisaligned;
          LETC valret

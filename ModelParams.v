@@ -143,7 +143,7 @@ Section exts.
 
   Variable allow_misaligned : bool.
   Variable allow_inst_misaligned : bool.
-  Variable misaligned_access : bool.
+  Variable has_misaligned_access_exception : bool.
 
   (* The supported extension entries. *)
   Local Definition entries
@@ -173,7 +173,7 @@ Section exts.
           FU.supported_exts := supported_exts;
           FU.allow_misaligned := allow_misaligned;
           FU.allow_inst_misaligned := allow_inst_misaligned;
-          FU.misaligned_access := misaligned_access;
+          FU.has_misaligned_access_exception := has_misaligned_access_exception;
           FU.lgGranularity := 3;
           FU.hasVirtualMem := true |}.
 

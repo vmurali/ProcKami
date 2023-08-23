@@ -18,7 +18,7 @@ Definition isInstCompressed ty sz (bit_string : Bit sz @# ty)
 
 Definition FieldRange := {x: (nat * nat) & word (fst x + 1 - snd x)}.
 Definition UniqId := (list FieldRange)%type.
-Definition fieldVal range value :=
+Definition fieldVal range value : FieldRange :=
   existT (fun x => word (fst x + 1 - snd x)) range value.
 
 Definition instSizeField := (1, 0).
@@ -175,7 +175,7 @@ Class ProcParams :=
     supported_exts: list SupportedExt;
     allow_misaligned: bool;
     allow_inst_misaligned: bool;
-    misaligned_access: bool;
+    has_misaligned_access_exception: bool;
     lgGranularity : nat; (* log2 (log2 n), where n represents the number of bits needed to represent the smallest reservation size *)
     hasVirtualMem : bool
   }.

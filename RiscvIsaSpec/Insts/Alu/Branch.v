@@ -82,7 +82,7 @@ Section Alu.
                  @%["val2"
                       <- (Valid #val2)]
                  @%["taken?" <- #bOut @% "taken?"]);
-         LETC fullException: Exception <- ($(if misaligned_access
+         LETC fullException: Exception <- ($(if has_misaligned_access_exception
                                              then InstAccessFault
                                              else InstAddrMisaligned) : Exception @# ty);
          LETC sndVal: Maybe Exception <- STRUCT {

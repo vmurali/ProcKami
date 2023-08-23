@@ -41,7 +41,7 @@ Definition supportedExts
 
 Definition allow_misaligned      := true.
 Definition allow_inst_misaligned := true.
-Definition misaligned_access     := false.
+Definition has_misaligned_access_exception     := false.
 
 Definition core (xlens : list nat) : Mod
   := generateCore
@@ -49,7 +49,7 @@ Definition core (xlens : list nat) : Mod
        supportedExts
        allow_misaligned
        allow_inst_misaligned
-       misaligned_access
+       has_misaligned_access_exception
        (_ 'h"1000").
 
 Definition model (xlens : list nat) : Mod
@@ -58,7 +58,7 @@ Definition model (xlens : list nat) : Mod
        supportedExts
        allow_misaligned
        allow_inst_misaligned
-       misaligned_access
+       has_misaligned_access_exception
        (_ 'h"1000").
 
 Definition modelParams (xlens : list nat) : ProcParams
@@ -67,7 +67,7 @@ Definition modelParams (xlens : list nat) : ProcParams
        supportedExts
        allow_misaligned
        allow_inst_misaligned
-       misaligned_access 
+       has_misaligned_access_exception 
        (_ 'h"1000").
 
 Definition core32 : Mod := core [Xlen32].

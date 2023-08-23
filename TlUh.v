@@ -144,7 +144,7 @@ Section test.
           FU.supported_exts := [];
           FU.allow_misaligned := false;
           FU.allow_inst_misaligned := false;
-          FU.misaligned_access := false;
+          FU.has_misaligned_access_exception := false;
           FU.lgGranularity := 3;
           FU.hasVirtualMem := true |}.
 
