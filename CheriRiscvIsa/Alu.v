@@ -33,31 +33,134 @@ Section Alu.
 
   Definition CapOutput :=
     STRUCT_TYPE {
-        "newAddr" :: Addr;
+        "addr"    :: Addr;
         "base"    :: Addr;
         "top"     :: Bit (Xlen + 1);
         "perms"   :: CapPerms;
         "bounds?" :: Bool }.
 
+  (*
+    Arith: "add"
+    And: "and"
+    Or: "and"
+    Xor: "xor"
+    RightShift: "rsh"
+    LeftShift: "lsh"
+    Branch: "add" evaluate branch condition; "cap" new jump address; use PCC cap for exception
+    JAL: "add" link address (pc+4 or pc+2); "cap" new jump address; use PCC cap for new jump address and link address and for exception; use current ie for exception
+    JALR: "add" link address (pc+4 or pc+2); "cap" new jump address; use PCC cap for link address and for exception; carry RS1 cap for nextPCC;
+          use current ie, RS1 tag and isNotZero imm for exception
+    AUIPCC: "cap" new constructed address; use PCC cap for checking bounds of new constructed address
+    AUICGP: "cap" new constructed address; use CGP's cap for checking bounds new constructed address
+    LUI: carry {<imm, 12'b0>}
+    CLC/CLX: "cap" Mem address; use Mem cap and Mem tag for exceptions
+    CSC: "cap" Mem address; carry data val; use Mem cap, Mem tag, data tag and data cap.G for exception
+    CSX: "cap" Mem address; carry data val; use Mem cap, Mem tag for exception
+
+    1 cGetAddress: carry address
+    1 cGetHigh: carry cap
+    1 cGetTag: carry tag
+    1 cGetBase: use cap to calculate base
+    1 cGetTop: use cap to calculate top
+    1 cGetLen: use cap to calculate length = top - base, saturated to 2^32-1
+    1 cGetPerm: use cap to calculate perms
+    1 cGetType: use cap to calculate otype
+
+    2 cIncAddr: "cap" newAddr = addr + offset; use cap to check in-bounds and non-sealedness; use tag to reset tag on not in-bounds or sealedness
+    1 cSub: "cap" newAddr = addr1 - addr2
+    1 cSetAddr: carry new address; use cap to check in-bounds and non-sealedness; use tag to reset tag on not in-bounds or sealedness
+    1 cMove: carry tag; carry cap; carry val
+    1 cSetHigh: carry newCap; carry val; clear tag
+    1 cAndPerm: use cap to AND with permsMask and to check non-sealedness; use tag to reset tag on sealedness
+    1 cClearTag: carry cap; carry val
+
+    1 cRepresentableAlignmentMask: use countLeadingZeros(val), and to see if e = 23-countLeadingZeros(val) has to be incremented by 1 iff LSB e bits are non-zero
+    1 cRoundRepresentableLength: use val to calculate cRepresentableALignmentMask (=m) and return (val + ~m)&m
+    3 cSetBounds: "cap" to calculate addr + length;
+                  use cap to check if addr + length is in bounds;
+                  use cap to check for non-sealedness;
+                  use length to calculate e as in cRepresentableAlignmentMask;
+                  use addr, length, e to calculate B, T and exactness;
+                  use cap to update it using B, T, e
+                  use tag to reset tag on sealedness or not in-bounds (or non exactness)
+
+    1 cSetEqualExact: check equality of two tags, two caps and two vals
+
+    1 cTestSubset: use cap1 and cap2 to get perms1, perms2, base1, base2, top1 and top2. use tag1 and tag2.
+                   Return 0: If tags don't match or if base2 < base1 or top2 > top1 or perms2 is not a subset of perms1
+                   Return 1: otherwise
+
+    1 cSeal: use addr2 for calculating otype and for checking bounds
+             use cap1 to check if it has permit execute and if it is sealed
+             use cap2 to check if addr2 is in-bounds, cap2 is not sealed, cap2 has permit seal and permitOtype i.e.
+                                                                                                   (if cap1.permit_execute then addr2 \in [1,2,3,6,7] else 9 <= addr2 <= 15)
+             use tag2 to check if sealer is tagged
+             use tag1 to reset tag if cap2's check or tag2's check fails or if cap1 is sealed
+             use cap1 to seal based on otype given by addr2
+
+    1 cUnseal: use addr2 for calculating otype and for checking bounds
+               use cap1 to get cap1.otype and check if cap1 is sealed
+               use cap2 to check if addr2 is in-bounds, cap2 is not sealed, cap2 has permit unseal, if addr2 matches cap1.otype
+               use tag2 to check if sealer is tagged
+               use tag1 to reset tag if cap2's check of tag2's check fails or if cap1 is unsealed
+               use cap1 to unseal with global set to cap1.global && cap2.global
+
+
+    "cGetX", "cClearTag", "cMove", "cSetAddr": carry val; carry cap; carry tag
+    "cAndPerms": carry tag; carry cap; carry address; carry permMask
+    "cIncAddr": "cap" new constructed address; carry cap; carry tag
+    "cSetHigh": carry address; carry cap
+    "cSub": "cap" new constructed address
+    "cSetBounds": carry tag; carry old address; use old cap; use length
+    "cRoundRepresentableAlignmentMask": use length
+    "cRoundRepresentableLength": use length
+    "cSeal": use sealer tag; use sealer cap; use sealer val; use sealee tag; use sealee cap; use sealee val
+    "cUnseal": use sealer tag; use sealer cap; use sealer val; use sealee tag; use sealee cap; use sealee val
+    "cSetEqualExact": compare eq of two caps; two vals and two tags
+    "cTestSubset": compare two cap bases; compare two cap tops; compare two cap perms
+   *)
+
+  (* TODO:
+     - Cs1Cs2Rd
+       + CSetEqualExact := tag, cap and val should all match. Use xor and adder?
+       + CTestSubset := both tags should be the same, cap of cs2 should be a subset of cs1 in permission and bounds.
+                        Perms can be sent to "and" logic; tags sent somewhere for equality; bounds checked explicitly "somehow"
+     - Cs1Cs2Cd
+       + CSeal := new tag is set only if (cs1 is tagged, cs1 is unsealed, cs2 is tagged, cs2 is not sealed, cs2 permit seal, cs2 in bounds,
+                                          if cs1.EX then 1 <= cs2.val <= 7 else 9 <= cs2_addr <= 15), 
+       + CUnseal := new tag is set only if (cs1 is tagged, cs2 bounds check, cs2 permit unseal, cs2 not sealed, cs1 sealed and cs1.otype = cs2.val), new G = cs1.G && cs12.G
+     - Rs1Rd
+       + CRoundRepresentableLength := Needs "e", which is effectively countLeadingZeros of length
+       + CRepresentableAlignmentMask := Needs "e" 
+     - Cs1ImmCd
+       + CIncAddrImm := increment address, clear tag if not in bounds
+       + CSetBoundsImm
+     - Cs1Rs2Cd
+       + CSetBounds
+       + CSetBoundsExact
+   *)
+
   Definition BaseFuncUnitsInput :=
     STRUCT_TYPE {
         "add" :: XlenPlus1Input; (* Branch: evaluate branch condition;
                                     JAL/JALR: Link address (pc+4 or pc+2);
-                                    LUI: carry imm;
-                                    Csc(/Csx): carry data tag and cap *)
-        "and" :: XlenInput; (* Contains isStTag anded with isStLocal on stores *)
-        "xor" :: XlenInput; (* Branch/AUIPCC: carry current PCC's cap for nextPCC;
-                               AUICGP: carry CGP's ($c3's) cap;
+                                    LUI: carry {<imm, 12'b0>};
+                                    CSC: carry data tag and cap *)
+        "and" :: XlenInput; (* CSC: Inputs data tag and data local *)
+        "xor" :: XlenInput; (* Branch/AUIPCC: carry current PCC's cap for nextPCC/new constructed address;
+                               AUICGP: carry CGP's ($c3's) cap for new constructed address;
                                JAL: carry current PCC's cap for nextPCC and linking;
                                JALR: carry RS1's cap for nextPCC;
-                               Contains linked cap on Jalr and cap on Mem *)
-        "rsh" :: RightShiftInput; (* JAL: carry current ie_status
-                                     JALR: carry RS1's tag, isNotZero imm, current ie_status *)
-        "lsh" :: LeftShiftInput; (* JALR: carry current PCC's cap for linking
-                                    CSX/CSC: carry data for store *)
+                               CLC/CLX/CSC/CSX: carry Mem cap *)
+        "rsh" :: RightShiftInput; (* JAL: carry current ie_status;
+                                     JALR: carry RS1's tag, isNotZero imm, current ie_status;
+                                     CLC/CLX/CSC/CSX: carry Mem tag *)
+        "lsh" :: LeftShiftInput; (* JALR: carry current PCC's cap for linking;
+                                    CSX/CSC: carry data *)
         "cap" :: CapInput }. (* Branch/JAL: New Jump address based on current PCC;
                                 AUIPCC/AUICGP: New constructed address;
-                                JALR: New Jump address based on RS1; *)
+                                JALR: New Jump address based on RS1;
+                                CLC/CLX/CSC/CSX: Mem address *)
 
   Definition BaseFuncExtraInfo :=
     STRUCT_TYPE {
@@ -163,10 +266,8 @@ Section Alu.
 
       Definition StaticIf2Bool (filt1: sumbool A B) (filt2: bool) (p: Bool @# ty) (t: K @# ty) (f: K @# ty)
         : K @# ty :=
-        if filt1
-        then if filt2
-             then (IF p then t else f)%kami_expr
-             else f
+        if filt2
+        then StaticIf filt1 p t f
         else f.
     End StaticIf.
 
@@ -212,21 +313,22 @@ Section Alu.
        RetE (mkJustExceptionExpanded instType tag addr inBounds perms #sealed #sentry
                taken isNotZeroImmVal stDataTaggedLocal)).
 
-    Definition CapFuncUnit (inp: CapInput @# ty) (cap: Cap @# ty) :=
-      (LETC newAddr1 : Addr <- (inp @% "addr") + (inp @% "offset");
-       LETC newAddr : Addr <- (IF inp @% "zeroLsb?"
-                               then ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen-1) #newAddr1, $$WO~0 >})
-                               else #newAddr1);
-       LETC lastAddr : Bit (Xlen + 1) <- (ZeroExtend 1 #newAddr) + ZeroExtendTruncLsb (Xlen + 1) (inp @% "size");
+    Definition CapFuncUnit (inp: CapInput @# ty) (cap: Cap @# ty): CapOutput ## ty :=
+      (LETC newAddr1 : Bit (Xlen + 1) <- ZeroExtend 1 (inp @% "addr") + ZeroExtend 1 (inp @% "offset");
+       LETC newAddr : Bit (Xlen + 1) <- (IF inp @% "zeroLsb?"
+                                         then castBits (Nat.add_comm 1 Xlen) ({< ZeroExtendTruncMsb Xlen #newAddr1, $$WO~0 >})
+                                         else #newAddr1);
+       LETC truncNewAddr: Addr <- UniBit (TruncLsb Xlen 1) #newAddr;
+       LETC lastAddr : Bit (Xlen + 1) <- #newAddr + ZeroExtendTruncLsb (Xlen + 1) (inp @% "size");
        LETE capBase <- getCapBase capAccessors cap (inp @% "addr");
        LETE capTop <- getCapTop capAccessors cap (inp @% "addr");
        LETE capPerms <- getPerms capAccessors cap;
        RetE ((STRUCT {
-                  "newAddr" ::= #newAddr;
+                  "addr"    ::= #truncNewAddr;
                   "base"    ::= #capBase;
                   "top"     ::= #capTop;
                   "perms"   ::= #capPerms;
-                  "bounds?" ::= ((#newAddr >= #capBase) && (#lastAddr <= #capTop)) }) : CapOutput @# ty)).
+                  "bounds?" ::= ((#truncNewAddr >= #capBase) && (#lastAddr <= #capTop)) }) : CapOutput @# ty)).
 
     Definition BaseFuncUnits (inp: BaseFuncUnitsInput ## ty) :=
       (LETE i <- inp;
@@ -257,7 +359,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "add" <- #addIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- UniBit (TruncLsb Xlen 1) (res @% "add");
-           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "slti" ;
@@ -272,7 +374,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "add" <- #addIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- UniBit (TruncMsb Xlen 1) (res @% "add");
-           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "sltiu" ;
@@ -287,7 +389,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "add" <- #addIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- UniBit (TruncMsb Xlen 1) (res @% "add");
-           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "add" ;
@@ -303,7 +405,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "add" <- #addIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- UniBit (TruncLsb Xlen 1) (res @% "add");
-           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "sub" ;
@@ -319,7 +421,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "add" <- #addIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- UniBit (TruncLsb Xlen 1) (res @% "add");
-           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "slt" ;
@@ -335,7 +437,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "add" <- #addIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- UniBit (TruncMsb Xlen 1) (res @% "add");
-           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "sltu" ;
@@ -351,7 +453,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "add" <- #addIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- UniBit (TruncMsb Xlen 1) (res @% "add");
-           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "addiw" ;
@@ -366,7 +468,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "add" <- #addIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- ZeroExtendTruncLsb 32 (res @% "add");
-           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "addw" ;
@@ -382,7 +484,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "add" <- #addIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- ZeroExtendTruncLsb 32 (res @% "add");
-           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "subw" ;
@@ -398,7 +500,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "add" <- #addIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- ZeroExtendTruncLsb 32 (res @% "add");
-           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg (ZeroExtendTruncLsb Xlen #ret) (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |}].
 
@@ -414,7 +516,7 @@ Section Alu.
                                    "arg2" ::= SignExtendTruncLsb Xlen (imm inst) };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "xor" <- #xorIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (res @% "xor") (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (res @% "xor") (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "ori";
@@ -428,7 +530,7 @@ Section Alu.
                                    "arg2" ::= ~ (SignExtendTruncLsb Xlen (imm inst)) };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "and" <- #andIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (~ (res @% "and")) (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (~ (res @% "and")) (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "andi";
@@ -442,7 +544,7 @@ Section Alu.
                                    "arg2" ::= SignExtendTruncLsb Xlen (imm inst) };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "and" <- #andIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (res @% "and") (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (res @% "and") (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "xor";
@@ -457,7 +559,7 @@ Section Alu.
                                    "arg2" ::= rs2 @% "val" };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "xor" <- #xorIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (res @% "xor") (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (res @% "xor") (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "or";
@@ -472,7 +574,7 @@ Section Alu.
                                    "arg2" ::= ~ (rs2 @% "val") };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "and" <- #andIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (~ (res @% "and")) (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (~ (res @% "and")) (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "and";
@@ -487,7 +589,7 @@ Section Alu.
                                    "arg2" ::= rs2 @% "val" };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "and" <- #andIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (res @% "and") (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (res @% "and") (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |}].
 
@@ -504,7 +606,7 @@ Section Alu.
                                    "sht" ::= ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst) };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "lsh" <- #lshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (res @% "lsh") (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (res @% "lsh") (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "slli64";
@@ -519,7 +621,7 @@ Section Alu.
                                    "sht" ::= ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst) };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "lsh" <- #lshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (res @% "lsh") (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (res @% "lsh") (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "srli";
@@ -534,7 +636,7 @@ Section Alu.
                                    "sht" ::= ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst) };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "rsh" <- #rshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (res @% "rsh") (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (res @% "rsh") (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "srai";
@@ -549,7 +651,7 @@ Section Alu.
                                    "sht" ::= ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst) };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "rsh" <- #rshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (res @% "rsh") (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (res @% "rsh") (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "sll";
@@ -564,7 +666,7 @@ Section Alu.
                                    "sht" ::= ZeroExtendTruncLsb (Nat.log2_up Xlen) (rs2 @% "val") };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "lsh" <- #lshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (res @% "lsh") (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (res @% "lsh") (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "srl";
@@ -579,7 +681,7 @@ Section Alu.
                                    "sht" ::= ZeroExtendTruncLsb (Nat.log2_up Xlen) (rs2 @% "val") };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "rsh" <- #rshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (res @% "rsh") (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (res @% "rsh") (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "sra";
@@ -594,7 +696,7 @@ Section Alu.
                                    "sht" ::= ZeroExtendTruncLsb (Nat.log2_up Xlen) (rs2 @% "val") };
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "rsh" <- #rshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-          (RetE (mkIntReg (res @% "rsh") (res @% "xor") (res @% "cap" @% "newAddr")));
+          (RetE (mkIntReg (res @% "rsh") (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "slliw";
@@ -610,7 +712,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "lsh" <- #lshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- SignExtendTruncLsb Xlen (ZeroExtendTruncLsb 32 (res @% "lsh"));
-           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "srliw";
@@ -627,7 +729,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "rsh" <- #rshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- SignExtendTruncLsb Xlen (ZeroExtendTruncLsb 32 (res @% "rsh"));
-           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "sraiw";
@@ -644,7 +746,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "rsh" <- #rshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- SignExtendTruncLsb Xlen (ZeroExtendTruncLsb 32 (res @% "rsh"));
-           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "sllw";
@@ -660,7 +762,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "lsh" <- #lshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- SignExtendTruncLsb Xlen (ZeroExtendTruncLsb 32 (res @% "lsh"));
-           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "srlw";
@@ -677,7 +779,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "rsh" <- #rshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- SignExtendTruncLsb Xlen (ZeroExtendTruncLsb 32 (res @% "rsh"));
-           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |};
       {|instName     := "sraw";
@@ -694,7 +796,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "rsh" <- #rshIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- SignExtendTruncLsb Xlen (ZeroExtendTruncLsb 32 (res @% "rsh"));
-           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := true; hasRs2 := true; implicit := 0 |}
       |}].
 
@@ -711,7 +813,7 @@ Section Alu.
            RetE ((DefaultBaseFuncUnitsInput inst rs1 rs2)@%[ "add" <- #addIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC ret <- UniBit (TruncLsb Xlen 1) (res @% "add");
-           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "newAddr")));
+           RetE (mkIntReg #ret (res @% "xor") (res @% "cap" @% "addr")));
         instProperties := {| hasRs1 := false; hasRs2 := false; implicit := 0 |}
       |};
       {|instName     := "auicgp" ;
@@ -732,7 +834,7 @@ Section Alu.
                    @%[ "xor" <- #xorIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC cap <- res @% "xor";
-           LETC newAddr <- res @% "cap" @% "newAddr";
+           LETC newAddr <- res @% "cap" @% "addr"   ;
            LETC tag <- (!isSealed capAccessors #cap) && (res @% "cap" @% "bounds?");
            RetE (mkCapResult #newAddr #cap #newAddr #tag));
         instProperties := {| hasRs1 := false; hasRs2 := false; implicit := 3 |}
@@ -755,7 +857,7 @@ Section Alu.
                    @%[ "xor" <- #xorIn ]));
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC cap <- res @% "xor";
-           LETC newAddr <- res @% "cap" @% "newAddr";
+           LETC newAddr <- res @% "cap" @% "addr"   ;
            LETC tag <- (res @% "cap" @% "bounds?");
            RetE (mkCapResult #newAddr #cap #newAddr #tag));
         instProperties := {| hasRs1 := false; hasRs2 := false; implicit := 0 |}
@@ -786,7 +888,7 @@ Section Alu.
         outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
           (LETC cap <- res @% "xor";
            LETC taken <- @takenFn ty (res @% "add");
-           LETC newAddr <- res @% "cap" @% "newAddr";
+           LETC newAddr <- res @% "cap" @% "addr"   ;
            LETC capPerms <- res @% "cap" @% "perms";
            LETE exception <- mkJustException BranchJal $$true #cap #capPerms
                                #newAddr (res @% "cap" @% "bounds?") #taken $$false $$false;
@@ -830,7 +932,7 @@ Section Alu.
           (LETC linkAddr <- UniBit (TruncLsb Xlen 1) (res @% "add");
            LETC nextPcLinkCap <- res @% "xor";
            LETC taken <- $$true;
-           LETC nextPcAddr <- res @% "cap" @% "newAddr";
+           LETC nextPcAddr <- res @% "cap" @% "addr"   ;
            LETC nextPcLinkCapPerms <- res @% "cap" @% "perms";
            LETC currIe <- (unpackBaseFuncExtraInfo (res @% "rsh")) @% "ie?";
            LETE exception <- mkJustException BranchJal $$true #nextPcLinkCap #nextPcLinkCapPerms
@@ -872,7 +974,7 @@ Section Alu.
            LETC nextPcCap <- res @% "xor";
            LETC linkCap <- res @% "lsh";
            LETC taken <- $$true;
-           LETC nextPcAddr <- res @% "cap" @% "newAddr";
+           LETC nextPcAddr <- res @% "cap" @% "addr"   ;
            LETC nextPcCapPerms <- res @% "cap" @% "perms";
            LETC notZeroImmIeTag <- unpackBaseFuncExtraInfo (res @% "rsh");
            LETC nextPcTag <- #notZeroImmIeTag @% "tag";
@@ -909,7 +1011,7 @@ Section Alu.
                  @%[ "xor" <- #xorIn ]
                  @%[ "rsh" <- #rshIn ]));
       outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-        (LETC memAddr <- res @% "cap" @% "newAddr";
+        (LETC memAddr <- res @% "cap" @% "addr"   ;
          LETC memTag <- (unpackBaseFuncExtraInfo (res @% "rsh")) @% "tag";
          LETC memCap <- res @% "xor";
          LETC memCapPerms <- res @% "cap" @% "perms";
@@ -948,7 +1050,7 @@ Section Alu.
                  @%[ "and" <- #andIn ]
                  @%[ "add" <- #addIn ]));
       outputXform ty (res : BaseFuncUnitsOutput @# ty) :=
-        (LETC memAddr <- res @% "cap" @% "newAddr";
+        (LETC memAddr <- res @% "cap" @% "addr"   ;
          LETC memTag <- (unpackBaseFuncExtraInfo (res @% "rsh")) @% "tag";
          LETC memCap <- res @% "xor";
          LETC memCapPerms <- res @% "cap" @% "perms";
@@ -1002,13 +1104,13 @@ Section Alu.
         (LETC cap <- res @% "xor";
          LETC tag <- (unpackBaseFuncExtraInfo (res @% "rsh")) @% "tag";
          LETE ret <- fn ty #tag #cap (res @% "cap");
-         RetE (mkIntReg #ret #cap (res @% "cap" @% "newAddr")));
+         RetE (mkIntReg #ret #cap (res @% "cap" @% "addr")));
       instProperties := {| hasRs1 := true; hasRs2 := false; implicit := 0 |}
     |}.
   
   Definition capCs1RdEntries: list (InstEntry BaseFuncUnitsInput BaseFuncUnitsOutput) := [
       mkCapCs1RdEntry "cGetAddr" ('b"01111")
-        (fun ty tag cap capOut => RetE (capOut @% "newAddr"));
+        (fun ty tag cap capOut => RetE (capOut @% "addr"));
       mkCapCs1RdEntry "cGetBase" ('b"00010")
         (fun ty tag cap capOut => RetE (capOut @% "base"));
       mkCapCs1RdEntry "cGetHigh" ('b"10111")
@@ -1065,12 +1167,12 @@ Section Alu.
       mkCapCs1CdEntry "cClearTag" ('b"01011") (fun ty tag cap capOut => RetE (STRUCT {
                                                                                   "tag" ::= $$false;
                                                                                   "cap" ::= cap;
-                                                                                  "val" ::= capOut @% "newAddr"
+                                                                                  "val" ::= capOut @% "addr"   
                                                                                 } : FullCapWithTag @# ty));
       mkCapCs1CdEntry "cMove"     ('b"01010") (fun ty tag cap capOut => RetE (STRUCT {
                                                                                   "tag" ::= tag;
                                                                                   "cap" ::= cap;
-                                                                                  "val" ::= capOut @% "newAddr"
+                                                                                  "val" ::= capOut @% "addr"   
                                                                                 } : FullCapWithTag @# ty))
     ].
 
@@ -1118,38 +1220,44 @@ Section Alu.
             LETE newCap <- setPerms capAccessors cap #andPerms;
             RetE ((STRUCT { "tag" ::= tag && !isSealed capAccessors cap;
                             "cap" ::= #newCap;
-                            "val" ::= capOut @% "newAddr" }) : FullCapWithTag @# ty)));
+                            "val" ::= capOut @% "addr" }) : FullCapWithTag @# ty)));
       mkCapCs1Rs2CdEntry "cIncAddr" ('b"001001") (fun ty rs1 _ => rs1) (fun ty _ rs2 => rs2)
-        (fun ty tag cap capOut rs2 =>
-           (RetE ((STRUCT { "tag" ::= tag && capOut @% "bounds?";
-                            "cap" ::= cap;
-                            "val" ::= capOut @% "newAddr" }) : FullCapWithTag @# ty)));
-      mkCapCs1Rs2CdEntry "cSetAddr" ('b"001001") (fun ty _ rs2 => rs2) (fun ty _ _ => $0)
         (fun ty tag cap capOut rs2 =>
            (RetE ((STRUCT { "tag" ::= tag && !isSealed capAccessors cap && capOut @% "bounds?";
                             "cap" ::= cap;
-                            "val" ::= capOut @% "newAddr" }) : FullCapWithTag @# ty)));
+                            "val" ::= capOut @% "addr" }) : FullCapWithTag @# ty)));
+      mkCapCs1Rs2CdEntry "cSetAddr" ('b"001001") (fun ty _ _ => $0) (fun ty _ rs2 => rs2)
+        (fun ty tag cap capOut rs2 =>
+           (RetE ((STRUCT { "tag" ::= tag && !isSealed capAccessors cap && capOut @% "bounds?";
+                            "cap" ::= cap;
+                            "val" ::= capOut @% "addr" }) : FullCapWithTag @# ty)));
       mkCapCs1Rs2CdEntry "cSetHigh" ('b"0010110") (fun ty rs1 _ => rs1) (fun ty _ _ => $0)
         (fun ty tag cap capOut rs2 =>
            (RetE ((STRUCT { "tag" ::= $$false;
                             "cap" ::= rs2;
-                            "val" ::= capOut @% "newAddr" }) : FullCapWithTag @# ty)))
+                            "val" ::= capOut @% "addr" }) : FullCapWithTag @# ty)));
+      mkCapCs1Rs2CdEntry "cSub"     ('b"0010100") (fun ty rs1 _ => rs1) (fun ty _ rs2 => neg rs2)
+        (fun ty tag cap capOut rs2 =>
+           (RetE ((STRUCT { "tag" ::= $$false;
+                            "cap" ::= $0;
+                            "val" ::= capOut @% "addr" }) : FullCapWithTag @# ty)))
     ].
 
-  (* TODO: make getCapBase and getCapTop as outputs so that we don't recalculate these
-     - Rs1Rd
-       + CRepresentableAlignmentMask
-       + CRoundRepresentableLength
-     - Cs1ImmRd
-       + CIncAddrImm
-       + CSetBoundsImm
+  (* TODO:
      - Cs1Cs2Rd
-       + CSub
-       + CSetEqualExact
-       + CTestSubset
+       + CSetEqualExact := tag, cap and val should all match. Use xor and adder?
+       + CTestSubset := both tags should be the same, cap of cs2 should be a subset of cs1 in permission and bounds.
+                        Perms can be sent to "and" logic; tags sent somewhere for equality; bounds checked explicitly "somehow"
      - Cs1Cs2Cd
-       + CSeal
-       + CUnseal
+       + CSeal := new tag is set only if (cs1 is tagged, cs1 is unsealed, cs2 is tagged, cs2 is not sealed, cs2 permit seal, cs2 in bounds,
+                                          if cs1.EX then 1 <= cs2.val <= 7 else 9 <= cs2_addr <= 15), 
+       + CUnseal := new tag is set only if (cs1 is tagged, cs2 bounds check, cs2 permit unseal, cs2 not sealed, cs1 sealed and cs1.otype = cs2.val), new G = cs1.G && cs12.G
+     - Rs1Rd
+       + CRoundRepresentableLength := Needs "e", which is effectively countLeadingZeros of length
+       + CRepresentableAlignmentMask := Needs "e" 
+     - Cs1ImmCd
+       + CIncAddrImm := increment address, clear tag if not in bounds
+       + CSetBoundsImm
      - Cs1Rs2Cd
        + CSetBounds
        + CSetBoundsExact
@@ -1162,3 +1270,11 @@ Section Alu.
       insts    := arithEntries ++ logicalEntries ++ shiftEntries ++ addressEntries ++
                     branchEntries ++ jalEntries ++ memEntries ++ getCapEntries ++ setCapEntries |}.
 End Alu.
+
+(*
+capSetBounds (base, length) -> E, B, T, exact?
+ePrelim = 23 - countLeadingZeros(TruncLsb 23 length)
+eInit = if (ePrelim > 14) then 24 else ePrelim
+EInit = if (ePrelim > 14) then 15 else ePrelim
+
+*)
