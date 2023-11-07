@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations.
+Require Import Kami.AllNotations ProcKami.Lib.
 
 Import ListNotations.
 
@@ -48,12 +48,12 @@ Section CapAccessors.
       isSentry: forall ty, Bit CapSz @# ty -> Bool @# ty;
       getCapPerms: forall ty, Bit CapSz @# ty -> CapPerms ## ty;
       getOTypeFromIe: forall ty, Bool @# ty (* Interrupt Enabled ? *) -> Bit CapOTypeSz @# ty;
-      seal: forall ty, Bit CapSz @# ty -> Bit CapSz @# ty -> Bit CapSz @# ty;
-      unseal: forall ty, Bit CapSz @# ty -> Bit AddrSz @# ty -> Bit CapSz @# ty;
+      seal: forall ty, Bit CapSz @# ty -> Bit CapOTypeSz @# ty -> Bit CapSz @# ty;
+      unseal: forall ty, Bit CapSz @# ty -> Bit CapSz @# ty;
       isIeSentry: forall ty, Bit CapSz @# ty -> Bool @# ty;
       isIdSentry: forall ty, Bit CapSz @# ty -> Bool @# ty;
       setCapPerms: forall ty, Bit CapSz @# ty -> CapPerms @# ty -> Bit CapSz ## ty;
-      isSealAddr: forall ty, Bit AddrSz @# ty -> Bool @# ty (* Exec seal or not *) -> Bool @# ty;
+      isSealAddr: forall ty, Bit AddrSz @# ty -> Bool @# ty (* Exec seal or not *) -> Bool ## ty;
       getCapEFromExp: forall ty, Bit (Nat.log2_up AddrSz) @# ty -> Bit CapESz @# ty;
       getCapExpFromE: forall ty, Bit CapESz @# ty -> Bit (Nat.log2_up AddrSz) @# ty;
       CapBounds := STRUCT_TYPE {
@@ -61,11 +61,18 @@ Section CapAccessors.
                        "T" :: Bit CapTSz;
                        "exp" :: Bit (Nat.log2_up AddrSz);
                        "exact?" :: Bool };
-      getCapBounds: forall ty, Bit AddrSz @# ty (* Base *) -> Bit AddrSz @# ty (* Length *) -> CapBounds ## ty
+      getCapBounds: forall ty, Bit AddrSz @# ty (* Base *) -> Bit AddrSz @# ty (* Length *) -> CapBounds ## ty;
+      setCapBounds ty (cap: Bit CapSz @# ty) B T exp :=
+        setCapE (getCapEFromExp exp) (setCapT T (setCapB B cap))
     }.
 End CapAccessors.
 
 Inductive Extension := Base | M.
+
+Theorem Extension_eq_dec: forall (e1 e2: Extension), {e1 = e2} + {e1 <> e2}.
+Proof.
+  decide equality.
+Qed.
 
 Definition PccValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen) (pcCap: word CapSz) (pcAddr: word Xlen)
   (compressed: bool) :=
@@ -138,8 +145,11 @@ Section ParamDefinitions.
     Definition CompInstSz := 16.
     Definition CompInst := (Bit CompInstSz).
 
-    Definition isInstCompressed ty sz (bitString : Bit sz @# ty)
-      := (ZeroExtendTruncLsb 2 bitString != $$(('b"11") : word 2))%kami_expr.
+    Definition isInstNotCompressed ty sz (bitString : Bit sz @# ty)
+      := unpack Bool (UniBit (UAnd _) (ZeroExtendTruncLsb 2 bitString)).
+
+    Definition isInstCompressed ty sz (bitString : Bit sz @# ty) :=
+      (!(isInstNotCompressed (bitString)))%kami_expr.
 
     Definition FieldRange := {x: (nat * nat) & word (snd x)}.
     Definition UniqId := (list FieldRange)%type.
@@ -209,7 +219,7 @@ Section ParamDefinitions.
   End InstEncoding.
 
   Definition FenceI := 0.
-  Definition Wfi := 1.
+  Definition WFI := 1.
 
   Definition CapBoundsViolation  := 1.  (* Reg/PC *)
   Definition CapTagViolation     := 2.  (* Reg *)
@@ -233,216 +243,78 @@ Section ParamDefinitions.
 
   Definition MemOpInfo :=
     STRUCT_TYPE {
-        "memOp"      :: Bit MemOpSz;
-        "size"       :: MemSize;
-        "signExt?"   :: Bool;
-        "MC"         :: Bool;
-        "LM"         :: Bool;
-        "LG"         :: Bool;
-        "accessTag?" :: Bool }.
+        "op"    :: Bit MemOpSz;
+        "size"  :: MemSize;
+        "MC"    :: Bool;
+        "LM"    :: Bool;
+        "LG"    :: Bool;
+        "sign?" :: Bool;
+        "cap?"  :: Bool }.
 
   Theorem sizeMemOpInfo: size MemOpInfo <= CapSz.
   Proof.
     simpl.
     unfold MemSize, MemSizeSz, CapSz, Xlen, MemOpSz.
-    destruct procParams as [_ xlen xlen_vars _ _ _ _ _ _ _ _ _ _ _ _ _ _].
+    destruct procParams as [_ xlen xlen_vars _ _ _ _ _ _ _ _ _ _ _].
     destruct xlen_vars; subst; simpl; lia.
   Qed.
 
-  (* Regular      : (wb?, data: FullCapWithTag, pcUpd?, addr: FullCap, regFile: Bit 0,
-                     exception?, exceptionCause: Bit ExceptionCauseSz=5, Reg/Pc: Bit 1)
-     Mem          : (memOp: MemOpInfo, data: FullCapWithTag, addr: Addr,
-                     exception?, exceptionCause: Bit ExceptionCauseSz=5)
-     SyncInterrupt: (syncInterruptCause: Bit SyncInterruptSz=1) *)
-
   Definition FuncOutput :=
     STRUCT_TYPE {
-        "data"             :: FullCapWithTag;
-        "addrCapOrMemOp"   :: Cap;
-        "addr"             :: Addr;
-        "interruptOrBJal?" :: Bool;
-        "wb?"              :: Bool;
-        "pcUpd?"           :: Bool;
-        "mem?"             :: Bool;
-        "exception?"       :: Bool;
-        "changeIe?"        :: Bool;
-        "ie?"              :: Bool }.
+        "data"              :: FullCapWithTag;
+        "pcCapOrMemOp"      :: Cap;
+        "addr"              :: Addr;
+        "wb?"               :: Bool;
+        "mayChangePc?"      :: Bool;
+        "taken?"            :: Bool;
+        "changePcCap?"      :: Bool;
+        "mem?"              :: Bool;
+        "exception?"        :: Bool;
+        "exceptionCausePc?" :: Bool; (* exception is by PC or reg *)
+        "interrupt?"        :: Bool;
+        "changeIe?"         :: Bool;
+        "newIe"             :: Bool }.
 
-  Section FuncOutputHelpers.
-    Variable ty: Kind -> Type.
-    Variable dataVal: Data @# ty. (* Default for Base Func Unit: Result of Adder *)
-    Variable addrCap: Cap @# ty.  (* Default for Base Func Unit: Result of old PCC cap *)
-    Variable addrVal: Addr @# ty. (* Default for Base Func Unit: Result of Cap's address *)
+  Section InstEntry.
+    Variable ik: Kind.
+    Record InstEntry :=
+      { instName       : string;
+        uniqId         : UniqId;
+        inputXform     : forall ty, FullCap @# ty -> Inst @# ty ->
+                                    FullCapWithTag @# ty -> FullCapWithTag @# ty ->
+                                    Bool @# ty -> ik ## ty;
+        instProperties : InstProperties }.
 
-    Local Open Scope kami_expr.
-
-    Definition intResult dVal : FullCapWithTag @# ty :=
-      STRUCT { "tag" ::= $$false;
-               "cap" ::= $0;
-               "val" ::= dVal }.
-
-    Definition mkNoUpd : FuncOutput @# ty :=
-      STRUCT {
-          "data"             ::= intResult dataVal;
-          "addrCapOrMemOp"   ::= addrCap;
-          "addr"             ::= addrVal;
-          "interruptOrBJal?" ::= $$false;
-          "wb?"              ::= $$false;
-          "pcUpd?"           ::= $$false;
-          "mem?"             ::= $$false;
-          "exception?"       ::= $$false;
-          "changeIe?"        ::= $$false;
-          "ie?"              ::= $$false }.
-
-    Definition mkIntReg : FuncOutput @# ty :=
-      STRUCT {
-          "data"             ::= intResult dataVal;
-          "addrCapOrMemOp"   ::= addrCap;
-          "addr"             ::= addrVal;
-          "interruptOrBJal?" ::= $$false;
-          "wb?"              ::= $$true;
-          "pcUpd?"           ::= $$false;
-          "mem?"             ::= $$false;
-          "exception?"       ::= $$false;
-          "changeIe?"        ::= $$false;
-          "ie?"              ::= $$false }.
-
-    Definition mkPc (pcUpd: Bool @# ty) (exception: Pair Bool Data @# ty) : FuncOutput @# ty :=
-      STRUCT {
-          "data"             ::= intResult (exception @% "snd");
-          "addrCapOrMemOp"   ::= addrCap;
-          "addr"             ::= addrVal;
-          "interruptOrBJal?" ::= (exception @% "fst");
-          "wb?"              ::= $$false;
-          "pcUpd?"           ::= (!(exception @% "fst") && pcUpd);
-          "mem?"             ::= $$false;
-          "exception?"       ::= (exception @% "fst");
-          "changeIe?"        ::= $$false;
-          "ie?"              ::= $$false }.
-
-    Definition mkCapResult (dataTag: Bool @# ty) : FuncOutput @# ty :=
-      STRUCT {
-          "data"             ::= STRUCT {
-                                     "tag" ::= dataTag;
-                                     "cap" ::= addrCap;
-                                     "val" ::= dataVal };
-          "addrCapOrMemOp"   ::= addrCap;
-          "addr"             ::= addrVal;
-          "interruptOrBJal?" ::= $$false;
-          "wb?"              ::= $$true;
-          "pcUpd?"           ::= $$false;
-          "mem?"             ::= $$false;
-          "exception?"       ::= $$false;
-          "changeIe?"        ::= $$false;
-          "ie?"              ::= $$false }.
-      
-    Definition mkIntRegAndPc (dataTag: Bool @# ty) (dataCap: Cap @# ty) (exception: Pair Bool Data @# ty)
-                             (isJal: bool) (changeIe: Bool @# ty) (ie: Bool @# ty) : FuncOutput @# ty :=
-      STRUCT {
-          "data"             ::= STRUCT {
-                                     "tag" ::= dataTag;
-                                     "cap" ::= dataCap;
-                                     "val" ::= (IF exception @% "fst" then exception @% "snd" else dataVal) };
-          "addrCapOrMemOp"   ::= addrCap;
-          "addr"             ::= addrVal;
-          "interruptOrBJal?" ::= $$isJal;
-          "wb?"              ::= !(exception @% "fst");
-          "pcUpd?"           ::= !(exception @% "fst");
-          "mem?"             ::= $$false;
-          "exception?"       ::= (exception @% "fst");
-          "changeIe?"        ::= if isJal then $$false else !(exception @% "fst") && changeIe;
-          "ie?"              ::= if isJal then $$false else ie }.
-
-    Definition mkFenceI : FuncOutput @# ty :=
-      STRUCT {
-          "data"             ::= intResult $FenceI;
-          "addrCapOrMemOp"   ::= addrCap;
-          "addr"             ::= addrVal;
-          "interruptOrBJal?" ::= $$true;
-          "wb?"              ::= $$false;
-          "pcUpd?"           ::= $$false;
-          "mem?"             ::= $$false;
-          "exception?"       ::= $$false;
-          "changeIe?"        ::= $$false;
-          "ie?"              ::= $$false }.
-
-    Definition mkWfi : FuncOutput @# ty :=
-      STRUCT {
-          "data"             ::= intResult $Wfi;
-          "addrCapOrMemOp"   ::= addrCap;
-          "addr"             ::= addrVal;
-          "interruptOrBJal?" ::= $$true;
-          "wb?"              ::= $$false;
-          "pcUpd?"           ::= $$false;
-          "mem?"             ::= $$false;
-          "exception?"       ::= $$false;
-          "changeIe?"        ::= $$false;
-          "ie?"              ::= $$false }.
-
-    Definition mkLd (size: MemSize @# ty) (accessTag: Bool @# ty) (signExt: Bool @# ty) (perms: CapPerms @# ty)
-                    (exception: Pair Bool Data @# ty): FuncOutput @# ty :=
-      STRUCT {
-          "data"             ::= intResult (IF exception @% "fst" then exception @% "snd" else dataVal);
-          "addrCapOrMemOp"   ::= ZeroExtendTruncLsb CapSz
-                                   (pack ((STRUCT {
-                                               "memOp"      ::= $LdOp;
-                                               "size"       ::= size;
-                                               "signExt?"   ::= signExt;
-                                               "MC"         ::= ITE accessTag (perms @% "MC") $$false;
-                                               "LM"         ::= ITE accessTag (perms @% "LM") $$false;
-                                               "LG"         ::= ITE accessTag (perms @% "LG") $$false;
-                                               "accessTag?" ::= accessTag }): MemOpInfo @# ty));
-          "addr"             ::= addrVal;
-          "interruptOrBJal?" ::= $$false;
-          "wb?"              ::= !(exception @% "fst");
-          "pcUpd?"           ::= $$false;
-          "mem?"             ::= $$true;
-          "exception?"       ::= (exception @% "fst");
-          "changeIe?"        ::= $$false;
-          "ie?"              ::= $$false }.
-
-    Definition mkSt (dataTag: Bool @# ty) (dataCap: Cap @# ty) (size: MemSize @# ty) (accessTag: Bool @# ty)
-      (exception: Pair Bool Data @# ty) : FuncOutput @# ty :=
-      STRUCT {
-          "data"             ::= STRUCT {
-                                     "tag" ::= dataTag;
-                                     "cap" ::= dataCap;
-                                     "val" ::= (IF exception @% "fst" then exception @% "snd" else dataVal) };
-          "addrCapOrMemOp"   ::= ZeroExtendTruncLsb CapSz
-                                   (pack ((STRUCT {
-                                               "memOp"      ::= $StOp;
-                                               "size"       ::= size;
-                                               "signExt?"   ::= $$false;
-                                               "MC"         ::= $$false;
-                                               "LM"         ::= $$false;
-                                               "LG"         ::= $$false;
-                                               "accessTag?" ::= accessTag }): MemOpInfo @# ty));
-          "addr"             ::= addrVal;
-          "interruptOrBJal?" ::= $$false;
-          "wb?"              ::= $$false;
-          "pcUpd?"           ::= $$false;
-          "mem?"             ::= $$true;
-          "exception?"       ::= (exception @% "fst");
-          "changeIe?"        ::= $$false;
-          "ie?"              ::= $$false }.
-
-  End FuncOutputHelpers.
-
-  Record InstEntry ik ok :=
-    { instName       : string;
-      xlens          : list nat;
-      extensions     : list Extension;
-      uniqId         : UniqId;
-      inputXform     : forall ty, FullCap @# ty -> Inst @# ty ->
-                                  FullCapWithTag @# ty -> FullCapWithTag @# ty ->
-                                  Bool @# ty -> ik ## ty;
-      outputXform    : forall ty, ok @# ty -> FuncOutput ## ty;
-      instProperties : InstProperties }.
+    Record InstEntryFull := {
+        xlens : list nat;
+        extension: Extension;
+        instEntries: list InstEntry }.
+  End InstEntry.
 
   Record FuncEntry :=
-    { funcName   : string;
-      funcInput  : Kind;
-      funcOutput : Kind;
-      func       : forall ty, funcInput ## ty -> funcOutput ## ty;
-      insts      : list (InstEntry funcInput funcOutput) }.
+    { localFuncInput  : Kind;
+      localFuncOutput : Kind;
+      localFunc       : forall ty, localFuncInput @# ty -> localFuncOutput ## ty;
+      outputXform     : forall ty, localFuncOutput @# ty -> FuncOutput ## ty;
+      insts           : list (InstEntryFull localFuncInput) }.
+
+  Record FiltFuncEntry :=
+    { localFiltFuncInput  : Kind;
+      localFiltFuncOutput : Kind;
+      localFiltFunc       : forall ty, localFiltFuncInput @# ty -> localFiltFuncOutput ## ty;
+      outputFiltXform     : forall ty, localFiltFuncOutput @# ty -> FuncOutput ## ty;
+      filtInsts           : list (InstEntry localFiltFuncInput) }.
+
+  Definition mkFiltFuncEntry (fe : FuncEntry) :=
+    {|localFiltFuncInput := localFuncInput fe;
+      localFiltFuncOutput := localFuncOutput fe;
+      localFiltFunc := localFunc fe;
+      outputFiltXform := outputXform fe;
+      filtInsts :=
+        fold_left (fun prev new =>
+                     (if (getBool (in_dec Nat.eq_dec Xlen (xlens new)) && getBool (in_dec Extension_eq_dec (extension new) supportedExts))%bool
+                      then instEntries new
+                      else []) ++ prev)
+          (insts fe) []
+    |}.
 End ParamDefinitions.
