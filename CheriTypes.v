@@ -52,7 +52,8 @@ Section CapAccessors.
       setCapPerms: forall ty, CapPerms @# ty -> Bit CapSz @# ty -> Bit CapSz ## ty;
       BaseTop := STRUCT_TYPE {
                      "base" :: Bit AddrSz;
-                     "top"  :: Bit (AddrSz + 1) };
+                     "top"  :: Bit (AddrSz + 1);
+                     "aTopBase" :: Bit (AddrSz - CapBSz) };
       getCapBaseTop: forall ty, Bit CapSz @# ty -> Bit AddrSz @# ty -> BaseTop ## ty;
       CapBounds := STRUCT_TYPE {
                        "B" :: Bit CapBSz;
@@ -80,11 +81,13 @@ Definition PccValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen) (pcCap: w
     (compressed = false -> truncLsb pcAddr = ZToWord 2 0).
 
 (* Changes from CherIoT:
-   - AUIPCC, AUICGP, CIncAddr and CSetAddr checks for bounds before clearing the tag
-     instead of representability checks
-   - All PC out-of-bounds exceptions are caught only when executing the instruction,
-     not during the previous instruction (like JALR, JAL, Branch, PC+2, PC+4)
- *)
+   - All PC out-of-bounds exceptions are caught only when executing
+     the instruction, not during the previous instruction (like JALR,
+     JAL, Branch, PC+2, PC+4).  Instead, we store the taken-ness and
+     previous PC, which we use to set EPC on a taken branch/Jump.
+   - No Special CSR - all system registers are memory mapped, so we
+     can use simple capabilities to enforce access constraint.
+*)
 
 Class ProcParams :=
   { procName: string;

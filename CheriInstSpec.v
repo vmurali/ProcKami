@@ -400,11 +400,11 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
               LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC baseBound <- #newAddr >= (#baseTop @% "base");
-              LETC topBound <- (ZeroExtend 1 #newAddr) + $1 <= (#baseTop @% "top");
+              LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
+              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "cap") && (#baseBound && #topBound) ]
+                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "cap") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
           instProperties := {| hasCs1 := false; hasCs2 := false; implicit := 3 |}
@@ -414,11 +414,11 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
               LETE baseTop <- getCapBaseTop capAccessors (pc @% "cap") (pc @% "val");
-              LETC baseBound <- #newAddr >= (#baseTop @% "base");
-              LETC topBound <- ZeroExtend 1 #newAddr + $1 <= #baseTop @% "top";
+              LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
+              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- #baseBound && #topBound ]
+                      @%[ "cdTag" <- #representable ]
                       @%[ "cdCap" <- pc @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
           instProperties := {| hasCs1 := false; hasCs2 := false; implicit := 3 |}
@@ -557,11 +557,11 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC newAddr <- (cs1 @% "val") + (cs2 @% "val");
               LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC baseBound <- #newAddr >= #baseTop @% "base";
-              LETC topBound <- ZeroExtend 1 #newAddr + $1 <= #baseTop @% "top";
+              LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
+              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && (#baseBound && #topBound) ]
+                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
           instProperties := {| hasCs1 := true; hasCs2 := true; implicit := 0 |}
@@ -572,11 +572,11 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
               LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC baseBound <- #newAddr >= #baseTop @% "base";
-              LETC topBound <- ZeroExtend 1 #newAddr + $1 <= #baseTop @% "top";
+              LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
+              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && (#baseBound && #topBound) ]
+                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
           instProperties := {| hasCs1 := true; hasCs2 := false; implicit := 0 |}
@@ -628,11 +628,11 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC newAddr <- cs2 @% "val";
               LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC baseBound <- #newAddr >= (#baseTop @% "base");
-              LETC topBound <- ZeroExtend 1 #newAddr + $1 <= (#baseTop @% "top");
+              LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
+              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && (#baseBound && #topBound) ]
+                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
           instProperties := {| hasCs1 := true; hasCs2 := true; implicit := 0 |}

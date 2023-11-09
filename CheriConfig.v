@@ -126,11 +126,15 @@ Section CapHelpers.
         LETC aHi <- ITE (#aMid < #B) $1 $0;
         LETC tHi <- ITE (#T < #B) $1 $0;
         LETC aTopBase <- #aTop - #aHi;
+        LETC aTopTop <- (ZeroExtend 1 #aTopBase) + #tHi;
         LETC base <- ZeroExtendTruncLsb AddrSz ({< #aTopBase, #B >}) << #exp;
-        LETC top <- ZeroExtendTruncLsb (AddrSz + 1) ({< #aTopBase + #tHi, #T >}) << #exp;
+        LETC top <- ZeroExtendTruncLsb (AddrSz + 1) ({< #aTopTop, #T >}) << #exp;
         RetE (STRUCT {
                   "base" ::= #base;
-                  "top" ::= #top } : (STRUCT_TYPE { "base" :: Bit AddrSz ; "top" :: Bit (AddrSz + 1) }) @# ty) ).
+                  "top" ::= #top;
+                  "aTopBase" ::= #aTopBase } : (STRUCT_TYPE { "base" :: Bit AddrSz ;
+                                                              "top"  :: Bit (AddrSz + 1) ;
+                                                              "aTopBase" :: Bit (AddrSz - 9) }) @# ty) ).
     
     Definition capBounds (base: Bit AddrSz @# ty) (length: Bit AddrSz @# ty) :=
       ( LETC top : Bit (AddrSz + 1) <- ZeroExtend 1 base + ZeroExtend 1 length;
