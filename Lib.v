@@ -12,16 +12,11 @@ Section Lib.
 
   Local Open Scope kami_expr.
   Definition Sub n (e1 e2: Bit n @# ty) :=
-    e1 + ~e2 + $1.
-
-  Definition isNotZero n (e: Bit n @# ty) := unpack Bool (UniBit (UOr n) e).
-  Definition isZero n (e: Bit n @# ty) := !isNotZero e.
+    (e1 + ~e2) + $1.
 
   Definition StaticIf (filter : bool) (pred: Bool @# ty) k (tExpr fExpr: k @# ty) :=
     if filter then ITE pred tExpr fExpr else fExpr.
-
-  Definition mkPair A B (a: A @# ty) (b: B @# ty) : Pair A B @# ty :=
-    STRUCT { "fst" ::= a; "snd" ::= b }.
-
 End Lib.
+
+Infix "-" := (@Sub _ _) : kami_expr_scope.
 

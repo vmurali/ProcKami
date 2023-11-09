@@ -1,7 +1,5 @@
 Require Import Kami.AllNotations ProcKami.Lib.
 
-Import ListNotations.
-
 Section CapAccessors.
   Variable CapSz: nat.
   Variable AddrSz: nat.
@@ -40,22 +38,22 @@ Section CapAccessors.
       CapTSz: nat;
       getCapT: forall ty, Bit CapSz @# ty -> Bit CapTSz @# ty;
       setCapT: forall ty, Bit CapTSz @# ty -> Bit CapSz @# ty -> Bit CapSz @# ty;
+      getCapEFromExp: forall ty, Bit (Nat.log2_up AddrSz) @# ty -> Bit CapESz @# ty;
+      getCapExpFromE: forall ty, Bit CapESz @# ty -> Bit (Nat.log2_up AddrSz) @# ty;
+      isSealed: forall ty, Bit CapSz @# ty -> Bool @# ty;
+      isSentry: forall ty, Bit CapSz @# ty -> Bool @# ty;
+      isIeSentry: forall ty, Bit CapSz @# ty -> Bool @# ty;
+      isIdSentry: forall ty, Bit CapSz @# ty -> Bool @# ty;
+      getOTypeFromIe: forall ty, Bool @# ty (* Interrupt Enabled ? *) -> Bit CapOTypeSz @# ty;
+      seal: forall ty, Bit CapOTypeSz @# ty -> Bit CapSz @# ty -> Bit CapSz @# ty;
+      unseal: forall ty, Bit CapSz @# ty -> Bit CapSz @# ty;
+      isSealAddr: forall ty, Bit AddrSz @# ty -> Bool @# ty (* Exec seal or not *) -> Bool @# ty;
+      getCapPerms: forall ty, Bit CapSz @# ty -> CapPerms ## ty;
+      setCapPerms: forall ty, CapPerms @# ty -> Bit CapSz @# ty -> Bit CapSz ## ty;
       BaseTop := STRUCT_TYPE {
                      "base" :: Bit AddrSz;
                      "top"  :: Bit (AddrSz + 1) };
       getCapBaseTop: forall ty, Bit CapSz @# ty -> Bit AddrSz @# ty -> BaseTop ## ty;
-      isSealed: forall ty, Bit CapSz @# ty -> Bool @# ty;
-      isSentry: forall ty, Bit CapSz @# ty -> Bool @# ty;
-      getCapPerms: forall ty, Bit CapSz @# ty -> CapPerms ## ty;
-      getOTypeFromIe: forall ty, Bool @# ty (* Interrupt Enabled ? *) -> Bit CapOTypeSz @# ty;
-      seal: forall ty, Bit CapSz @# ty -> Bit CapOTypeSz @# ty -> Bit CapSz @# ty;
-      unseal: forall ty, Bit CapSz @# ty -> Bit CapSz @# ty;
-      isIeSentry: forall ty, Bit CapSz @# ty -> Bool @# ty;
-      isIdSentry: forall ty, Bit CapSz @# ty -> Bool @# ty;
-      setCapPerms: forall ty, Bit CapSz @# ty -> CapPerms @# ty -> Bit CapSz ## ty;
-      isSealAddr: forall ty, Bit AddrSz @# ty -> Bool @# ty (* Exec seal or not *) -> Bool ## ty;
-      getCapEFromExp: forall ty, Bit (Nat.log2_up AddrSz) @# ty -> Bit CapESz @# ty;
-      getCapExpFromE: forall ty, Bit CapESz @# ty -> Bit (Nat.log2_up AddrSz) @# ty;
       CapBounds := STRUCT_TYPE {
                        "B" :: Bit CapBSz;
                        "T" :: Bit CapTSz;
@@ -79,7 +77,7 @@ Definition PccValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen) (pcCap: w
   evalLetExpr ( LETE perms <- getCapPerms capAccessors (Const type pcCap);
                 RetE (Var type (SyntaxKind CapPerms) perms @% "EX"))%kami_expr = true /\
     evalExpr ((isSealed capAccessors (Const _ pcCap))) = false /\
-    if compressed then truncLsb pcAddr = ZToWord 2 0 else True.
+    (compressed = false -> truncLsb pcAddr = ZToWord 2 0).
 
 (* Changes from CherIoT:
    - AUIPCC, AUICGP, CIncAddr and CSetAddr checks for bounds before clearing the tag
@@ -181,35 +179,31 @@ Section ParamDefinitions.
 
       Local Open Scope kami_expr.
 
-      Notation extractField span :=
-        (UniBit (TruncMsb (fst span) (snd span))
-           (UniBit (TruncLsb (fst span + snd span) (InstSz - (fst span + snd span))) inst)).
+      Notation extractFieldFromInst span := (extractFieldExpr InstSz inst (fst span) (snd span)).
 
-      Notation extractFieldDynamic span :=
-        (UniBit (TruncLsb (fst span) (snd span))
-           (ZeroExtendTruncLsb (fst span + snd span) inst)).
+      Notation extractFieldFromInstDynamic span := (extractFieldExprDynamicWidth inst (fst span) (snd span)).
       
-      Definition instSize := extractField instSizeField.
-      Definition opcode := extractField opcodeField.
-      Definition funct3 := extractField funct3Field.
-      Definition funct7 := extractField funct7Field.
-      Definition funct6 := extractField funct6Field.
-      Definition funct5 := extractField funct5Field.
-      Definition imm := extractField immField.
-      Definition rm := extractField rmField.
-      Definition fmt := extractField fmtField.
+      Definition instSize := extractFieldFromInst instSizeField.
+      Definition opcode := extractFieldFromInst opcodeField.
+      Definition funct3 := extractFieldFromInst funct3Field.
+      Definition funct7 := extractFieldFromInst funct7Field.
+      Definition funct6 := extractFieldFromInst funct6Field.
+      Definition funct5 := extractFieldFromInst funct5Field.
+      Definition imm := extractFieldFromInst immField.
+      Definition rm := extractFieldFromInst rmField.
+      Definition fmt := extractFieldFromInst fmtField.
       Definition branchOffset := {< (inst$[31:31]), (inst$[7:7]),  (inst$[30:25]), (inst$[11:8]), $$(WO~0) >}.
       Definition jalOffset := {< inst$[31:31], (inst$[19:12]), (inst$[20:20]), (inst$[30:21]), $$(WO~0) >}.
       Definition memSubOOpcode := {< (inst$[5:5]), (inst$[3:3])>}.
-      Definition auiLuiOffset := extractField auiLuiField.
-      Definition rs1 := extractFieldDynamic rs1Field.
-      Definition rs2 := extractFieldDynamic rs2Field.
-      Definition rs3 := extractFieldDynamic rs3Field.
-      Definition rd := extractFieldDynamic rdField.
-      Definition rs1Fixed := extractField rs1FixedField.
-      Definition rs2Fixed := extractField rs2FixedField.
-      Definition rs3Fixed := extractField rs3FixedField.
-      Definition rdFixed := extractField rdFixedField.
+      Definition auiLuiOffset := extractFieldFromInst auiLuiField.
+      Definition rs1 := extractFieldFromInstDynamic rs1Field.
+      Definition rs2 := extractFieldFromInstDynamic rs2Field.
+      Definition rs3 := extractFieldFromInstDynamic rs3Field.
+      Definition rd := extractFieldFromInstDynamic rdField.
+      Definition rs1Fixed := extractFieldFromInst rs1FixedField.
+      Definition rs2Fixed := extractFieldFromInst rs2FixedField.
+      Definition rs3Fixed := extractFieldFromInst rs3FixedField.
+      Definition rdFixed := extractFieldFromInst rdFixedField.
     End Fields.
 
     Record InstProperties :=

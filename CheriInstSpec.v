@@ -1,5 +1,4 @@
 Require Import Kami.AllNotations ProcKami.CheriTypes ProcKami.Lib.
-Require Import List.
 
 Section InstBaseSpec.
   Context `{procParams: ProcParams}.
@@ -87,7 +86,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC in1 <- SignExtend 1 (cs1 @% "val");
               LETC in2 <- SignExtendTruncLsb (Xlen + 1) (imm inst);
-              LETC res <- #in1 - #in2;
+              LETC res <- Sub #in1 #in2;
               LETC msb <- UniBit (TruncMsb Xlen 1) #res;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
@@ -100,7 +99,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC in1 <- ZeroExtend 1 (cs1 @% "val");
               LETC in2 <- ZeroExtendTruncLsb (Xlen + 1) (imm inst);
-              LETC res <- #in1 - #in2;
+              LETC res <- Sub #in1 #in2;
               LETC msb <- UniBit (TruncMsb Xlen 1) #res;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
@@ -202,7 +201,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC in1 <- SignExtend 1 (cs1 @% "val");
               LETC in2 <- SignExtend 1 (cs2 @% "val");
-              LETC res <- UniBit (TruncMsb Xlen 1) (#in1 + ~#in2 + $1);
+              LETC res <- UniBit (TruncMsb Xlen 1) (Sub #in1 #in2);
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #res]));
@@ -215,7 +214,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC in1 <- ZeroExtend 1 (cs1 @% "val");
               LETC in2 <- ZeroExtend 1 (cs2 @% "val");
-              LETC res <- UniBit (TruncMsb Xlen 1) (#in1 + ~#in2 + $1);
+              LETC res <- UniBit (TruncMsb Xlen 1) (Sub #in1 #in2);
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #res]));
@@ -432,7 +431,7 @@ Section InstBaseSpec.
             ( LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
               LETC newPerms <- unpack CapPerms (ZeroExtendTruncLsb (size CapPerms)
                                                   ((ZeroExtendTruncLsb Xlen (pack #perms)) .& (cs2 @% "val")));
-              LETE newCap <- setCapPerms capAccessors (cs1 @% "cap") #newPerms;
+              LETE newCap <- setCapPerms capAccessors #newPerms (cs1 @% "cap");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- cs1 @% "tag" ]
@@ -494,7 +493,7 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"7f")];
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC len <- (#baseTop @% "top") - ZeroExtend 1 (#baseTop @% "base");
+              LETC len <- Sub (#baseTop @% "top") (ZeroExtend 1 (#baseTop @% "base"));
               LETC lenMsb <- unpack Bool (UniBit (TruncMsb Xlen 1) #len);
               LETC lenLsb <- UniBit (TruncLsb Xlen 1) #len;
               RetE ((DefBaseOutput ty)
@@ -616,7 +615,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETE capBounds <- getCapBounds capAccessors ($0) (cs1 @% "val");
               LETC mask <- $$(wones Xlen) << (#capBounds @% "exp");
-              LETC repLen <- (cs1 @% "val" + ~#mask) .& #mask;
+              LETC repLen <- (cs1 @% "val" + (~#mask)) .& #mask;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- #repLen ]));
@@ -752,8 +751,8 @@ Section InstBaseSpec.
               LETC topBound <- ZeroExtend 1 (cs2 @% "val") + $1 <= (#baseTop2 @% "top");
               LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
               LETE perms2 <- getCapPerms capAccessors (cs2 @% "cap");
-              LETE validSealAddr <- isSealAddr capAccessors (cs2 @% "val") (#perms @% "EX");
-              LETC newCap <- seal capAccessors (cs1 @% "cap") (ZeroExtendTruncLsb (CapOTypeSz capAccessors) (cs2 @% "val"));
+              LETC validSealAddr <- isSealAddr capAccessors (cs2 @% "val") (#perms @% "EX");
+              LETC newCap <- seal capAccessors (ZeroExtendTruncLsb (CapOTypeSz capAccessors) (cs2 @% "val")) (cs1 @% "cap");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- (cs2 @% "tag") && !isSealed capAccessors (cs2 @% "cap") && (#baseBound && #topBound) &&
@@ -775,7 +774,7 @@ Section InstBaseSpec.
               LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
               LETE perms2 <- getCapPerms capAccessors (cs2 @% "cap");
               LETC newPerms <- #perms @%[ "GL" <- #perms @% "GL" && #perms2 @% "GL" ];
-              LETE newCapWithPerms <- setCapPerms capAccessors (cs1 @% "cap") #newPerms;
+              LETE newCapWithPerms <- setCapPerms capAccessors #newPerms (cs1 @% "cap");
               LETC newCap <- unseal capAccessors #newCapWithPerms;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
@@ -980,7 +979,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- $$true ]
-                      @%[ "cdCap" <- seal capAccessors (pc @% "cap") (getOTypeFromIe capAccessors ie) ]
+                      @%[ "cdCap" <- seal capAccessors (getOTypeFromIe capAccessors ie) (pc @% "cap") ]
                       @%[ "cdVal" <- #linkAddr ]
                       @%[ "mayChangePc?" <- $$true ]
                       @%[ "taken?" <- $$true ]
@@ -1019,7 +1018,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- $$true ]
-                      @%[ "cdCap" <- seal capAccessors (pc @% "cap") (getOTypeFromIe capAccessors ie) ]
+                      @%[ "cdCap" <- seal capAccessors (getOTypeFromIe capAccessors ie) (pc @% "cap") ]
                       @%[ "cdVal" <- #linkAddr ]
                       @%[ "mayChangePc?" <- $$true ]
                       @%[ "taken?" <- $$true ]
