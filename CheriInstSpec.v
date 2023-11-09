@@ -86,7 +86,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC in1 <- SignExtend 1 (cs1 @% "val");
               LETC in2 <- SignExtendTruncLsb (Xlen + 1) (imm inst);
-              LETC res <- Sub #in1 #in2;
+              LETC res <- #in1 - #in2;
               LETC msb <- UniBit (TruncMsb Xlen 1) #res;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
@@ -99,7 +99,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC in1 <- ZeroExtend 1 (cs1 @% "val");
               LETC in2 <- ZeroExtendTruncLsb (Xlen + 1) (imm inst);
-              LETC res <- Sub #in1 #in2;
+              LETC res <- #in1 - #in2;
               LETC msb <- UniBit (TruncMsb Xlen 1) #res;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
@@ -191,7 +191,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
-                      @%[ "cdVal" <- Sub (cs1 @% "val") (cs2 @% "val")]));
+                      @%[ "cdVal" <- (cs1 @% "val") - (cs2 @% "val")]));
           instProperties := {| hasCs1 := true; hasCs2 := true; implicit := 0 |}
         |};
         {|instName := "SLT";
@@ -201,7 +201,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC in1 <- SignExtend 1 (cs1 @% "val");
               LETC in2 <- SignExtend 1 (cs2 @% "val");
-              LETC res <- UniBit (TruncMsb Xlen 1) (Sub #in1 #in2);
+              LETC res <- UniBit (TruncMsb Xlen 1) (#in1 - #in2);
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #res]));
@@ -214,7 +214,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETC in1 <- ZeroExtend 1 (cs1 @% "val");
               LETC in2 <- ZeroExtend 1 (cs2 @% "val");
-              LETC res <- UniBit (TruncMsb Xlen 1) (Sub #in1 #in2);
+              LETC res <- UniBit (TruncMsb Xlen 1) (#in1 - #in2);
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #res]));
@@ -351,7 +351,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
-                      @%[ "cdVal" <- Trunc32Signed Xlen (Sub (cs1 @% "val") (cs2 @% "val"))]));
+                      @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") - (cs2 @% "val"))]));
           instProperties := {| hasCs1 := true; hasCs2 := true; implicit := 0 |}
         |};
         {|instName := "SLLW";
@@ -493,7 +493,7 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"7f")];
           inputXform ty pc inst cs1 cs2 ie :=
             ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC len <- Sub (#baseTop @% "top") (ZeroExtend 1 (#baseTop @% "base"));
+              LETC len <- (#baseTop @% "top") - (ZeroExtend 1 (#baseTop @% "base"));
               LETC lenMsb <- unpack Bool (UniBit (TruncMsb Xlen 1) #len);
               LETC lenLsb <- UniBit (TruncLsb Xlen 1) #len;
               RetE ((DefBaseOutput ty)
@@ -719,7 +719,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 ie :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
-                      @%[ "cdVal" <- Sub (cs1 @% "val") (cs2 @% "val") ]));
+                      @%[ "cdVal" <- (cs1 @% "val") - (cs2 @% "val") ]));
           instProperties := {| hasCs1 := true; hasCs2 := true; implicit := 0 |}
         |};
         {|instName := "CTestSubset";
@@ -817,22 +817,22 @@ Section InstBaseSpec.
         mkBranchInst "BLT" ('b"100") (fun ty rs1 rs2 =>
                                         ( LETC a <- SignExtend 1 rs1;
                                           LETC b <- SignExtend 1 rs2;
-                                          LETC res <- Sub #a #b;
+                                          LETC res <- #a - #b;
                                           RetE (unpack Bool (UniBit (TruncMsb Xlen 1) #res))));
         mkBranchInst "BGE" ('b"101") (fun ty rs1 rs2 =>
                                         ( LETC a <- SignExtend 1 rs1;
                                           LETC b <- SignExtend 1 rs2;
-                                          LETC res <- Sub #a #b;
+                                          LETC res <- #a - #b;
                                           RetE !(unpack Bool (UniBit (TruncMsb Xlen 1) #res))));
         mkBranchInst "BLTU" ('b"110") (fun ty rs1 rs2 =>
                                          ( LETC a <- ZeroExtend 1 rs1;
                                            LETC b <- ZeroExtend 1 rs2;
-                                           LETC res <- Sub #a #b;
+                                           LETC res <- #a - #b;
                                            RetE (unpack Bool (UniBit (TruncMsb Xlen 1) #res))));
         mkBranchInst "BGEU" ('b"111") (fun ty rs1 rs2 =>
                                          ( LETC a <- ZeroExtend 1 rs1;
                                            LETC b <- ZeroExtend 1 rs2;
-                                           LETC res <- Sub #a #b;
+                                           LETC res <- #a - #b;
                                            RetE !(unpack Bool (UniBit (TruncMsb Xlen 1) #res))))
       ]
     |}.

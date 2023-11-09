@@ -126,7 +126,7 @@ Section CapHelpers.
           LETC aTop <- UniBit (TruncMsb 9 (AddrSz - 9)) #aMidTop;
           LETC aHi <- ITE (#aMid < #B) $1 $0;
           LETC tHi <- ITE (#T < #B) $1 $0;
-          LETC aTopBase <- Sub #aTop #aHi;
+          LETC aTopBase <- #aTop - #aHi;
           LETC base <- ZeroExtendTruncLsb AddrSz ({< #aTopBase, #B >}) << #exp;
           LETC top <- ZeroExtendTruncLsb (AddrSz + 1) ({< #aTopBase + #tHi, #T >}) << #exp;
           RetE (STRUCT {
@@ -135,22 +135,22 @@ Section CapHelpers.
   
       Definition capBounds (base: Bit AddrSz @# ty) (length: Bit AddrSz @# ty) :=
         ( LETC top : Bit (AddrSz + 1) <- ZeroExtend 1 base + ZeroExtend 1 length;
-          LETC expInit : Bit (Nat.log2_up AddrSz) <- Sub $23 (countLeadingZeros _ (ZeroExtendTruncMsb 23 length));
+          LETC expInit : Bit (Nat.log2_up AddrSz) <- $23 - (countLeadingZeros _ (ZeroExtendTruncMsb 23 length));
           LETC isInitSatExpInitSat : Pair Bool (Bit (Nat.log2_up AddrSz)) <-
                                        ITE (#expInit > $14) (STRUCT { "fst" ::= $$true; "snd" ::= $$(wones 5) })
                                          (STRUCT { "fst" ::= $$false; "snd" ::= #expInit });
           LETC isInitSat <- #isInitSatExpInitSat @% "fst";
           LETC expInitSat <- #isInitSatExpInitSat @% "snd";
-          LETC lostTopInit <- isNotZero (#top << (Sub $AddrSz #expInitSat));
+          LETC lostTopInit <- isNotZero (#top << ($AddrSz - #expInitSat));
           LETC lengthShifted <- ZeroExtendTruncLsb 9 (length >> #expInitSat);
           LETC lengthShiftedAllOnes <- isAllOnes #lengthShifted;
           LETC exp : Bit (Nat.log2_up AddrSz) <- ITE (#lostTopInit && #lengthShiftedAllOnes && !#isInitSat)
                                                    (#expInitSat + $1) (#expInitSat);
           LETC B <- ZeroExtendTruncLsb 9 (base >> #exp);
-          LETC lostTop <- isNotZero (#top << (Sub $AddrSz #exp));
+          LETC lostTop <- isNotZero (#top << ($AddrSz - #exp));
           LETC TInit <- ZeroExtendTruncLsb 9 (#top >> #exp);
           LETC T <- ITE #lostTop (#TInit + $1) #TInit;
-          LETC lostBase <- isNotZero (base << (Sub $AddrSz #exp));
+          LETC lostBase <- isNotZero (base << ($AddrSz - #exp));
           RetE (STRUCT {
                     "B" ::= #B;
                     "T" ::= #T;
