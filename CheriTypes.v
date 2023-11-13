@@ -10,7 +10,7 @@ Section CapAccessors.
         "SE" :: Bool; (* Permit Seal *)
         "US" :: Bool; (* Permit Unseal *)
         "EX" :: Bool; (* Permit Execute *)
-        "SR" :: Bool; (* Permit system register access. Unused *)
+        "SR" :: Bool; (* Permit system register access *)
         "MC" :: Bool; (* Permit Load or Store of Caps *)
         "LD" :: Bool; (* Permit Load *)
         "SL" :: Bool; (* Permit Store of Local *)
@@ -85,9 +85,7 @@ Definition PccValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen) (pcCap: w
      the instruction, not during the previous instruction (like JALR,
      JAL, Branch, PC+2, PC+4).  Instead, we store the taken-ness and
      previous PC, which we use to set EPC on a taken branch/Jump.
-   - No Special CSR - all system registers are memory mapped, so we
-     can use simple capabilities to enforce access constraint.
-*)
+ *)
 
 Class ProcParams :=
   { procName: string;
@@ -145,6 +143,8 @@ Section ParamDefinitions.
     Definition Inst := (Bit InstSz).
     Definition CompInstSz := 16.
     Definition CompInst := (Bit CompInstSz).
+    Definition ScrIdSz := 5.
+    Definition ScrId := Bit ScrIdSz.
 
     Definition isInstNotCompressed ty sz (bitString : Bit sz @# ty)
       := unpack Bool (UniBit (UAnd _) (ZeroExtendTruncLsb 2 bitString)).
@@ -210,9 +210,12 @@ Section ParamDefinitions.
     End Fields.
 
     Record InstProperties :=
-      { hasCs1   : bool ;
-        hasCs2   : bool ;
-        implicit : nat }.
+      { hasCs1        : bool ;
+        hasCs2        : bool ;
+        hasScr        : bool ;
+        hasCsr        : bool ;
+        implicit      : nat ;
+        implicitMepcc : bool }.
   End InstEncoding.
 
   Definition FenceI := 0.
@@ -227,9 +230,13 @@ Section ParamDefinitions.
   Definition CapLdCapViolation   := 20. (* Reg *)
   Definition CapStCapViolation   := 21. (* Reg *)
   Definition CapStLocalViolation := 22. (* Reg *)
+  Definition CapSysRegViolation  := 24. (* PC *)
   Definition CapLdMisaligned     := 4.  (* Addr *)
-  Definition InstMisaligned      := 0.  (* Addr *)
   Definition CapStMisaligned     := 6.  (* Addr *)
+
+  Definition InstMisaligned      := 0.  (* Addr *)
+  Definition InstIllegal         := 2.  (* Inst *)
+  Definition ECall               := 8.
 
   Definition LdOp := 0.
   Definition StOp := 1.
@@ -259,18 +266,23 @@ Section ParamDefinitions.
   Definition FuncOutput :=
     STRUCT_TYPE {
         "data"              :: FullCapWithTag;
-        "pcCapOrMemOp"      :: Cap;
-        "addr"              :: Addr;
+        "pcOrScrCapOrMemOp" :: Cap;
+        "addrOrScrOrCsrVal" :: Addr;
         "wb?"               :: Bool;
         "mayChangePc?"      :: Bool;
         "taken?"            :: Bool;
         "changePcCap?"      :: Bool;
         "mem?"              :: Bool;
         "exception?"        :: Bool;
-        "exceptionCausePc?" :: Bool; (* exception is by PC or reg *)
+        "baseException?"    :: Bool; (* non-cap exception *)
+        "pcException?"      :: Bool; (* cap exception caused by PC *)
         "interrupt?"        :: Bool;
         "changeIe?"         :: Bool;
-        "newIe"             :: Bool }.
+        "newIe"             :: Bool;
+        "wbScr?"            :: Bool;
+        "scrTag"            :: Bool;
+        "scrException?"     :: Bool;
+        "wbCsr?"            :: Bool}.
 
   Section InstEntry.
     Variable ik: Kind.
@@ -279,6 +291,7 @@ Section ParamDefinitions.
         uniqId         : UniqId;
         inputXform     : forall ty, FullCap @# ty -> Inst @# ty ->
                                     FullCapWithTag @# ty -> FullCapWithTag @# ty ->
+                                    FullCapWithTag @# ty -> Data @# ty ->
                                     Bool @# ty -> ik ## ty;
         instProperties : InstProperties }.
 
@@ -309,7 +322,8 @@ Section ParamDefinitions.
       outputFiltXform := outputXform fe;
       filtInsts :=
         fold_left (fun prev new =>
-                     (if (getBool (in_dec Nat.eq_dec Xlen (xlens new)) && getBool (in_dec Extension_eq_dec (extension new) supportedExts))%bool
+                     (if (getBool (in_dec Nat.eq_dec Xlen (xlens new)) &&
+                            getBool (in_dec Extension_eq_dec (extension new) supportedExts))%bool
                       then instEntries new
                       else []) ++ prev)
           (insts fe) []
