@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Lib.
+Require Import Kami.AllNotations.
 
 Section CapAccessors.
   Variable CapSz: nat.

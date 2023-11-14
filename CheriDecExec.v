@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.CheriTypes ProcKami.Lib.
+Require Import Kami.AllNotations ProcKami.CheriTypes.
 
 Section DecExec.
   Context `{procParams: ProcParams}.
