@@ -242,7 +242,7 @@ Section ParamDefinitions.
   Definition StOp := 1.
   Definition MemOpSz := 1.
 
-  Definition MemSizeSz := Nat.log2_up (S ((Xlen + CapSz)/8)).
+  Definition MemSizeSz := (Nat.log2_up ((Xlen + CapSz)/8)) + 1.
   Definition MemSize := Bit MemSizeSz.
 
   Definition MemOpInfo :=
@@ -254,6 +254,14 @@ Section ParamDefinitions.
         "LG"    :: Bool;
         "sign?" :: Bool;
         "cap?"  :: Bool }.
+
+  Definition MemReq :=
+    STRUCT_TYPE {
+        "op" :: Bit MemOpSz;
+        "size" :: MemSize;
+        "addr" :: Addr }.
+
+  Definition MemResp := FullCapWithTag.
 
   Theorem sizeMemOpInfo: size MemOpInfo <= CapSz.
   Proof.
@@ -301,31 +309,35 @@ Section ParamDefinitions.
         instEntries: list InstEntry }.
   End InstEntry.
 
+  Record FuncEntryFull :=
+    { localFuncInputFull  : Kind;
+      localFuncOutputFull : Kind;
+      localFuncFull       : forall ty, localFuncInputFull @# ty -> localFuncOutputFull ## ty;
+      outputXformFull     : forall ty, localFuncOutputFull @# ty -> FuncOutput ## ty;
+      instsFull           : list (InstEntryFull localFuncInputFull) }.
+
   Record FuncEntry :=
     { localFuncInput  : Kind;
       localFuncOutput : Kind;
       localFunc       : forall ty, localFuncInput @# ty -> localFuncOutput ## ty;
       outputXform     : forall ty, localFuncOutput @# ty -> FuncOutput ## ty;
-      insts           : list (InstEntryFull localFuncInput) }.
+      insts           : list (InstEntry localFuncInput) }.
 
-  Record FiltFuncEntry :=
-    { localFiltFuncInput  : Kind;
-      localFiltFuncOutput : Kind;
-      localFiltFunc       : forall ty, localFiltFuncInput @# ty -> localFiltFuncOutput ## ty;
-      outputFiltXform     : forall ty, localFiltFuncOutput @# ty -> FuncOutput ## ty;
-      filtInsts           : list (InstEntry localFiltFuncInput) }.
-
-  Definition mkFiltFuncEntry (fe : FuncEntry) :=
-    {|localFiltFuncInput := localFuncInput fe;
-      localFiltFuncOutput := localFuncOutput fe;
-      localFiltFunc := localFunc fe;
-      outputFiltXform := outputXform fe;
-      filtInsts :=
+  Definition mkFuncEntry (fe : FuncEntryFull) :=
+    {|localFuncInput := localFuncInputFull fe;
+      localFuncOutput := localFuncOutputFull fe;
+      localFunc := localFuncFull fe;
+      outputXform := outputXformFull fe;
+      insts :=
         fold_left (fun prev new =>
                      (if (getBool (in_dec Nat.eq_dec Xlen (xlens new)) &&
                             getBool (in_dec Extension_eq_dec (extension new) supportedExts))%bool
                       then instEntries new
                       else []) ++ prev)
-          (insts fe) []
+          (instsFull fe) []
     |}.
+
+  Record CsrInfo := {
+      csrAddress : word (snd (immField));
+      csrReg : RegInitT }.
 End ParamDefinitions.

@@ -12,5 +12,8 @@ Section Lib.
 
   Definition StaticIf (filter : bool) (pred: Bool @# ty) k (tExpr fExpr: k @# ty) :=
     if filter then ITE pred tExpr fExpr else fExpr.
+
+  Definition ShuffleArray n k (inp: Array n k @# ty) (inpStart: Bit (Nat.log2_up n) @# ty) : Array n k @# ty :=
+    BuildArray (fun i => ReadArray inp ($(FinFun.Fin2Restrict.f2n i) + inpStart)%kami_expr).
 End Lib.
 

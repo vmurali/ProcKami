@@ -1115,13 +1115,15 @@ Section InstBaseSpec.
       ]
     |}.
 
-  Definition csrs : list (word (snd immField)) := [
-      _ 'h"300"; (* mstatus *)
-      _ 'h"342"; (* mcause *)
-      _ 'h"343"  (* mtval *) ].
+  Definition csrs : list CsrInfo := [
+      Build_CsrInfo (_ 'h"C01") ("time", existT _ (SyntaxKind Data) (Some (SyntaxConst (ConstBit (wzero _)))));
+      Build_CsrInfo (_ 'h"C81") ("timeh", existT _ (SyntaxKind Data) (Some (SyntaxConst (ConstBit (wzero _)))));
+      Build_CsrInfo (_ 'h"300") ("mstatus", existT _ (SyntaxKind Data) (Some (SyntaxConst (ConstBit (wzero _)))));
+      Build_CsrInfo (_ 'h"342") ("mcause", existT _ (SyntaxKind Data) None);
+      Build_CsrInfo (_ 'h"343") ("mtval", existT _ (SyntaxKind Data) None) ].
   
   Definition isValidCsrs ty (inst : Inst @# ty) :=
-    Kor (map (fun csr => (imm inst == Const ty (ConstBit csr))%kami_expr) csrs).
+    Kor (map (fun csr => (imm inst == Const ty (ConstBit (csrAddress csr)))%kami_expr) csrs).
 
   Definition csrInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
@@ -1346,17 +1348,17 @@ Section InstBaseSpec.
       ]
     |}.
 
-  Definition specBaseFuncUnit : FuncEntry :=
-    {|localFuncInput := BaseOutput;
-      localFuncOutput := BaseOutput;
-      localFunc ty x := RetE x;
-      outputXform := baseOutputXform;
-      insts := [aluInsts; alu64Insts; capInsts; branchInsts;
-                ldInsts; ld32Insts; ld64Insts; stInsts; st32Insts; st64Insts;
-                jumpInsts; exceptionInsts; csrInsts; cSpecialInsts; interruptInsts]
+  Definition specBaseFuncUnit : FuncEntryFull :=
+    {|localFuncInputFull := BaseOutput;
+      localFuncOutputFull := BaseOutput;
+      localFuncFull ty x := RetE x;
+      outputXformFull := baseOutputXform;
+      instsFull := [aluInsts; alu64Insts; capInsts; branchInsts;
+                    ldInsts; ld32Insts; ld64Insts; stInsts; st32Insts; st64Insts;
+                    jumpInsts; exceptionInsts; csrInsts; cSpecialInsts; interruptInsts]
     |}.
 
-  Definition specBaseInsts : list (InstEntry BaseOutput) := filtInsts (mkFiltFuncEntry specBaseFuncUnit).
+  Definition specBaseInsts : list (InstEntry BaseOutput) := insts (mkFuncEntry specBaseFuncUnit).
 
   Ltac simplify_field field :=
     repeat match goal with
@@ -1368,8 +1370,8 @@ Section InstBaseSpec.
 
   Theorem uniqAluIds: NoDup (map (@uniqId _ BaseOutput) specBaseInsts).
   Proof.
-    unfold specBaseInsts, mkFiltFuncEntry, filtInsts, specBaseFuncUnit, insts,
-      localFuncInput, localFuncOutput, fold_left.
+    unfold specBaseInsts, mkFuncEntry, insts, specBaseFuncUnit, instsFull,
+      localFuncInputFull, localFuncOutputFull, fold_left.
     pose proof extsHasBase as base.
     simplify_field (@extension procParams BaseOutput).
     destruct (in_dec Extension_eq_dec Base supportedExts);
