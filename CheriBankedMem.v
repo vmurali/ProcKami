@@ -67,9 +67,7 @@ Section BankedMem.
                        (eq_rect _ _ (loadInstReqBytesCallHelp ms
                                        (exprs ++ [ReadArrayConst #ret Fin.F1]) (S pos)) _ _))
         end.
-      abstract (rewrite app_length;
-                rewrite <- Nat.add_assoc;
-                reflexivity).
+      abstract (rewrite app_length, <- Nat.add_assoc; reflexivity).
       Defined.
     End CommonIdx.
     
