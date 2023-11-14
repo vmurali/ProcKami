@@ -38,6 +38,8 @@ Section InstBaseSpec.
 
   Section ty.
     Variable ty: Kind -> Type.
+    Local Definition Trunc32Signed := @TruncToSizeSigned ty 32.
+    Local Definition Trunc32Unsigned := @TruncToSizeUnsigned ty 32.
     Definition DefBaseOutput: BaseOutput @# ty := Const _ Default.
 
     Definition baseOutputXform (inp: BaseOutput @# ty): FuncOutput ## ty :=

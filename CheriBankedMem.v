@@ -13,13 +13,18 @@ Section BankedMem.
 
   Variable memBankInits: list MemBankInit.
   Variable tagRead tagWrite tagDataArray: string.
-  Variable numMemBankInits: length memBankInits = (CapSz + Xlen) / 8.
+  Definition NumBanks := (CapSz + Xlen) / 8.
+  Variable lengthMemBankInits: length memBankInits = NumBanks.
 
-  Ltac dischargeNumBanksLengthMemBankInits :=
-    rewrite numMemBankInits;
-    unfold FullCap, Cap, CapSz, Data;
+  Local Ltac dischargeDiv8 :=
+    unfold NumBanks, FullCap, Cap, CapSz, Data;
+    let H := fresh in
     destruct (xlenIs32_or_64) as [H | H]; rewrite H; auto.
   
+  Local Ltac dischargeLengthMemBankInits :=
+    rewrite lengthMemBankInits;
+    dischargeDiv8.
+
   Definition createRegFile (mb: MemBankInit) :=
     {|rfIsWrMask := false;
       rfNum := 1;
@@ -46,21 +51,21 @@ Section BankedMem.
   Local Open Scope kami_expr.
   Local Open Scope kami_action.
 
-  Section Load.
+  Section LoadInst.
     Variable addr: Addr @# ty.
-    Variable isInst: bool.
     
     Section CommonIdx.
       Variable idx idxPlus1: Bit (Nat.log2_up Size) @# ty.
-      Variable idxLsb: Bit (Nat.log2_up (length memBankInits)) @# ty.
+      Variable idxLsb: Bit (Nat.log2_up NumBanks) @# ty.
 
-      Local Fixpoint loadReqBytesCallHelp (mbs: list MemBankInit)
+      Local Fixpoint loadInstReqBytesCallHelp (mbs: list MemBankInit)
         (exprs: list (Bit 8 @# ty)) (pos: nat) : ActionT ty (Array (length exprs + length mbs) (Bit 8)). refine
         match mbs return ActionT ty (Array (length exprs + length mbs) (Bit 8)) with
         | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
         | m :: ms => ( LET actualIdx <- ITE ($pos < idxLsb) idxPlus1 idx;
-                       Call ret : Array 1 (Bit 8) <- ((if isInst then instName else loadName) m) (#actualIdx : Bit (Nat.log2_up Size));
-                       (eq_rect _ _ (loadReqBytesCallHelp ms (exprs ++ [ReadArrayConst #ret Fin.F1]) (S pos)) _ _))
+                       Call ret : Array 1 (Bit 8) <- (instName m) (#actualIdx : Bit (Nat.log2_up Size));
+                       (eq_rect _ _ (loadInstReqBytesCallHelp ms
+                                       (exprs ++ [ReadArrayConst #ret Fin.F1]) (S pos)) _ _))
         end.
       abstract (rewrite app_length;
                 rewrite <- Nat.add_assoc;
@@ -68,66 +73,81 @@ Section BankedMem.
       Defined.
     End CommonIdx.
     
-    Definition loadReq: ActionT ty FullCapWithTag.
+    Definition loadInstReq: ActionT ty FullCap.
       refine
         ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up Size) addr;
           LET idxPlus1 <- #idx + $1;
-          LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up (length memBankInits)) addr;
-          LETA bytes <- loadReqBytesCallHelp #idx #idxPlus1 #idxLsb memBankInits [] 0;
+          LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
+          LETA bytes <- loadInstReqBytesCallHelp #idx #idxPlus1 #idxLsb memBankInits [] 0;
           LET shuffledBytes <- ShuffleArray #bytes #idxLsb;
-          LET unpacked <- unpack FullCap (castBits _ (pack #shuffledBytes));
-          Call tag : Bool <- tagRead (#idx: Bit (Nat.log2_up Size));
-          Ret (STRUCT {
-                   "tag" ::= #tag;
-                   "cap" ::= #unpacked @% "cap";
-                   "val" ::= #unpacked @% "val" } : FullCapWithTag @# ty)).
-      abstract dischargeNumBanksLengthMemBankInits.
+          Ret (unpack FullCap (castBits _ (pack #shuffledBytes)) )).
+      abstract dischargeLengthMemBankInits.
     Defined.
-  End Load.
+  End LoadInst.
 
-  Section Store.
+  Section LoadStore.
+    Variable isStore: Bool @# ty.
     Variable addr: Addr @# ty.
     Variable size: MemSize @# ty.
     Variable isCap: Bool @# ty.
     Variable data: FullCapWithTag @# ty.
+    Variable signed: Bool @# ty.
 
     Section CommonIdx.
       Variable idx idxPlus1: Bit (Nat.log2_up Size) @# ty.
-      Variable idxLsb: Bit (Nat.log2_up (length memBankInits)) @# ty.
-      Variable bytes: Array (length memBankInits) (Bit 8) @# ty.
+      Variable idxLsb: Bit (Nat.log2_up NumBanks) @# ty.
+      Variable bytes: Array NumBanks (Bit 8) @# ty.
 
-      Local Fixpoint storeReqBytesCallHelp (mbs: list MemBankInit) (pos: nat) : ActionT ty Void. refine
+      Local Fixpoint reqBytesCallHelp (mbs: list MemBankInit) (pos: nat)
+        (exprs: list (Bit 8 @# ty)) : ActionT ty (Array (length exprs + length mbs) (Bit 8)). refine
         match mbs with
-        | [] => Retv
+        | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
         | m :: ms => ( LET inpPos <- $pos - idxLsb;
                        LET actualIdx <- ITE (unpack Bool (ZeroExtendTruncMsb 1 #inpPos)) idxPlus1 idx;
-                       LET isWrite <- (ZeroExtend 1 #inpPos) < castBits _ size;
+                       LET isWrite <- (ZeroExtend 1 #inpPos) < size;
                        LET writeRq <- STRUCT { "addr" ::= #actualIdx;
                                                "data" ::= BuildArray (fun _ => bytes @[ #inpPos ] ) };
-                       If #isWrite
-                       then Call (storeName m) (#writeRq : WriteRq (Nat.log2_up Size) (Array 1 (Bit 8))); Retv
-                       else Retv;
-                       storeReqBytesCallHelp ms (S pos) )
+                       If isStore
+                       then ( If #isWrite
+                              then Call (storeName m) (#writeRq : WriteRq (Nat.log2_up Size) (Array 1 (Bit 8))); Retv
+                              else Retv;
+                              Ret (Const ty Default) )
+                       else ( Call ret : Array 1 (Bit 8) <- (loadName m) (#actualIdx : Bit (Nat.log2_up Size));
+                              Ret #ret ) as retVal;
+                       (eq_rect _ _ (reqBytesCallHelp ms (S pos) (exprs ++ [ReadArrayConst #retVal Fin.F1])) _ _))
         end.
-      abstract (rewrite numMemBankInits; auto).
+      abstract (rewrite app_length, <- Nat.add_assoc; reflexivity).
       Defined.
     End CommonIdx.
 
-    Definition storeReq: ActionT ty Void.
+    Definition loadStoreReq: ActionT ty FullCapWithTag.
       refine
         ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up Size) addr;
           LET idxPlus1 <- #idx + $1;
-          LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up (length memBankInits)) addr;
+          LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
           LET capVal <- {< (data @% "cap"), (data @% "val") >};
-          LET bytes <- unpack (Array (length memBankInits) (Bit 8)) (castBits _ #capVal);
-          LETA _ <- storeReqBytesCallHelp #idx #idxPlus1 #idxLsb #bytes memBankInits 0;
+          LET bytes <- unpack (Array NumBanks (Bit 8)) (castBits _ #capVal);
+          LETA ldBytes <- reqBytesCallHelp #idx #idxPlus1 #idxLsb #bytes memBankInits 0 [];
+          LET shuffledLdBytes <- ShuffleArray #ldBytes #idxLsb;
+          LET ldSignVal <- (IF signed
+                            then TruncToDynamicSizeArraySigned #shuffledLdBytes size
+                            else TruncToDynamicSizeArrayUnsigned #shuffledLdBytes size);
+          LET ldVal <- unpack FullCap (castBits _ (pack #ldSignVal));
           LET tagWriteRq <- STRUCT { "addr" ::= #idx;
                                      "data" ::= BuildArray (fun _ => data @% "tag") };
-          If isCap
-          then Call tagWrite (#tagWriteRq: WriteRq (Nat.log2_up Size) (Array 1 Bool)); Retv
-          else Retv;
-          Retv ).
-      abstract dischargeNumBanksLengthMemBankInits.
+          If isStore
+          then ( If isCap
+                 then Call tagWrite (#tagWriteRq: WriteRq (Nat.log2_up Size) (Array 1 Bool)); Retv
+                 else Retv;
+                 Ret (Const ty Default) )
+          else ( Call tag: Array 1 Bool <- tagRead (#idx : Bit (Nat.log2_up Size)); Ret (#tag ![ 0 ]) )
+          as tag;
+          Ret (STRUCT {
+                   "tag" ::= #tag;
+                   "cap" ::= #ldVal @% "cap";
+                   "val" ::= #ldVal @% "val" } : FullCapWithTag @# ty) ).
+      - abstract dischargeDiv8.
+      - abstract dischargeLengthMemBankInits.
     Defined.
-  End Store.
+  End LoadStore.
 End BankedMem.
