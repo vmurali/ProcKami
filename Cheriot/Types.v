@@ -255,14 +255,6 @@ Section ParamDefinitions.
         "sign?" :: Bool;
         "cap?"  :: Bool }.
 
-  Definition MemReq :=
-    STRUCT_TYPE {
-        "op" :: Bit MemOpSz;
-        "size" :: MemSize;
-        "addr" :: Addr }.
-
-  Definition MemResp := FullCapWithTag.
-
   Theorem sizeMemOpInfo: size MemOpInfo <= CapSz.
   Proof.
     simpl.

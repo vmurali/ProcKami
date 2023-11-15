@@ -1,18 +1,18 @@
-Require Import Kami.AllNotations ProcKami.CheriTypes.
+Require Import Kami.AllNotations ProcKami.Cheriot.Types.
 
 Section BankedMem.
   Context `{procParams: ProcParams}.
   
   Variable Size: nat.
+  Variable tagRead tagWrite tagDataArray: string.
+
   Record MemBankInit := {
       instName: string;
       loadName: string;
       storeName: string;
       dataArrayName: string;
       regFileInit: RegFileInitT Size (Bit 8) }.
-
   Variable memBankInits: list MemBankInit.
-  Variable tagRead tagWrite tagDataArray: string.
   Definition NumBanks := (CapSz + Xlen) / 8.
   Variable lengthMemBankInits: length memBankInits = NumBanks.
 

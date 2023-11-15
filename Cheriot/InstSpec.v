@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.CheriTypes.
+Require Import Kami.AllNotations ProcKami.Cheriot.Types.
 
 Section InstBaseSpec.
   Context `{procParams: ProcParams}.
