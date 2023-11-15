@@ -31,6 +31,19 @@ Section DecExec.
                        decodeHelp rest (ITE #matchI #decI (Const ty Default) :: exprs) )
       end.
 
+    Section InstProperties.
+      Variable f: InstProperties -> bool.
+      
+      Local Fixpoint getInstPropertiesHelp (ls: list (InstEntry decOutput)) (exprs: list (Bool @# ty)): Bool ## ty :=
+        match ls with
+        | nil => RetE (Kor exprs)
+        | i :: rest => ( LETC matchI <- matchUniqId (uniqId i);
+                         getInstPropertiesHelp rest (!#matchI || $$(f (instProperties i)) :: exprs) )
+        end.
+
+      Definition getInstProperties (ls: list (InstEntry decOutput)) := getInstPropertiesHelp ls [].
+    End InstProperties.
+
     Definition decode (ls: list (InstEntry decOutput)) := decodeHelp ls [].
     
     Definition decodeMatch (ls: list (InstEntry decOutput)) :=
@@ -44,6 +57,15 @@ Section DecExec.
       LETE execOut <- outputXform funcEntry #fuOut;
       RetE (ITE #decMatch #execOut (Const ty Default)) ).
 
+  Section FuncEntry.
+    (*
+    Variable fs: list FuncEntry.
+
+    Definition DecOut := Struct (fun i => localFuncInput (nth_Fin fs i))
+                           (fun i => funcName (nth_Fin fs i)).
+     *)
+
+  End FuncEntry.
   Definition fullDec (ls: list FuncEntry) := map (fun f => existT _ f (decode (insts f))) ls.
 
   Local Fixpoint fullExecHelp (ls: list {f: FuncEntry & localFuncInput f ## ty } )

@@ -114,11 +114,23 @@ Class ProcParams :=
     NumBanks := (CapSz + Xlen) / 8;
     lengthMemBankInits: length memBankInits = NumBanks;
     procName: string;
-    pcReg: string;
-    mtccReg: string;
-    mtdcReg: string;
-    mscratchcReg: string;
-    mepccReg: string;
+    pcCapReg: string;
+    pcValReg: string;
+    prevPcCapReg: string;
+    prevPcValReg: string;
+    takenReg: string;
+    mtccTagReg: string; 
+    mtccCapReg: string;
+    mtccValReg: string;
+    mtdcTagReg: string;
+    mtdcCapReg: string;
+    mtdcValReg: string;
+    mscratchcTagReg: string;
+    mscratchcCapReg: string;
+    mscratchcValReg: string;
+    mepccTagReg: string;
+    mepccCapReg: string;
+    mepccValReg: string;
     tagRead: string;
     tagWrite: string;
     tagArray: string }.
@@ -319,21 +331,24 @@ Section ParamDefinitions.
   End InstEntry.
 
   Record FuncEntryFull :=
-    { localFuncInputFull  : Kind;
+    { funcNameFull        : string;
+      localFuncInputFull  : Kind;
       localFuncOutputFull : Kind;
       localFuncFull       : forall ty, localFuncInputFull @# ty -> localFuncOutputFull ## ty;
       outputXformFull     : forall ty, localFuncOutputFull @# ty -> FuncOutput ## ty;
       instsFull           : list (InstEntryFull localFuncInputFull) }.
 
   Record FuncEntry :=
-    { localFuncInput  : Kind;
+    { funcName        : string;
+      localFuncInput  : Kind;
       localFuncOutput : Kind;
       localFunc       : forall ty, localFuncInput @# ty -> localFuncOutput ## ty;
       outputXform     : forall ty, localFuncOutput @# ty -> FuncOutput ## ty;
       insts           : list (InstEntry localFuncInput) }.
 
   Definition mkFuncEntry (fe : FuncEntryFull) :=
-    {|localFuncInput := localFuncInputFull fe;
+    {|funcName := funcNameFull fe;
+      localFuncInput := localFuncInputFull fe;
       localFuncOutput := localFuncOutputFull fe;
       localFunc := localFuncFull fe;
       outputXform := outputXformFull fe;

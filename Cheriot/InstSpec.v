@@ -1351,7 +1351,8 @@ Section InstBaseSpec.
     |}.
 
   Definition specBaseFuncUnit : FuncEntryFull :=
-    {|localFuncInputFull := BaseOutput;
+    {|funcNameFull := "base";
+      localFuncInputFull := BaseOutput;
       localFuncOutputFull := BaseOutput;
       localFuncFull ty x := RetE x;
       outputXformFull := baseOutputXform;
