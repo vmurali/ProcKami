@@ -63,9 +63,9 @@ Section BankedMem.
         match mbs return ActionT ty (Array (length exprs + length mbs) (Bit 8)) with
         | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
         | m :: ms => ( LET actualIdx <- ITE ($pos < idxLsb) idxPlus1 idx;
-                       Call ret : Array 1 (Bit 8) <- (instName m) (#actualIdx : Bit (Nat.log2_up Size));
+                       LETA ret <- callReadRegFile (Bit 8) (instName m) #actualIdx;
                        (eq_rect _ _ (instReqCallHelp ms
-                                       (exprs ++ [ReadArrayConst #ret Fin.F1]) (S pos)) _ _))
+                                       (exprs ++ [#ret]) (S pos)) _ _))
         end.
       abstract (rewrite app_length, <- Nat.add_assoc; reflexivity).
       Defined.
@@ -103,16 +103,14 @@ Section BankedMem.
         | m :: ms => ( LET inpPos <- $pos - idxLsb;
                        LET actualIdx <- ITE (unpack Bool (ZeroExtendTruncMsb 1 #inpPos)) idxPlus1 idx;
                        LET isWrite <- (ZeroExtend 1 #inpPos) < size;
-                       LET writeRq <- STRUCT { "addr" ::= #actualIdx;
-                                               "data" ::= BuildArray (fun _ => bytes @[ #inpPos ] ) };
                        If isStore
                        then ( If #isWrite
-                              then Call (storeName m) (#writeRq : WriteRq (Nat.log2_up Size) (Array 1 (Bit 8))); Retv
+                              then callWriteRegFile (storeName m) #actualIdx (bytes @[ #inpPos ])
                               else Retv;
                               Ret (Const ty Default) )
-                       else ( Call ret : Array 1 (Bit 8) <- (loadName m) (#actualIdx : Bit (Nat.log2_up Size));
-                              Ret #ret ) as retVal;
-                       (eq_rect _ _ (memReqCallHelp ms (S pos) (exprs ++ [ReadArrayConst #retVal Fin.F1])) _ _))
+                       else callReadRegFile (Bit 8) (loadName m) #actualIdx
+                       as ret;
+                       (eq_rect _ _ (memReqCallHelp ms (S pos) (exprs ++ [#ret])) _ _))
         end.
       abstract (rewrite app_length, <- Nat.add_assoc; reflexivity).
       Defined.
@@ -131,14 +129,12 @@ Section BankedMem.
                             then TruncToDynamicSizeArraySigned #shuffledLdBytes size
                             else TruncToDynamicSizeArrayUnsigned #shuffledLdBytes size);
           LET ldVal <- unpack FullCap (castBits _ (pack #ldSignVal));
-          LET tagWriteRq <- STRUCT { "addr" ::= #idx;
-                                     "data" ::= BuildArray (fun _ => data @% "tag") };
           If isStore
           then ( If isCap
-                 then Call tagWrite (#tagWriteRq: WriteRq (Nat.log2_up Size) (Array 1 Bool)); Retv
+                 then callWriteRegFile tagWrite #idx (data @% "tag")
                  else Retv;
                  Ret (Const ty Default) )
-          else ( Call tag: Array 1 Bool <- tagRead (#idx : Bit (Nat.log2_up Size)); Ret (#tag ![ 0 ]) )
+          else callReadRegFile Bool tagRead #idx
           as tag;
           Ret (STRUCT {
                    "tag" ::= #tag;

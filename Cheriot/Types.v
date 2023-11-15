@@ -332,4 +332,13 @@ Section ParamDefinitions.
   Record CsrInfo := {
       csrAddress : word (snd (immField));
       csrReg : RegInitT }.
+
+  Definition callReadRegFile k (name: string) ty n (idx: Bit n @# ty) : ActionT ty k :=
+    ( Call ret : Array 1 k <- name (idx: Bit n);
+      Ret (ReadArrayConst #ret Fin.F1) )%kami_action.
+    
+  Definition callWriteRegFile (name: string) ty n (idx: Bit n @# ty) k (v: k @# ty) : ActionT ty Void :=
+    ( Call name (STRUCT { "addr" ::= idx;
+                          "data" ::= BuildArray (fun _ => v) } : WriteRq n (Array 1 k));
+      Retv )%kami_action.
 End ParamDefinitions.
