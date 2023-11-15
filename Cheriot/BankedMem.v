@@ -58,25 +58,25 @@ Section BankedMem.
       Variable idx idxPlus1: Bit (Nat.log2_up Size) @# ty.
       Variable idxLsb: Bit (Nat.log2_up NumBanks) @# ty.
 
-      Local Fixpoint loadInstReqBytesCallHelp (mbs: list MemBankInit)
+      Local Fixpoint instReqCallHelp (mbs: list MemBankInit)
         (exprs: list (Bit 8 @# ty)) (pos: nat) : ActionT ty (Array (length exprs + length mbs) (Bit 8)). refine
         match mbs return ActionT ty (Array (length exprs + length mbs) (Bit 8)) with
         | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
         | m :: ms => ( LET actualIdx <- ITE ($pos < idxLsb) idxPlus1 idx;
                        Call ret : Array 1 (Bit 8) <- (instName m) (#actualIdx : Bit (Nat.log2_up Size));
-                       (eq_rect _ _ (loadInstReqBytesCallHelp ms
+                       (eq_rect _ _ (instReqCallHelp ms
                                        (exprs ++ [ReadArrayConst #ret Fin.F1]) (S pos)) _ _))
         end.
       abstract (rewrite app_length, <- Nat.add_assoc; reflexivity).
       Defined.
     End CommonIdx.
     
-    Definition loadInstReq: ActionT ty FullCap.
+    Definition instReq: ActionT ty FullCap.
       refine
         ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up Size) addr;
           LET idxPlus1 <- #idx + $1;
           LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
-          LETA bytes <- loadInstReqBytesCallHelp #idx #idxPlus1 #idxLsb memBankInits [] 0;
+          LETA bytes <- instReqCallHelp #idx #idxPlus1 #idxLsb memBankInits [] 0;
           LET shuffledBytes <- ShuffleArray #bytes #idxLsb;
           Ret (unpack FullCap (castBits _ (pack #shuffledBytes)) )).
       abstract dischargeLengthMemBankInits.
@@ -96,7 +96,7 @@ Section BankedMem.
       Variable idxLsb: Bit (Nat.log2_up NumBanks) @# ty.
       Variable bytes: Array NumBanks (Bit 8) @# ty.
 
-      Local Fixpoint reqBytesCallHelp (mbs: list MemBankInit) (pos: nat)
+      Local Fixpoint memReqCallHelp (mbs: list MemBankInit) (pos: nat)
         (exprs: list (Bit 8 @# ty)) : ActionT ty (Array (length exprs + length mbs) (Bit 8)). refine
         match mbs with
         | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
@@ -112,7 +112,7 @@ Section BankedMem.
                               Ret (Const ty Default) )
                        else ( Call ret : Array 1 (Bit 8) <- (loadName m) (#actualIdx : Bit (Nat.log2_up Size));
                               Ret #ret ) as retVal;
-                       (eq_rect _ _ (reqBytesCallHelp ms (S pos) (exprs ++ [ReadArrayConst #retVal Fin.F1])) _ _))
+                       (eq_rect _ _ (memReqCallHelp ms (S pos) (exprs ++ [ReadArrayConst #retVal Fin.F1])) _ _))
         end.
       abstract (rewrite app_length, <- Nat.add_assoc; reflexivity).
       Defined.
@@ -125,7 +125,7 @@ Section BankedMem.
           LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
           LET capVal <- {< (data @% "cap"), (data @% "val") >};
           LET bytes <- unpack (Array NumBanks (Bit 8)) (castBits _ #capVal);
-          LETA ldBytes <- reqBytesCallHelp #idx #idxPlus1 #idxLsb #bytes memBankInits 0 [];
+          LETA ldBytes <- memReqCallHelp #idx #idxPlus1 #idxLsb #bytes memBankInits 0 [];
           LET shuffledLdBytes <- ShuffleArray #ldBytes #idxLsb;
           LET ldSignVal <- (IF signed
                             then TruncToDynamicSizeArraySigned #shuffledLdBytes size
