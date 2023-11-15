@@ -87,9 +87,15 @@ Definition PccValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen) (pcCap: w
      previous PC, which we use to set EPC on a taken branch/Jump.
  *)
 
+Record MemBankInit numMemBytes :=
+  { instRqName: string;
+    loadRqName: string;
+    storeRqName: string;
+    memArrayName: string;
+    regFileInit: RegFileInitT numMemBytes (Bit 8) }.
+
 Class ProcParams :=
-  { procName: string;
-    Xlen: nat;
+  { Xlen: nat;
     xlenIs32_or_64: Xlen = 32 \/ Xlen = 64;
     CapSz := Xlen;
     capAccessors: CapAccessors CapSz Xlen;
@@ -101,10 +107,21 @@ Class ProcParams :=
     supportedExts: list Extension;
     extsHasBase: In Base supportedExts;
     RegIdSz: nat;
-    regIdSzIs4_or5: RegIdSz = 4 \/ RegIdSz = 5
-  }.
-
-Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
+    regIdSzIs4_or5: RegIdSz = 4 \/ RegIdSz = 5;
+    NumMemBytes: nat;
+    MemBankParams := MemBankInit NumMemBytes;
+    memBankInits: list MemBankParams;
+    NumBanks := (CapSz + Xlen) / 8;
+    lengthMemBankInits: length memBankInits = NumBanks;
+    procName: string;
+    pcReg: string;
+    mtccReg: string;
+    mtdcReg: string;
+    mscratchcReg: string;
+    mepccReg: string;
+    tagRead: string;
+    tagWrite: string;
+    tagArray: string }.
 
 Section ParamDefinitions.
   Context {procParams: ProcParams}.
@@ -259,7 +276,7 @@ Section ParamDefinitions.
   Proof.
     simpl.
     unfold MemSize, MemSizeSz, CapSz, Xlen, MemOpSz.
-    destruct procParams as [_ xlen xlen_vars _ _ _ _ _ _ _ _ _ _ _].
+    destruct procParams as [xlen xlen_vars].
     destruct xlen_vars; subst; simpl; lia.
   Qed.
 

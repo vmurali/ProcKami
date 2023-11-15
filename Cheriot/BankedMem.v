@@ -3,35 +3,18 @@ Require Import Kami.AllNotations ProcKami.Cheriot.Types.
 Section BankedMem.
   Context `{procParams: ProcParams}.
   
-  Variable Size: nat.
-  Variable tagRead tagWrite tagDataArray: string.
-
-  Record MemBankInit := {
-      instName: string;
-      loadName: string;
-      storeName: string;
-      dataArrayName: string;
-      regFileInit: RegFileInitT Size (Bit 8) }.
-  Variable memBankInits: list MemBankInit.
-  Definition NumBanks := (CapSz + Xlen) / 8.
-  Variable lengthMemBankInits: length memBankInits = NumBanks.
-
   Local Ltac dischargeDiv8 :=
     unfold NumBanks, FullCap, Cap, CapSz, Data;
     let H := fresh in
     destruct (xlenIs32_or_64) as [H | H]; rewrite H; auto.
   
-  Local Ltac dischargeLengthMemBankInits :=
-    rewrite lengthMemBankInits;
-    dischargeDiv8.
-
-  Definition createRegFile (mb: MemBankInit) :=
+  Definition createRegFile (mb: MemBankParams) :=
     {|rfIsWrMask := false;
       rfNum := 1;
-      rfDataArray := dataArrayName mb;
-      rfRead := Async [instName mb; loadName mb];
-      rfWrite := storeName mb;
-      rfIdxNum := Size;
+      rfDataArray := memArrayName mb;
+      rfRead := Async [instRqName mb; loadRqName mb];
+      rfWrite := storeRqName mb;
+      rfIdxNum := NumMemBytes;
       rfData := Bit 8;
       rfInit := regFileInit mb |}.
 
@@ -40,10 +23,10 @@ Section BankedMem.
   Definition tagFile :=
     {|rfIsWrMask := false;
       rfNum := 1;
-      rfDataArray := tagDataArray;
+      rfDataArray := tagArray;
       rfRead := Async [tagRead];
       rfWrite := tagWrite;
-      rfIdxNum := Size;
+      rfIdxNum := NumMemBytes;
       rfData := Bool;
       rfInit := RFNonFile _ (Some (ConstBool false)) |}.
 
@@ -55,15 +38,15 @@ Section BankedMem.
     Variable addr: Addr @# ty.
     
     Section CommonIdx.
-      Variable idx idxPlus1: Bit (Nat.log2_up Size) @# ty.
+      Variable idx idxPlus1: Bit (Nat.log2_up NumMemBytes) @# ty.
       Variable idxLsb: Bit (Nat.log2_up NumBanks) @# ty.
 
-      Local Fixpoint instReqCallHelp (mbs: list MemBankInit)
+      Local Fixpoint instReqCallHelp (mbs: list MemBankParams)
         (exprs: list (Bit 8 @# ty)) (pos: nat) : ActionT ty (Array (length exprs + length mbs) (Bit 8)). refine
         match mbs return ActionT ty (Array (length exprs + length mbs) (Bit 8)) with
         | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
         | m :: ms => ( LET actualIdx <- ITE ($pos < idxLsb) idxPlus1 idx;
-                       LETA ret <- callReadRegFile (Bit 8) (instName m) #actualIdx;
+                       LETA ret <- callReadRegFile (Bit 8) (instRqName m) #actualIdx;
                        (eq_rect _ _ (instReqCallHelp ms
                                        (exprs ++ [#ret]) (S pos)) _ _))
         end.
@@ -71,16 +54,13 @@ Section BankedMem.
       Defined.
     End CommonIdx.
     
-    Definition instReq: ActionT ty FullCap.
-      refine
-        ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up Size) addr;
-          LET idxPlus1 <- #idx + $1;
-          LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
-          LETA bytes <- instReqCallHelp #idx #idxPlus1 #idxLsb memBankInits [] 0;
-          LET shuffledBytes <- ShuffleArray #bytes #idxLsb;
-          Ret (unpack FullCap (castBits _ (pack #shuffledBytes)) )).
-      abstract dischargeLengthMemBankInits.
-    Defined.
+    Definition instReq: ActionT ty Inst :=
+      ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes) addr;
+        LET idxPlus1 <- #idx + $1;
+        LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
+        LETA bytes <- instReqCallHelp #idx #idxPlus1 #idxLsb memBankInits [] 0;
+        LET shuffledBytes <- ShuffleArray #bytes #idxLsb;
+        Ret (ZeroExtendTruncLsb InstSz (pack #shuffledBytes))).
   End LoadInst.
 
   Section LoadStore.
@@ -92,11 +72,11 @@ Section BankedMem.
     Variable signed: Bool @# ty.
 
     Section CommonIdx.
-      Variable idx idxPlus1: Bit (Nat.log2_up Size) @# ty.
+      Variable idx idxPlus1: Bit (Nat.log2_up NumMemBytes) @# ty.
       Variable idxLsb: Bit (Nat.log2_up NumBanks) @# ty.
       Variable bytes: Array NumBanks (Bit 8) @# ty.
 
-      Local Fixpoint memReqCallHelp (mbs: list MemBankInit) (pos: nat)
+      Local Fixpoint memReqCallHelp (mbs: list MemBankParams) (pos: nat)
         (exprs: list (Bit 8 @# ty)) : ActionT ty (Array (length exprs + length mbs) (Bit 8)). refine
         match mbs with
         | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
@@ -105,10 +85,10 @@ Section BankedMem.
                        LET isWrite <- (ZeroExtend 1 #inpPos) < size;
                        If isStore
                        then ( If #isWrite
-                              then callWriteRegFile (storeName m) #actualIdx (bytes @[ #inpPos ])
+                              then callWriteRegFile (storeRqName m) #actualIdx (bytes @[ #inpPos ])
                               else Retv;
                               Ret (Const ty Default) )
-                       else callReadRegFile (Bit 8) (loadName m) #actualIdx
+                       else callReadRegFile (Bit 8) (loadRqName m) #actualIdx
                        as ret;
                        (eq_rect _ _ (memReqCallHelp ms (S pos) (exprs ++ [#ret])) _ _))
         end.
@@ -118,7 +98,7 @@ Section BankedMem.
 
     Definition loadStoreReq: ActionT ty FullCapWithTag.
       refine
-        ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up Size) addr;
+        ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes) addr;
           LET idxPlus1 <- #idx + $1;
           LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
           LET capVal <- {< (data @% "cap"), (data @% "val") >};
@@ -141,7 +121,7 @@ Section BankedMem.
                    "cap" ::= #ldVal @% "cap";
                    "val" ::= #ldVal @% "val" } : FullCapWithTag @# ty) ).
       - abstract dischargeDiv8.
-      - abstract dischargeLengthMemBankInits.
+      - abstract (rewrite lengthMemBankInits; dischargeDiv8).
     Defined.
   End LoadStore.
 End BankedMem.

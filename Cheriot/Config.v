@@ -214,15 +214,37 @@ Section CapHelpers.
   Qed.
 End CapHelpers.
 
-Definition procParams : ProcParams :=
-  {|procName := "cheriot";
-    Xlen := 32;
-    xlenIs32_or_64 := or_introl eq_refl;
-    capAccessors := capAccessorsInit;
-    pccValid := pccValidThm;
-    TrapAddr := _ 'h"100";
-    supportedExts := [Base];
-    extsHasBase := or_introl eq_refl;
-    RegIdSz := 4;
-    regIdSzIs4_or5 := or_introl eq_refl
-  |}.
+Section Prefix.
+  Local Notation prefix := ("cheriot_0").
+  Local Notation "@^ x" := (prefix ++ "_" ++ x)%string (at level 0).
+
+  Definition createMemRFParam (n: nat) : MemBankInit (Nat.pow 2 12) :=
+    {|instRqName := @^"instRq";
+      loadRqName := @^"loadRq";
+      storeRqName := @^"storeRq";
+      memArrayName := @^"memArray";
+      regFileInit := RFNonFile _ (Some (ConstBit (wzero _)) ) |}.
+
+  Definition procParams : ProcParams :=
+    {|Xlen := 32;
+      xlenIs32_or_64 := or_introl eq_refl;
+      capAccessors := capAccessorsInit;
+      pccValid := pccValidThm;
+      TrapAddr := _ 'h"100";
+      supportedExts := [Base];
+      extsHasBase := or_introl eq_refl;
+      RegIdSz := 4;
+      regIdSzIs4_or5 := or_introl eq_refl;
+      memBankInits := map createMemRFParam (zeroToN 8);
+      lengthMemBankInits := eq_refl;
+      procName := prefix;
+      pcReg := @^"pc";
+      mtccReg := @^"mtcc";
+      mtdcReg := @^"mtdc";
+      mscratchcReg := @^"mscratchc";
+      mepccReg := @^"mepcc";
+      tagRead := @^"tagRead";
+      tagWrite := @^"tagWrite";
+      tagArray := @^"tagArray";
+    |}.
+End Prefix.
