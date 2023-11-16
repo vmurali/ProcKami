@@ -1222,7 +1222,7 @@ Section InstBaseSpec.
     {|xlens := [32; 64];
       extension := Base;
       instEntries := [
-        {|instName := "CSpecialRW.MTCC";
+        {|instName := "CSpecialRW_MTCC";
           uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (natToWord _ 28);
@@ -1250,7 +1250,7 @@ Section InstBaseSpec.
                       @%[ "scrException?" <- $$true ]));
           instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := true; hasCsr := false; implicit := 0; implicitMepcc := false |}
         |};
-        {|instName := "CSpecialRW.MTDC";
+        {|instName := "CSpecialRW_MTDC";
           uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (natToWord _ 29);
@@ -1270,7 +1270,7 @@ Section InstBaseSpec.
                       @%[ "scrException?" <- $$true ]));
           instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := true; hasCsr := false; implicit := 0; implicitMepcc := false |}
         |};
-        {|instName := "CSpecialRW.MScratchC";
+        {|instName := "CSpecialRW_MScratchC";
           uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (natToWord _ 30);
@@ -1290,7 +1290,7 @@ Section InstBaseSpec.
                       @%[ "scrException?" <- $$true ]));
           instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := true; hasCsr := false; implicit := 0; implicitMepcc := false |}
         |};
-        {|instName := "CSpecialRW.MEPCC";
+        {|instName := "CSpecialRW_MEPCC";
           uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (natToWord _ 31);
