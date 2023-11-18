@@ -23,4 +23,4 @@ Makefile.coq.all.conf
 .*.swn
 .*.swo
 .*.swp
-
+.nia.cache
