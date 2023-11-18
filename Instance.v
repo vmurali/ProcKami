@@ -122,7 +122,6 @@ Definition rules_64 : list (evaluated_Rule (getRegisters basemod64)) := map (fun
 
 Separate Extraction
          predPack
-         orKind
          predPackOr
          createWriteRq
          createWriteRqMask
