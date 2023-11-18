@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Lib ProcKami.Cheriot.Types.
+Require Import Kami.AllNotations ProcKami.Cheriot.Types.
 
 Definition CapStruct : Kind :=
   (STRUCT_TYPE {

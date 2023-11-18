@@ -23,16 +23,14 @@ Section Reducer.
       Qed.
     End SameKindStruct.
 
-    Definition RedStructKind ls := Struct (fun i => snd (nth_Fin (map (fun x => (sMap x, kMap x)) ls) i))
-                                     (fun i => fst (nth_Fin (map (fun x => (sMap x, kMap x)) ls) i)).
+    Definition RedStructKind ls := Struct (fun i => nth_Fin (map (fun x => (sMap x, kMap x)) ls) i).
 
     Section Let.
       Variable letMap: forall a, kMap a ## ty.
 
       Local Open Scope kami_expr.
       Local Fixpoint structLetHelp (exprs: list { x : string * Kind & snd x @# ty }) (ls: list A):
-        Struct (fun i => snd (nth_Fin (map (@projT1 _ _) exprs ++ map (fun x => (sMap x, kMap x)) ls) i))
-          (fun i => fst (nth_Fin (map (@projT1 _ _) exprs ++ map (fun x => (sMap x, kMap x)) ls) i)) ## ty.
+        Struct (fun i => nth_Fin (map (@projT1 _ _) exprs ++ map (fun x => (sMap x, kMap x)) ls) i) ## ty.
       refine
         (match ls with
          | nil => RetE (@eq_rect _ _ _ (getStructVal exprs) _ _)
@@ -52,8 +50,7 @@ Section Reducer.
       Local Open Scope kami_expr.
       Local Open Scope kami_action.
       Local Fixpoint structActionHelp (exprs: list { x : string * Kind & snd x @# ty }) (ls: list A):
-        ActionT ty (Struct (fun i => snd (nth_Fin (map (@projT1 _ _) exprs ++ map (fun x => (sMap x, kMap x)) ls) i))
-                      (fun i => fst (nth_Fin (map (@projT1 _ _) exprs ++ map (fun x => (sMap x, kMap x)) ls) i))).
+        ActionT ty (Struct (fun i => nth_Fin (map (@projT1 _ _) exprs ++ map (fun x => (sMap x, kMap x)) ls) i)).
       refine
         (match ls with
          | nil => Ret (@eq_rect _ _ _ (getStructVal exprs) _ _)
