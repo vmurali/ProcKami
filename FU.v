@@ -372,19 +372,17 @@ Section Params.
     Local Definition names inits := (fun j => ext_name (nth_Fin inits j)). 
 
     Definition Extensions :=
-      Struct (fun _ => Bool) (names InitExtsAll).
+      Struct (fun i => (names InitExtsAll i, Bool)).
 
     Definition ExtensionsReg :=
-      Struct (fun _ => Bool) (names InitExtsReg).
+      Struct (fun i => (names InitExtsReg i, Bool)).
 
     Definition InitExtsAllVal :=
-      (ConstStruct (fun i => Bool)
-                   (names InitExtsAll)
+      (ConstStruct (fun i => (names InitExtsAll i, Bool))
                    (fun k => ext_init (nth_Fin InitExtsAll k))).
 
     Definition InitExtsRegVal :=
-      (ConstStruct (fun i => Bool)
-                   (names InitExtsReg)
+      (ConstStruct (fun i => (names InitExtsReg i, Bool))
                    (fun k => ext_init (nth_Fin InitExtsReg k))).
 
     Definition extReg_misa_field_char (i: Fin.t 26) :=
@@ -404,29 +402,29 @@ Section Params.
                                            (misaToExtRegFind i))).
 
     Definition misaToExtReg ty (arr: Array 26 Bool @# ty): ExtensionsReg @# ty :=
-      BuildStruct _ _ (fun i =>
-                         match extRegToMisaFind i with
-                         | None => $$ false
-                         | Some j => ReadArrayConst arr j
-                         end)%kami_expr.
+      BuildStruct (fun i => (_, Bool)) (fun i =>
+                                          match extRegToMisaFind i with
+                                          | None => $$ false
+                                          | Some j => ReadArrayConst arr j
+                                          end)%kami_expr.
 
     Definition ExtRegToExt ty (exts: ExtensionsReg @# ty): Extensions @# ty :=
-      BuildStruct _ _ (fun i =>
-                         match struct_get_field exts (names _ i) Bool with
-                         | None => match find (fun j => String.eqb (ext_name j) (names _ i))
-                                              InitExtsAll with
-                                   | None => $$ false
-                                   | Some (Build_SupportedExt _ init _) => $$ init
-                                   end
-                         | Some y => y
-                         end)%kami_expr.
+      BuildStruct (fun i => (_, Bool)) (fun i =>
+                                          match structGetFieldKindMaybeExpr (names _ i) exts Bool with
+                                          | None => match find (fun j => String.eqb (ext_name j) (names _ i))
+                                                            InitExtsAll with
+                                                    | None => $$ false
+                                                    | Some (Build_SupportedExt _ init _) => $$ init
+                                                    end
+                                          | Some y => y
+                                          end)%kami_expr.
 
     Definition ExtToExtReg ty (exts: Extensions @# ty): ExtensionsReg @# ty :=
-      BuildStruct _ _ (fun i =>
-                         match struct_get_field exts (names _ i) Bool with
-                         | None => $$ false
-                         | Some y => y
-                         end)%kami_expr.
+      BuildStruct (fun i => (_, Bool)) (fun i =>
+                                          match structGetFieldKindMaybeExpr (names _ i) exts Bool with
+                                          | None => $$ false
+                                          | Some y => y
+                                          end)%kami_expr.
 
   End Extensions.
 
@@ -569,9 +567,9 @@ Section Params.
       Section Mode.
         Variable mode: PrivMode @# ty.
         Definition modeSet := ((mode == $MachineMode)
-                               || (mode == $HypervisorMode && struct_get_field_default ext "H" ($$false))
-                               || (mode == $SupervisorMode && struct_get_field_default ext "S" ($$false))
-                               || (mode == $UserMode && struct_get_field_default ext "U" ($$false)))%kami_expr.
+                               || (mode == $HypervisorMode && structGetFieldKindExprDefault "H" ext Bool)
+                               || (mode == $SupervisorMode && structGetFieldKindExprDefault "S" ext Bool)
+                               || (mode == $UserMode && structGetFieldKindExprDefault "U" ext Bool))%kami_expr.
         Definition modeFix :=
           (IF modeSet
            then mode
@@ -626,7 +624,7 @@ Section Params.
       := utila_expr_any
            (map
               (fun ext : string
-                 => RetE (struct_get_field_default exts_pkt ext $$false))
+                 => RetE (structGetFieldKindExprDefault ext exts_pkt Bool))
               exts)%kami_expr.
   End DecoderHelpers.
   
@@ -902,7 +900,7 @@ Section Params.
     (* See 3.1.1 and 3.1.15 *)
     Definition maskEpc (exts : Extensions @# ty) (epc : VAddr @# ty)
       :  VAddr @# ty
-      := let shiftAmount := (IF struct_get_field_default exts "C" ($$ false) then $1 else $2): Bit 2 @# ty in
+      := let shiftAmount := (IF structGetFieldKindExprDefault "C" exts Bool then $1 else $2): Bit 2 @# ty in
          (epc >> shiftAmount) << shiftAmount.
 
     Local Close Scope kami_expr.

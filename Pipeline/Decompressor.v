@@ -16,7 +16,7 @@ Section Decompressor.
     := utila_expr_all
          (map
             (fun ext : string
-               => RetE (struct_get_field_default exts_pkt ext $$false))
+               => RetE (structGetFieldKindExprDefault ext exts_pkt Bool))
             exts)%kami_expr.
 
   Definition decompress

@@ -66,8 +66,7 @@ Section CsrInterface.
     (fields : list CsrField)
     :  Kind
     := Struct
-         (fun i => csrFieldKind (nth_Fin fields i))
-         (fun j => csrFieldName (nth_Fin fields j)).
+         (fun i => (csrFieldName (nth_Fin fields i), csrFieldKind (nth_Fin fields i))).
 
   Record CsrView
     := {
@@ -98,15 +97,15 @@ Section CsrInterface.
          DispHex upd_pkt;
          DispString _ "\n"
        ];
-       LETA csr_value <- BuildStructAction (fun i => csrFieldKind (nth_Fin (csrViewFields view) i))
-                           (fun i => csrFieldName (nth_Fin (csrViewFields view) i))
-                           (fun i => match csrFieldValue (nth_Fin (csrViewFields view) i) with
-                                     | csrFieldValueConst const => Ret $$const
-                                     | csrFieldValueReg interface
-                                       => Read value : (csrFieldRegisterKind interface) <- csrFieldRegisterName interface;
-                                          Ret (csrFieldRegisterReadXform interface upd_pkt #value)
-                                     | csrFieldValueAct act => act ty
-                                     end);
+  LETA csr_value <- BuildStructAction (fun i => (csrFieldName (nth_Fin (csrViewFields view) i),
+                                                  csrFieldKind (nth_Fin (csrViewFields view) i)))
+                      (fun i => match csrFieldValue (nth_Fin (csrViewFields view) i) with
+                                | csrFieldValueConst const => Ret $$const
+                                | csrFieldValueReg interface
+                                  => Read value : (csrFieldRegisterKind interface) <- csrFieldRegisterName interface;
+                       Ret (csrFieldRegisterReadXform interface upd_pkt #value)
+                      | csrFieldValueAct act => act ty
+                       end);
        System [
          DispString _ "[csrViewReadWrite] csr value: ";
          DispHex #csr_value;
@@ -259,7 +258,7 @@ Section CsrInterface.
     (context : CsrFieldUpdGuard @# ty)
     (data : csrKind fields @# ty)
     := ZeroExtendTruncLsb CsrValueWidth
-         (IF struct_get_field_default (context @% "cfg" @% "extensions") "C" ($$false)
+         (IF structGetFieldKindExprDefault "C" (context @% "cfg" @% "extensions") Bool
            then pack data >> ($1 : Bit 2 @# ty) << ($1 : Bit 2 @# ty)
            else pack data >> ($2 : Bit 2 @# ty) << ($2 : Bit 2 @# ty)).
 
@@ -314,10 +313,10 @@ Section CsrInterface.
                    := fun _ _ value => extRegToMisa value;
                    csrFieldRegisterWriteXform
                    := fun _ guard old new =>
-                        IF !(struct_get_field_default (misaToExtReg new) "C" ($$false)) &&
+                        IF !(structGetFieldKindExprDefault "C" (misaToExtReg new) Bool) &&
                            (guard @% "warlUpdateInfo" @% "compressed?" ==
                             isAligned (guard @% "warlUpdateInfo" @% "pc") $2)
-                        then struct_set_field_default (misaToExtReg new) "C" ($$true)
+                        then structSetFieldKind "C" (misaToExtReg new) ($$true)
                         else misaToExtReg new
                 |}
        |}.
@@ -432,10 +431,10 @@ Section CsrInterface.
          ($MachineMode : PrivMode @# ty)
            ::= $$true;
          ($SupervisorMode : PrivMode @# ty)
-           ::= struct_get_field_default (context @% "mcounteren") name $$false;
+           ::= structGetFieldKindExprDefault name (context @% "mcounteren") Bool;
          ($UserMode : PrivMode @# ty)
-           ::= (struct_get_field_default (context @% "mcounteren") name $$false) &&
-               (struct_get_field_default (context @% "scounteren") name $$false)
+           ::= (structGetFieldKindExprDefault name (context @% "mcounteren") Bool) &&
+               (structGetFieldKindExprDefault name (context @% "scounteren") Bool)
        }.
 
   Fixpoint repeatCsrView

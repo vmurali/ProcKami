@@ -116,7 +116,7 @@ Section decoder.
     := LETE ret : Bool <- (utila_expr_any
                              (map
                                 (fun ext : string
-                                 => RetE ((struct_get_field_default ctxt ext (Const ty (natToWord 2 0))) == $0))
+                                 => RetE ((structGetFieldKindExprDefault ext ctxt (Bit 2)) == $0))
                                 (ext_ctxt_off inst)));
          RetE (!#ret).
 
