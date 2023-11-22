@@ -1353,9 +1353,7 @@ Section InstBaseSpec.
   Definition specBaseFuncUnit : FuncEntryFull :=
     {|funcNameFull := "base";
       localFuncInputFull := BaseOutput;
-      localFuncOutputFull := BaseOutput;
-      localFuncFull ty x := RetE x;
-      outputXformFull := baseOutputXform;
+      localFuncFull ty x := baseOutputXform x;
       instsFull := [aluInsts; alu64Insts; capInsts; branchInsts;
                     ldInsts; ld32Insts; ld64Insts; stInsts; st32Insts; st64Insts;
                     jumpInsts; exceptionInsts; csrInsts; cSpecialInsts; interruptInsts]
@@ -1374,7 +1372,7 @@ Section InstBaseSpec.
   Theorem uniqAluIds: NoDup (map (@uniqId _ BaseOutput) specBaseInsts).
   Proof.
     unfold specBaseInsts, mkFuncEntry, insts, specBaseFuncUnit, instsFull,
-      localFuncInputFull, localFuncOutputFull, fold_left.
+      localFuncInputFull, fold_left.
     pose proof extsHasBase as base.
     simplify_field (@extension procParams BaseOutput).
     destruct (in_dec Extension_eq_dec Base supportedExts);

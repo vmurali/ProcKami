@@ -258,6 +258,7 @@ Section DecExec.
         Kor (map (fun i => matchUniqId (uniqId i)) ls).
     End Decode.
 
+    (*
     Definition funcEntryExec (funcEntry: FuncEntry) (decOut: localFuncInput funcEntry ## ty) : FuncOutput ## ty :=
       ( LETE decOutput <- decOut;
         LETC decMatch <- decodeMatch (insts funcEntry);
@@ -278,5 +279,6 @@ Section DecExec.
     Definition fullExec (ls: list {f: FuncEntry & localFuncInput f ## ty }) := fullExecHelp ls [].
 
     Definition fullDecExec (ls: list FuncEntry) := fullExec (fullDec ls).
+     *)
   End ListFuncEntry.
 End DecExec.

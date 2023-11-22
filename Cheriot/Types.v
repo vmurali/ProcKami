@@ -333,25 +333,19 @@ Section ParamDefinitions.
   Record FuncEntryFull :=
     { funcNameFull        : string;
       localFuncInputFull  : Kind;
-      localFuncOutputFull : Kind;
-      localFuncFull       : forall ty, localFuncInputFull @# ty -> localFuncOutputFull ## ty;
-      outputXformFull     : forall ty, localFuncOutputFull @# ty -> FuncOutput ## ty;
+      localFuncFull       : forall ty, localFuncInputFull @# ty -> FuncOutput ## ty;
       instsFull           : list (InstEntryFull localFuncInputFull) }.
 
   Record FuncEntry :=
     { funcName        : string;
       localFuncInput  : Kind;
-      localFuncOutput : Kind;
-      localFunc       : forall ty, localFuncInput @# ty -> localFuncOutput ## ty;
-      outputXform     : forall ty, localFuncOutput @# ty -> FuncOutput ## ty;
+      localFunc       : forall ty, localFuncInput @# ty -> FuncOutput ## ty;
       insts           : list (InstEntry localFuncInput) }.
 
   Definition mkFuncEntry (fe : FuncEntryFull) :=
     {|funcName := funcNameFull fe;
       localFuncInput := localFuncInputFull fe;
-      localFuncOutput := localFuncOutputFull fe;
       localFunc := localFuncFull fe;
-      outputXform := outputXformFull fe;
       insts :=
         fold_left (fun prev new =>
                      (if (getBool (in_dec Nat.eq_dec Xlen (xlens new)) &&
