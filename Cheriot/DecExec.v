@@ -113,14 +113,28 @@ Section FinTag.
     | nil => nil
     | x :: xs => (Fin.F1, x) :: map (fun y => (Fin.FS (fst y), snd y)) (finTag xs)
     end.
-  Variable B: Type.
-  Variable f: A -> B.
-  Fixpoint finTagMap (ls: list A): list (Fin.t (length (map f ls)) * A) :=
-    match ls return list (Fin.t (length (map f ls)) * A) with
-    | nil => nil
-    | x :: xs => (Fin.F1, x) ::
-                   map (fun y => (Fin.FS (fst y), snd y)) (finTagMap xs)
-    end.
+
+  Section FinTagMap.
+    Variable B: Type.
+    Variable f: A -> B.
+    Fixpoint finTagMap (ls: list A): list (Fin.t (length (map f ls)) * A) :=
+      match ls return list (Fin.t (length (map f ls)) * A) with
+      | nil => nil
+      | x :: xs => (Fin.F1, x) ::
+                     map (fun y => (Fin.FS (fst y), snd y)) (finTagMap xs)
+      end.
+    
+    Fixpoint finTagMapPf (ls: list A):
+      list {x: (Fin.t (length (map f ls)) * A) & nth_Fin (map f ls) (fst x) = f (snd x)} :=
+      match ls return list {x: (Fin.t (length (map f ls)) * A) & nth_Fin (map f ls) (fst x) = f (snd x)} with
+      | nil => nil
+      | x :: xs => existT _ (Fin.F1, x) eq_refl ::
+                     map (fun y => existT (fun z =>
+                                             nth_Fin (map f (x :: xs)) (fst z) =
+                                               f (snd z)) (Fin.FS (fst (projT1 y)), snd (projT1 y))
+                                     (projT2 y)) (finTagMapPf xs)
+      end.
+  End FinTagMap.
 End FinTag.
 
 Section DecExec.
@@ -145,8 +159,8 @@ Section DecExec.
     CABool And (map matchField uid).
 
   Section ListInstEntry.
-    Variable k: Kind.
-    Variable ls: list (InstEntry k).
+    Variable ik: Kind.
+    Variable ls: list (InstEntry ik).
 
     Let finLs := finTagMap (fun x => (instName x, Bool)) ls.
 
@@ -157,12 +171,12 @@ Section DecExec.
       structLet (fun x => instName x) (fun _ => Bool)
         (fun x => RetE (matchUniqId (uniqId x))) ls.
 
-    Definition decodeInstEntry (matches: MatchInstEntryStruct @# ty) : Maybe k ## ty :=
-      redLet (@Kor _ (Maybe k))
+    Definition decodeInstEntry (matches: MatchInstEntryStruct @# ty) : Maybe ik ## ty :=
+      redLet (@Kor _ (Maybe ik))
         (fun x => ( LETE out <- inputXform (snd x) pc inst cs1 cs2 scr csr ie;
                     RetE ((ITE (castReadStructExpr _ (ReadStruct matches (fst x)))
                              (Valid #out)
-                             Invalid) : Maybe k @# ty)))
+                             Invalid) : Maybe ik @# ty)))
         finLs.
 
     Section InstProperties.
@@ -176,42 +190,38 @@ Section DecExec.
 
   Section FuncEntry.
     Variable ls: list FuncEntry.
-    Let fins := getFins (length ls).
-    Let ifin := nth_Fin ls.
+
+    Let finLs := finTagMapPf (fun x => ((funcName x ++ "_match")%string, MatchInstEntryStruct (insts x))) ls.
+
     Definition MatchFuncEntryStruct: Kind :=
-      StructKind (fun i => (funcName (ifin i) ++ "_match")%string)
-        (fun i => MatchInstEntryStruct (insts (ifin i))) fins.
+      StructKind (fun x => (funcName x ++ "_match")%string) (fun x => MatchInstEntryStruct (insts x)) ls.
 
     Definition matchFuncEntry: MatchFuncEntryStruct ## ty :=
-      structLet _  _ (fun i => matchInstEntry (insts (ifin i))) fins.
+      structLet _  _ (fun x => matchInstEntry (insts x)) ls.
 
     Definition decodeFuncEntry (allMatches : MatchFuncEntryStruct @# ty) :
-      StructKind (fun i => funcName (ifin i)) (fun i => Maybe (localFuncInput (ifin i))) fins ## ty.
+      StructKind (fun x => funcName (snd (projT1 x))) (fun x => Maybe (localFuncInput (snd (projT1 x)))) finLs ## ty.
       refine
-        (structLet (fun i => funcName (ifin i)) (fun i => Maybe (localFuncInput (ifin i)))
-           (fun i => ( LETC matches <- ReadStruct allMatches (Fin.cast i _);
-                       decodeInstEntry (ls := insts (ifin i)) (_ #matches) )) fins).
-      Unshelve.
-      2: abstract (rewrite map_length_red, getFins_length; reflexivity).
-      abstract (rewrite nth_Fin_map_equiv_deduce, nth_Fin_getFins,
-                 Fin_cast_cast_diff_deduce, Fin_cast_cast_same; exact id).
+        (structLet _ _
+           (fun x => ( LETC matches <- ReadStruct allMatches (fst (projT1 x));
+                       decodeInstEntry (ls := insts (snd (projT1 x)))
+                         (_ #matches) )) finLs).
+      rewrite (projT2 x).
+      exact id.
     Defined.
 
     Section InstProperties.
       Variable name: string.
       Variable f: InstProperties -> bool.
       Definition PropertiesFuncEntryStruct: Kind :=
-        StructKind (fun i => (funcName (ifin i) ++ "_" ++ name))%string (fun _ => Bool) fins.
+        StructKind (fun x => (funcName (snd (projT1 x)) ++ "_" ++ name)%string) (fun _ => Bool) finLs.
 
       Definition propertiesFuncEntry (allMatches: MatchFuncEntryStruct @# ty): PropertiesFuncEntryStruct ## ty.
         refine
-          (structLet (fun i => (funcName (ifin i) ++ "_" ++ name)%string) (fun _ => Bool)
-             (fun i => RetE (propertiesInstEntry f (_ (ReadStruct allMatches (Fin.cast i _))))) fins).
-        Unshelve.
-        2: abstract (rewrite map_length_red, getFins_length; reflexivity).
-        3: exact (insts (ifin i)).
-        - abstract (rewrite nth_Fin_map_equiv_deduce, nth_Fin_getFins,
-                     Fin_cast_cast_diff_deduce, Fin_cast_cast_same; exact id).
+          (structLet _ _
+             (fun x => RetE (propertiesInstEntry f (_ (ReadStruct allMatches (fst (projT1 x)))))) finLs).
+        rewrite (projT2 x).
+        exact id.
       Defined.
     End InstProperties.
   End FuncEntry.
