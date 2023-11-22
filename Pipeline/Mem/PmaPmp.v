@@ -126,7 +126,7 @@ Section PmaPmp.
                    | None => ($$ (getDefaultConst DTagOffset))
                    | Some devTag
                      => (STRUCT {
-                             "dtag" ::= $(proj1_sig (to_nat devTag));
+                             "dtag" ::= $(proj1_sig (Fin.to_nat devTag));
                              "offset" ::= offset
                            } : DTagOffset @# ty)
                    end;
