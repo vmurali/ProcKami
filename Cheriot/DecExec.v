@@ -11,18 +11,16 @@ Section Reducer.
 
     Section SameKindStruct.
       Context {k: Kind}.
-      Theorem lsSameKind ls: forall i,
-          snd (nth i (map (fun a => (sMap a, k)) ls) ("", k)) = k.
-      Proof.
-        induction ls; simpl; destruct i; auto.
-      Qed.
-      
       Theorem structIndexSameKind ls i:
         (snd (nth_Fin (map (fun a => (sMap a, k)) ls) i)) = k.
       Proof.
-        rewrite (@nth_Fin_nth _ ("", k) _).
-        rewrite lsSameKind; auto.
-      Qed.
+        induction ls.
+        - apply Fin.case0.
+          exact i.
+        - fin_dep_destruct i.
+          + reflexivity.
+          + apply IHls.
+      Defined.
 
       Definition castReadStructExpr {ls i ty} (e: snd (nth_Fin (map (fun a => (sMap a, k)) ls) i) @# ty) : k @# ty :=
         eq_rect _ (fun x => x @# ty) e _ (structIndexSameKind ls i).
@@ -108,6 +106,23 @@ Section Reducer.
 
 End Reducer.
 
+Section FinTag.
+  Variable A: Type.
+  Fixpoint finTag (ls: list A): list (Fin.t (length ls) * A) :=
+    match ls return list (Fin.t (length ls) * A) with
+    | nil => nil
+    | x :: xs => (Fin.F1, x) :: map (fun y => (Fin.FS (fst y), snd y)) (finTag xs)
+    end.
+  Variable B: Type.
+  Variable f: A -> B.
+  Fixpoint finTagMap (ls: list A): list (Fin.t (length (map f ls)) * A) :=
+    match ls return list (Fin.t (length (map f ls)) * A) with
+    | nil => nil
+    | x :: xs => (Fin.F1, x) ::
+                   map (fun y => (Fin.FS (fst y), snd y)) (finTagMap xs)
+    end.
+End FinTag.
+
 Section DecExec.
   Context `{procParams: ProcParams}.
   Variable ty: Kind -> Type.
@@ -131,64 +146,51 @@ Section DecExec.
 
   Section ListInstEntry.
     Variable k: Kind.
+    Variable ls: list (InstEntry k).
 
-    Definition MatchInstEntryStruct: list ((nat * InstEntry k)) -> Kind :=
-      StructKind (fun x => instName (snd x)) (fun _ => Bool).
+    Let finLs := finTagMap (fun x => (instName x, Bool)) ls.
 
-    Definition matchInstEntry: forall ls, MatchInstEntryStruct ls ## ty :=
-      structLet (fun x => instName (snd x)) (fun _ => Bool)
-        (fun x => RetE (matchUniqId (uniqId (snd x)))).
+    Definition MatchInstEntryStruct: Kind :=
+      StructKind (fun x => instName x) (fun _ => Bool) ls.
 
-    Definition decodeInstEntry ls: MatchInstEntryStruct ls @# ty -> Maybe k ## ty :=
-      match ls return MatchInstEntryStruct ls @# ty -> Maybe k ## ty with
-      | nil => fun _ => RetE Invalid
-      | e :: es =>
-          fun matches =>
-            redLet (@Kor _ (Maybe k))
-              (fun x =>
-                 ( LETE out <- inputXform (snd x) pc inst cs1 cs2 scr csr ie;
-                   RetE
-                     ((ITE (castReadStructExpr _ (ReadStruct matches (natToFin (fst x) _ )))
-                         (Valid #out)
-                         Invalid): Maybe k @# ty)) )
-              (e :: es)
-      end.
+    Definition matchInstEntry: MatchInstEntryStruct ## ty :=
+      structLet (fun x => instName x) (fun _ => Bool)
+        (fun x => RetE (matchUniqId (uniqId x))) ls.
+
+    Definition decodeInstEntry (matches: MatchInstEntryStruct @# ty) : Maybe k ## ty :=
+      redLet (@Kor _ (Maybe k))
+        (fun x => ( LETE out <- inputXform (snd x) pc inst cs1 cs2 scr csr ie;
+                    RetE ((ITE (castReadStructExpr _ (ReadStruct matches (fst x)))
+                             (Valid #out)
+                             Invalid) : Maybe k @# ty)))
+        finLs.
 
     Section InstProperties.
       Variable f: InstProperties -> bool.
-      Definition propertiesInstEntry ls (matches: MatchInstEntryStruct ls @# ty): Bool @# ty :=
-        Kor (map (fun i => Const ty (f (instProperties (snd (nth_Fin' ls (@map_length _ _ _ _) i)))) &&
-                             castReadStructExpr _ (ReadStruct matches i))%kami_expr
-               (getFins (length (map (fun x => (instName (snd x), Bool)) ls)))).
+      Definition propertiesInstEntry (matches: MatchInstEntryStruct @# ty): Bool @# ty :=
+        Kor (map (fun x => Const ty (f (instProperties (snd x))) &&
+                             castReadStructExpr _ (ReadStruct matches (fst x)))
+                 finLs).
     End InstProperties.
   End ListInstEntry.
 
   Section FuncEntry.
-    Section FinTag.
-      Variable A: Type.
-      Fixpoint finTag (ls: list A) : list (Fin.t (length ls) * A) :=
-        match ls return list (Fin.t (length ls) * A) with
-        | nil => nil
-        | x :: xs => (Fin.F1, x) :: map (fun x => (Fin.FS (fst x), snd x)) (finTag xs)
-        end.
-    End FinTag.
-
     Variable ls: list FuncEntry.
     Let fins := getFins (length ls).
     Let ifin := nth_Fin ls.
     Definition MatchFuncEntryStruct: Kind :=
       StructKind (fun i => (funcName (ifin i) ++ "_match")%string)
-        (fun i => MatchInstEntryStruct (tag (insts (ifin i)))) fins.
+        (fun i => MatchInstEntryStruct (insts (ifin i))) fins.
 
     Definition matchFuncEntry: MatchFuncEntryStruct ## ty :=
-      structLet _  _ (fun i => matchInstEntry (tag (insts (ifin i)))) fins.
+      structLet _  _ (fun i => matchInstEntry (insts (ifin i))) fins.
 
     Definition decodeFuncEntry (allMatches : MatchFuncEntryStruct @# ty) :
       StructKind (fun i => funcName (ifin i)) (fun i => Maybe (localFuncInput (ifin i))) fins ## ty.
       refine
         (structLet (fun i => funcName (ifin i)) (fun i => Maybe (localFuncInput (ifin i)))
            (fun i => ( LETC matches <- ReadStruct allMatches (Fin.cast i _);
-                       decodeInstEntry (ls := tag (insts (ifin i))) (_ #matches) )) fins).
+                       decodeInstEntry (ls := insts (ifin i)) (_ #matches) )) fins).
       Unshelve.
       2: abstract (rewrite map_length_red, getFins_length; reflexivity).
       abstract (rewrite nth_Fin_map_equiv_deduce, nth_Fin_getFins,
@@ -207,7 +209,7 @@ Section DecExec.
              (fun i => RetE (propertiesInstEntry f (_ (ReadStruct allMatches (Fin.cast i _))))) fins).
         Unshelve.
         2: abstract (rewrite map_length_red, getFins_length; reflexivity).
-        3: exact (tag (insts (ifin i))).
+        3: exact (insts (ifin i)).
         - abstract (rewrite nth_Fin_map_equiv_deduce, nth_Fin_getFins,
                      Fin_cast_cast_diff_deduce, Fin_cast_cast_same; exact id).
       Defined.
