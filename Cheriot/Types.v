@@ -244,7 +244,8 @@ Section ParamDefinitions.
         hasScr        : bool ;
         hasCsr        : bool ;
         implicit      : nat ;
-        implicitMepcc : bool }.
+        implicitMepcc : bool ;
+        implicitIe    : bool }.
   End InstEncoding.
 
   Definition FenceI := 0.
