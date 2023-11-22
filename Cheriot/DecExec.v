@@ -1,29 +1,106 @@
 Require Import Kami.AllNotations ProcKami.Cheriot.Types.
 
+Axiom cheat: forall t, t.
+
+Require Import Coq.Program.Equality.
+Section nthFinMapEquiv.
+  Variable A B: Type.
+  Variable f: A -> B.
+  Theorem nth_Fin_map_equiv ls: forall i pf,
+      nth_Fin (map f ls) i = f (nth_Fin ls (Fin.cast i pf)).
+  Proof.
+    induction ls; intros i.
+    - apply Fin.case0.
+      exact i.
+    - fin_dep_destruct i; cbn; auto.
+  Defined.
+
+  Theorem nth_Fin_map_equiv_deduce ls i:
+    nth_Fin (map f ls) i = f (nth_Fin ls (Fin.cast i (map_length_red f ls))).
+  Proof.
+    apply (nth_Fin_map_equiv ls i (map_length_red f ls)).
+  Defined.
+
+  Theorem Fin_cast_eq_nat n (i: Fin.t n) (pf: n = n): Fin.cast i pf = i.
+  Proof.
+    induction i; try reflexivity.
+    cbn [Fin.cast].
+    f_equal.
+    apply IHi.
+  Defined.
+
+  Theorem Fin_cast_cast_same m n (i: Fin.t m) (pf1: m = n) (pf2: n = m):
+    Fin.cast (Fin.cast i pf1) pf2 = i.
+  Proof.
+    destruct i.
+    - destruct pf1.
+      reflexivity.
+    - destruct pf1.
+      rewrite ?Fin_cast_eq_nat.
+      reflexivity.
+  Defined.
+
+  Theorem Fin_cast_cast_diff m n p (i: Fin.t m) (pf1: m = n) (pf2: n = p) (pf3: m = p):
+    Fin.cast (Fin.cast i pf1) pf2 = Fin.cast i pf3.
+  Proof.
+    destruct i.
+    - destruct pf2, pf1.
+      rewrite ?Fin_cast_eq_nat.
+      reflexivity.
+    - destruct pf2, pf1.
+      rewrite ?Fin_cast_eq_nat.
+      reflexivity.
+  Defined.
+
+  Theorem Fin_cast_cast_diff_deduce m n p (i: Fin.t m) (pf1: m = n) (pf2: n = p):
+    Fin.cast (Fin.cast i pf1) pf2 = Fin.cast i (eq_trans pf1 pf2).
+  Proof.
+    apply Fin_cast_cast_diff.
+  Defined.
+End nthFinMapEquiv.
+
+Theorem nth_Fin_getFins n i:
+  nth_Fin (getFins n) i = Fin.cast i (getFins_length n).
+Proof.
+  induction n.
+  - apply Fin.case0.
+  - pattern i; apply fin_case.
+    + reflexivity.
+    + intros.
+      cbn.
+      rewrite (nth_Fin_map_equiv_deduce FS (getFins n) y).
+      rewrite IHn.
+      apply (f_equal FS (Fin_cast_cast_diff _ _ _ _)).
+Defined.
+    
 Section Reducer.
   Variable A: Type.
   Variable ty: Kind -> Type.
 
   Section Struct.
-    Variable kMap: A -> Kind.
     Variable sMap: A -> string.
 
     Section SameKindStruct.
-      Theorem lsSameKind (k: Kind) ls: forall i,
+      Context {k: Kind}.
+      Theorem lsSameKind ls: forall i,
           snd (nth i (map (fun a => (sMap a, k)) ls) ("", k)) = k.
       Proof.
         induction ls; simpl; destruct i; auto.
       Qed.
       
-      Theorem structSameKind (k: Kind) ls i:
+      Theorem structIndexSameKind ls i:
         (snd (nth_Fin (map (fun a => (sMap a, k)) ls) i)) = k.
       Proof.
         rewrite (@nth_Fin_nth _ ("", k) _).
         rewrite lsSameKind; auto.
       Qed.
+
+      Definition castReadStructExpr {ls i ty} (e: snd (nth_Fin (map (fun a => (sMap a, k)) ls) i) @# ty) : k @# ty :=
+        eq_rect _ (fun x => x @# ty) e _ (structIndexSameKind ls i).
     End SameKindStruct.
 
-    Definition RedStructKind ls := Struct (fun i => nth_Fin (map (fun x => (sMap x, kMap x)) ls) i).
+    Variable kMap: A -> Kind.
+    Definition StructKind ls := Struct (fun i => nth_Fin (map (fun x => (sMap x, kMap x)) ls) i).
 
     Section Let.
       Variable letMap: forall a, kMap a ## ty.
@@ -41,7 +118,7 @@ Section Reducer.
       - abstract (rewrite map_app, <- app_assoc; reflexivity).
       Defined.
 
-      Definition structLet: forall ls, RedStructKind ls ## ty := structLetHelp [].
+      Definition structLet: forall ls, StructKind ls ## ty := structLetHelp [].
     End Let.
 
     Section Action.
@@ -61,7 +138,7 @@ Section Reducer.
       - abstract (rewrite map_app, <- app_assoc; reflexivity).
       Defined.
 
-      Definition structAction: forall ls, ActionT ty (RedStructKind ls) := structActionHelp [].
+      Definition structAction: forall ls, ActionT ty (StructKind ls) := structActionHelp [].
     End Action.
   End Struct.
 
@@ -125,90 +202,140 @@ Section DecExec.
 
   Section ListInstEntry.
     Variable k: Kind.
-    Variable name: string.
 
-    Definition MatchStruct: list ((nat * InstEntry k)) -> Kind :=
-      RedStructKind (fun _ => Bool) (fun x => instName (snd x))%string.
+    Definition MatchInstEntryStruct: list ((nat * InstEntry k)) -> Kind :=
+      StructKind (fun x => instName (snd x)) (fun _ => Bool).
 
-    Definition matchListInstEntry: forall ls, MatchStruct ls ## ty :=
-      structLet (fun _ => Bool) (fun x => instName (snd x))%string
+    Definition matchInstEntry: forall ls, MatchInstEntryStruct ls ## ty :=
+      structLet (fun x => instName (snd x)) (fun _ => Bool)
         (fun x => RetE (matchUniqId (uniqId (snd x)))).
 
-    Definition decodeListInstEntry ls: MatchStruct ls @# ty -> Maybe k ## ty.
-      refine
-        (match ls return MatchStruct ls @# ty -> Maybe k ## ty with
-         | nil => fun _ => RetE Invalid
-         | e :: es =>
-             fun matches =>
-               redLet (@Kor _ (Maybe k))
-                 (fun x =>
-                    ( LETE out <- inputXform (snd x) pc inst cs1 cs2 scr csr ie;
-                      RetE
-                        ((ITE (eq_rect _ _ (ReadStruct matches ( natToFin (fst x) _ )) _ _)
-                            (Valid #out)
-                            Invalid): Maybe k @# ty)) )
-                 (e :: es)
-         end).
-      abstract (rewrite structSameKind; auto).
-    Defined.
-  End ListInstEntry.
-
-  Section Decode.
-    Variable decOutput: Kind.
-    Local Fixpoint decodeHelp (ls: list (InstEntry decOutput)) (exprs: list (decOutput @# ty)) : decOutput ## ty :=
-      match ls with
-      | nil => RetE (Kor exprs)
-      | i :: rest => ( LETE decI <- inputXform i pc inst cs1 cs2 scr csr ie;
-                       LETC matchI <- matchUniqId (uniqId i);
-                       decodeHelp rest (ITE #matchI #decI (Const ty Default) :: exprs) )
+    Definition decodeInstEntry ls: MatchInstEntryStruct ls @# ty -> Maybe k ## ty :=
+      match ls return MatchInstEntryStruct ls @# ty -> Maybe k ## ty with
+      | nil => fun _ => RetE Invalid
+      | e :: es =>
+          fun matches =>
+            redLet (@Kor _ (Maybe k))
+              (fun x =>
+                 ( LETE out <- inputXform (snd x) pc inst cs1 cs2 scr csr ie;
+                   RetE
+                     ((ITE (castReadStructExpr _ (ReadStruct matches (natToFin (fst x) _ )))
+                         (Valid #out)
+                         Invalid): Maybe k @# ty)) )
+              (e :: es)
       end.
 
     Section InstProperties.
       Variable f: InstProperties -> bool.
-      
-      Local Fixpoint getInstPropertiesHelp (ls: list (InstEntry decOutput)) (exprs: list (Bool @# ty)): Bool ## ty :=
-        match ls with
-        | nil => RetE (Kor exprs)
-        | i :: rest => ( LETC matchI <- matchUniqId (uniqId i);
-                         getInstPropertiesHelp rest (!#matchI || $$(f (instProperties i)) :: exprs) )
-        end.
-
-      Definition getInstProperties (ls: list (InstEntry decOutput)) := getInstPropertiesHelp ls [].
+      Definition propertiesInstEntry ls (matches: MatchInstEntryStruct ls @# ty): Bool @# ty :=
+        Kor (map (fun i => Const ty (f (instProperties (snd (nth_Fin' ls (@map_length _ _ _ _) i)))) &&
+                             castReadStructExpr _ (ReadStruct matches i))%kami_expr
+               (getFins (length (map (fun x => (instName (snd x), Bool)) ls)))).
     End InstProperties.
-
-    Definition decode (ls: list (InstEntry decOutput)) := decodeHelp ls [].
-    
-    Definition decodeMatch (ls: list (InstEntry decOutput)) :=
-      Kor (map (fun i => matchUniqId (uniqId i)) ls).
-  End Decode.
-
-  Definition funcEntryExec (funcEntry: FuncEntry) (decOut: localFuncInput funcEntry ## ty) : FuncOutput ## ty :=
-    ( LETE decOutput <- decOut;
-      LETC decMatch <- decodeMatch (insts funcEntry);
-      LETE fuOut <- localFunc funcEntry #decOutput;
-      LETE execOut <- outputXform funcEntry #fuOut;
-      RetE (ITE #decMatch #execOut (Const ty Default)) ).
+  End ListInstEntry.
 
   Section FuncEntry.
-    (*
-    Variable fs: list FuncEntry.
+    Section FinTag.
+      Variable A: Type.
+      Fixpoint finTag (ls: list A) : list (Fin.t (length ls) * A) :=
+        match ls return list (Fin.t (length ls) * A) with
+        | nil => nil
+        | x :: xs => (Fin.F1, x) :: map (fun x => (Fin.FS (fst x), snd x)) (finTag xs)
+        end.
+    End FinTag.
 
-    Definition DecOut := Struct (fun i => localFuncInput (nth_Fin fs i))
-                           (fun i => funcName (nth_Fin fs i)).
-     *)
+    Variable ls: list FuncEntry.
+    Let fins := getFins (length ls).
+    Let ifin := nth_Fin ls.
+    Definition MatchFuncEntryStruct: Kind :=
+      StructKind (fun i => (funcName (ifin i) ++ "_match")%string)
+        (fun i => MatchInstEntryStruct (tag (insts (ifin i)))) fins.
 
+    Definition matchFuncEntry: MatchFuncEntryStruct ## ty :=
+      structLet _  _ (fun i => matchInstEntry (tag (insts (ifin i)))) fins.
+
+    Definition decodeFuncEntry (allMatches : MatchFuncEntryStruct @# ty) :
+      StructKind (fun i => funcName (ifin i)) (fun i => Maybe (localFuncInput (ifin i))) fins ## ty.
+      refine
+        (structLet (fun i => funcName (ifin i)) (fun i => Maybe (localFuncInput (ifin i)))
+           (fun i => ( LETC matches <- ReadStruct allMatches (Fin.cast i _);
+                       decodeInstEntry (ls := tag (insts (ifin i))) (_ #matches) )) fins).
+      Unshelve.
+      2: abstract (rewrite map_length_red, getFins_length; reflexivity).
+      abstract (rewrite nth_Fin_map_equiv_deduce, nth_Fin_getFins,
+                 Fin_cast_cast_diff_deduce, Fin_cast_cast_same; exact id).
+    Defined.
+
+    Section InstProperties.
+      Variable name: string.
+      Variable f: InstProperties -> bool.
+      Definition PropertiesFuncEntryStruct: Kind :=
+        StructKind (fun i => (funcName (ifin i) ++ "_" ++ name))%string (fun _ => Bool) fins.
+
+      Definition propertiesFuncEntry (allMatches: MatchFuncEntryStruct @# ty): PropertiesFuncEntryStruct ## ty.
+        refine
+          (structLet (fun i => (funcName (ifin i) ++ "_" ++ name)%string) (fun _ => Bool)
+             (fun i => RetE (propertiesInstEntry f (_ (ReadStruct allMatches (Fin.cast i _))))) fins).
+        Unshelve.
+        2: abstract (rewrite map_length_red, getFins_length; reflexivity).
+        3: exact (tag (insts (ifin i))).
+        - abstract (rewrite nth_Fin_map_equiv_deduce, nth_Fin_getFins,
+                     Fin_cast_cast_diff_deduce, Fin_cast_cast_same; exact id).
+      Defined.
+    End InstProperties.
   End FuncEntry.
-  Definition fullDec (ls: list FuncEntry) := map (fun f => existT _ f (decode (insts f))) ls.
 
-  Local Fixpoint fullExecHelp (ls: list {f: FuncEntry & localFuncInput f ## ty } )
-    (exprs: list (FuncOutput @# ty)) : FuncOutput ## ty :=
-    match ls with
-    | nil => RetE (Kor exprs)
-    | existT f decOut :: rest => ( LETE execOut <- funcEntryExec f decOut;
-                                   fullExecHelp rest (#execOut :: exprs) )
-    end.
+  Section ListFuncEntry.
+    Variable k: Kind.
 
-  Definition fullExec (ls: list {f: FuncEntry & localFuncInput f ## ty }) := fullExecHelp ls [].
+    Section Decode.
+      Variable decOutput: Kind.
+      Local Fixpoint decodeHelp (ls: list (InstEntry decOutput)) (exprs: list (decOutput @# ty)) : decOutput ## ty :=
+        match ls with
+        | nil => RetE (Kor exprs)
+        | i :: rest => ( LETE decI <- inputXform i pc inst cs1 cs2 scr csr ie;
+                         LETC matchI <- matchUniqId (uniqId i);
+                         decodeHelp rest (ITE #matchI #decI (Const ty Default) :: exprs) )
+        end.
 
-  Definition fullDecExec (ls: list FuncEntry) := fullExec (fullDec ls).
+      Section InstProperties.
+        Variable f: InstProperties -> bool.
+        
+        Local Fixpoint getInstPropertiesHelp (ls: list (InstEntry decOutput)) (exprs: list (Bool @# ty)): Bool ## ty :=
+          match ls with
+          | nil => RetE (Kor exprs)
+          | i :: rest => ( LETC matchI <- matchUniqId (uniqId i);
+                           getInstPropertiesHelp rest (!#matchI || $$(f (instProperties i)) :: exprs) )
+          end.
+
+        Definition getInstProperties (ls: list (InstEntry decOutput)) := getInstPropertiesHelp ls [].
+      End InstProperties.
+
+      Definition decode (ls: list (InstEntry decOutput)) := decodeHelp ls [].
+      
+      Definition decodeMatch (ls: list (InstEntry decOutput)) :=
+        Kor (map (fun i => matchUniqId (uniqId i)) ls).
+    End Decode.
+
+    Definition funcEntryExec (funcEntry: FuncEntry) (decOut: localFuncInput funcEntry ## ty) : FuncOutput ## ty :=
+      ( LETE decOutput <- decOut;
+        LETC decMatch <- decodeMatch (insts funcEntry);
+        LETE fuOut <- localFunc funcEntry #decOutput;
+        LETE execOut <- outputXform funcEntry #fuOut;
+        RetE (ITE #decMatch #execOut (Const ty Default)) ).
+
+    Definition fullDec (ls: list FuncEntry) := map (fun f => existT _ f (decode (insts f))) ls.
+
+    Local Fixpoint fullExecHelp (ls: list {f: FuncEntry & localFuncInput f ## ty } )
+      (exprs: list (FuncOutput @# ty)) : FuncOutput ## ty :=
+      match ls with
+      | nil => RetE (Kor exprs)
+      | existT f decOut :: rest => ( LETE execOut <- funcEntryExec f decOut;
+                                     fullExecHelp rest (#execOut :: exprs) )
+      end.
+
+    Definition fullExec (ls: list {f: FuncEntry & localFuncInput f ## ty }) := fullExecHelp ls [].
+
+    Definition fullDecExec (ls: list FuncEntry) := fullExec (fullDec ls).
+  End ListFuncEntry.
 End DecExec.
