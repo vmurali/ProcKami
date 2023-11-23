@@ -1132,7 +1132,6 @@ Section InstBaseSpec.
                                    | _ => true
                                    end)).
 
-  (* TODO : fix behavior w.r.t rs1 and rd being 0 *)
   Definition csrInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -1169,7 +1168,7 @@ Section InstBaseSpec.
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
-                      @%[ "wbCsr?" <- $$true ]
+                      @%[ "wbCsr?" <- isNotZero (rs1Fixed inst) ]
                       @%[ "csrVal" <- csr .| (cs1 @% "val") ]));
           instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := true; implicit := 0; implicitMepcc := false; implicitIe := false |}
         |};
@@ -1187,7 +1186,7 @@ Section InstBaseSpec.
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
-                      @%[ "wbCsr?" <- $$true ]
+                      @%[ "wbCsr?" <- isNotZero (rs1Fixed inst) ]
                       @%[ "csrVal" <- csr .& ~(cs1 @% "val") ]));
           instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := true; implicit := 0; implicitMepcc := false; implicitIe := false |}
         |};
@@ -1223,7 +1222,7 @@ Section InstBaseSpec.
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
-                      @%[ "wbCsr?" <- $$true ]
+                      @%[ "wbCsr?" <- isNotZero (rs1Fixed inst) ]
                       @%[ "csrVal" <- csr .| ZeroExtendTruncLsb Xlen (rs1Fixed inst) ]));
           instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := true; implicit := 0; implicitMepcc := false; implicitIe := false |}
         |};
@@ -1241,14 +1240,13 @@ Section InstBaseSpec.
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
-                      @%[ "wbCsr?" <- $$true ]
+                      @%[ "wbCsr?" <- isNotZero (rs1Fixed inst) ]
                       @%[ "csrVal" <- csr .& ~(ZeroExtendTruncLsb Xlen (rs1Fixed inst)) ]));
           instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := true; implicit := 0; implicitMepcc := false; implicitIe := false |}
         |}
       ]
     |}.
   
-  (* TODO : fix behavior w.r.t rs1 and rd being 0 *)
   Definition cSpecialInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -1275,6 +1273,7 @@ Section InstBaseSpec.
                       @%[ "cdVal" <- scr @% "val" ]
                       @%[ "exception?" <- !(#pcPerms @% "SR") ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
+                      @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
                       @%[ "scrTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "cap") && #representable ]
                       @%[ "scrCap" <- cs1 @% "cap" ]
                       @%[ "scrVal" <- #newMtcc ]
@@ -1295,6 +1294,7 @@ Section InstBaseSpec.
                       @%[ "cdVal" <- scr @% "val" ]
                       @%[ "exception?" <- !(#pcPerms @% "SR") ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
+                      @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
                       @%[ "scrTag" <- cs1 @% "tag" ]
                       @%[ "scrCap" <- cs1 @% "cap" ]
                       @%[ "scrVal" <- cs1 @% "val" ]
@@ -1315,6 +1315,7 @@ Section InstBaseSpec.
                       @%[ "cdVal" <- scr @% "val" ]
                       @%[ "exception?" <- !(#pcPerms @% "SR") ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
+                      @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
                       @%[ "scrTag" <- cs1 @% "tag" ]
                       @%[ "scrCap" <- cs1 @% "cap" ]
                       @%[ "scrVal" <- cs1 @% "val" ]
@@ -1343,6 +1344,7 @@ Section InstBaseSpec.
                       @%[ "cdVal" <- #newMepc ]
                       @%[ "exception?" <- !(#pcPerms @% "SR" )]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
+                      @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
                       @%[ "scrTag" <- cs1 @% "tag" ]
                       @%[ "scrCap" <- cs1 @% "cap" ]
                       @%[ "scrVal" <- cs1 @% "val" ]
