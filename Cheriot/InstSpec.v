@@ -1131,6 +1131,7 @@ Section InstBaseSpec.
                                    | _ => true
                                    end)).
 
+  (* TODO : fix behavior w.r.t rs1 and rd being 0 *)
   Definition csrInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -1246,6 +1247,7 @@ Section InstBaseSpec.
       ]
     |}.
   
+  (* TODO : fix behavior w.r.t rs1 and rd being 0 *)
   Definition cSpecialInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
