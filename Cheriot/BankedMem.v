@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Types.
+Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
 
 Section BankedMem.
   Context `{procParams: ProcParams}.

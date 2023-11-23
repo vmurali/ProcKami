@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Types ProcKami.Cheriot.DecExec.
+Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.DecExec.
 
 Section CsrScr.
   Context `{procParams: ProcParams}.

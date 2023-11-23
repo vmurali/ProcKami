@@ -1,5 +1,6 @@
 Require Import Kami.AllNotations.
-Require Import ProcKami.Cheriot.Types ProcKami.Cheriot.BankedMem ProcKami.Cheriot.DecExec ProcKami.Cheriot.CsrScr.
+Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
+Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.BankedMem ProcKami.Cheriot.CsrScr.
 
 Section Run.
   Context `{procParams: ProcParams}.
@@ -135,13 +136,13 @@ Section Run.
       LETA scr <- ( If !(#hasScrProp || #implicitMepccProp)
                     then ( Nondet rand: FullCapWithTag;
                            Ret #rand)
-                    else ( readRegs scrs FullCapWithTag #getScrIdx ) as retVal;
+                    else ( readRegs procName scrs FullCapWithTag #getScrIdx ) as retVal;
                     Ret #retVal );
 
       LETA csr <- ( If !#hasCsrProp
                     then ( Nondet rand: Data;
                            Ret #rand)
-                    else ( readRegs csrs Data #getCsrIdx ) as retVal;
+                    else ( readRegs procName csrs Data #getCsrIdx ) as retVal;
                     Ret #retVal );
 
       (* TODO: see if ie can be combined with csr *)

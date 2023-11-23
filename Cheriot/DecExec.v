@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Types ProcKami.Cheriot.Lib.
+Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
 
 Section DecExec.
   Context `{procParams: ProcParams}.

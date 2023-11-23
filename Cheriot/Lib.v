@@ -1,5 +1,50 @@
 Require Import Kami.AllNotations.
 
+Section FinTag.
+  Variable A: Type.
+  Fixpoint finTag (ls: list A): list (Fin.t (length ls) * A) :=
+    match ls return list (Fin.t (length ls) * A) with
+    | nil => nil
+    | x :: xs => (Fin.F1, x) :: map (fun y => (Fin.FS (fst y), snd y)) (finTag xs)
+    end.
+
+  Section FinTagMap.
+    Variable B: Type.
+    Variable f: A -> B.
+    Fixpoint finTagMap (ls: list A): list (Fin.t (length (map f ls)) * A) :=
+      match ls return list (Fin.t (length (map f ls)) * A) with
+      | nil => nil
+      | x :: xs => (Fin.F1, x) ::
+                     map (fun y => (Fin.FS (fst y), snd y)) (finTagMap xs)
+      end.
+
+    Fixpoint finTagMapPf2 (ls: list A):
+      list {x: (Fin.t (length (map f ls)) * A) & nth_Fin (map f ls) (fst x) = f (snd x)} :=
+      match ls return list {x: (Fin.t (length (map f ls)) * A) & nth_Fin (map f ls) (fst x) = f (snd x)} with
+      | nil => nil
+      | x :: xs => existT _ (Fin.F1, x) eq_refl ::
+                     map (fun y => existT (fun z =>
+                                             nth_Fin (map f (x :: xs)) (fst z) =
+                                               f (snd z)) (Fin.FS (fst (projT1 y)), snd (projT1 y))
+                                     (projT2 y)) (finTagMapPf2 xs)
+      end.
+
+    Record FinTagMapPf ls :=
+      { finTagMapFin: Fin.t (length (map f ls));
+        finTagMapVal: A;
+        finTagMapPrf: nth_Fin (map f ls) finTagMapFin = f finTagMapVal }.
+    
+    Fixpoint finTagMapPf (ls: list A): list (FinTagMapPf ls) :=
+      match ls return list (FinTagMapPf ls) with
+      | nil => nil
+      | x :: xs => Build_FinTagMapPf (x :: xs) Fin.F1 eq_refl ::
+                     map (fun y => Build_FinTagMapPf (x :: xs) (Fin.FS (finTagMapFin y)) (finTagMapPrf y))
+                     (finTagMapPf xs)
+      end.
+
+  End FinTagMap.
+End FinTag.
+
 Section Reducer.
   Variable A: Type.
   Variable ty: Kind -> Type.
@@ -101,51 +146,42 @@ Section Reducer.
       Definition redAction: forall ls, ActionT ty RK := redActionHelp [].
     End Action.
   End Red.
-
 End Reducer.
 
-Section FinTag.
-  Variable A: Type.
-  Fixpoint finTag (ls: list A): list (Fin.t (length ls) * A) :=
-    match ls return list (Fin.t (length ls) * A) with
-    | nil => nil
-    | x :: xs => (Fin.F1, x) :: map (fun y => (Fin.FS (fst y), snd y)) (finTag xs)
+Section RegAccess.  
+  (* TODO: Index this with Kind of the register *)
+  Record RegInfo n := {
+      regAddress : word n;
+      regInit : RegInitT }.
+
+  Definition getAddrFromInfo (name: string) n (regs: list (RegInfo n)) :=
+    match find (fun x => String.eqb (fst (regInit x)) name) regs with
+    | Some x => regAddress x
+    | None => wzero _
     end.
 
-  Section FinTagMap.
-    Variable B: Type.
-    Variable f: A -> B.
-    Fixpoint finTagMap (ls: list A): list (Fin.t (length (map f ls)) * A) :=
-      match ls return list (Fin.t (length (map f ls)) * A) with
-      | nil => nil
-      | x :: xs => (Fin.F1, x) ::
-                     map (fun y => (Fin.FS (fst y), snd y)) (finTagMap xs)
-      end.
+  Local Open Scope kami_action.
+  Definition readRegs prefix n (regs: list (RegInfo n)) k ty (e: Bit n @# ty) :=
+    redAction (@Kor _ k)
+      (fun x => ( match projT1 (snd (regInit x)) with
+                  | SyntaxKind k' =>
+                      if Kind_decb k k'
+                      then (If (e == Const ty (regAddress x))
+                            then ( Read retVal : k <- (prefix ++ "_" ++ (fst (regInit x)))%string;
+                                   Ret #retVal )
+                            else Ret (Const ty Default) as ret;
+                            Ret #ret )
+                      else Ret (Const ty Default)
+                  | _ => Ret (Const ty Default)
+                  end)) regs.
 
-    Fixpoint finTagMapPf2 (ls: list A):
-      list {x: (Fin.t (length (map f ls)) * A) & nth_Fin (map f ls) (fst x) = f (snd x)} :=
-      match ls return list {x: (Fin.t (length (map f ls)) * A) & nth_Fin (map f ls) (fst x) = f (snd x)} with
-      | nil => nil
-      | x :: xs => existT _ (Fin.F1, x) eq_refl ::
-                     map (fun y => existT (fun z =>
-                                             nth_Fin (map f (x :: xs)) (fst z) =
-                                               f (snd z)) (Fin.FS (fst (projT1 y)), snd (projT1 y))
-                                     (projT2 y)) (finTagMapPf2 xs)
-      end.
-
-    Record FinTagMapPf ls :=
-      { finTagMapFin: Fin.t (length (map f ls));
-        finTagMapVal: A;
-        finTagMapPrf: nth_Fin (map f ls) finTagMapFin = f finTagMapVal }.
+  Definition callReadRegFile k (name: string) ty n (idx: Bit n @# ty) : ActionT ty k :=
+    ( Call ret : Array 1 k <- name (idx: Bit n);
+      Ret (ReadArrayConst #ret Fin.F1) ).
     
-    Fixpoint finTagMapPf (ls: list A): list (FinTagMapPf ls) :=
-      match ls return list (FinTagMapPf ls) with
-      | nil => nil
-      | x :: xs => Build_FinTagMapPf (x :: xs) Fin.F1 eq_refl ::
-                     map (fun y => Build_FinTagMapPf (x :: xs) (Fin.FS (finTagMapFin y)) (finTagMapPrf y))
-                     (finTagMapPf xs)
-      end.
-
-  End FinTagMap.
-End FinTag.
+  Definition callWriteRegFile (name: string) ty n (idx: Bit n @# ty) k (v: k @# ty) : ActionT ty Void :=
+    ( Call name (STRUCT { "addr" ::= idx;
+                          "data" ::= BuildArray (fun _ => v) } : WriteRq n (Array 1 k));
+      Retv ).
+End RegAccess.
 
