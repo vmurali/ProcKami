@@ -274,6 +274,14 @@ Section ParamDefinitions.
   Definition CapStMisaligned     := 6.  (* Addr *)
 
   Definition InstMisaligned      := 0.  (* Addr *)
+  Definition InstAccessFault     := 1.  (* Addr *)
+  Definition InstPageFault       := 12. (* Addr *)
+  Definition LoadAccessFault     := 5.  (* Addr *)
+  Definition LoadPageFault       := 13. (* Addr *)
+  Definition StoreAccessFault    := 7.  (* Addr *)
+  Definition StorePageFault      := 15. (* Addr *)
+  Definition TagAccessFault      := 24. (* Addr *)
+  Definition TagPageFault        := 25. (* Addr *)
   Definition InstIllegal         := 2.  (* Inst *)
   Definition ECall               := 8.
 
@@ -314,7 +322,7 @@ Section ParamDefinitions.
         "mem?"              :: Bool;
         "exception?"        :: Bool;
         "baseException?"    :: Bool; (* non-cap exception *)
-        "pcException?"      :: Bool; (* cap exception caused by PC *)
+        "pcCapException?"   :: Bool; (* cap exception caused by PC *)
         "interrupt?"        :: Bool;
         "changeIe?"         :: Bool;
         "newIe"             :: Bool;

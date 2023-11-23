@@ -56,14 +56,25 @@ Section BankedMem.
       abstract (rewrite app_length, <- Nat.add_assoc; reflexivity).
       Defined.
     End CommonIdx.
+
+    Definition InstRet := STRUCT_TYPE {
+                              "inst" :: Inst;
+                              "badLower16?" :: Bool;
+                              "error?" :: Bool;
+                              "fault?" :: Bool
+                            }.
     
-    Definition instReq: ActionT ty Inst :=
+    Definition instReq: ActionT ty InstRet :=
       ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes) addr;
         LET idxPlus1 <- #idx + $1;
         LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
         LETA bytes <- instReqCallHelp #idx #idxPlus1 #idxLsb memBankInits [] 0;
         LET shuffledBytes <- ShuffleArray #bytes #idxLsb;
-        Ret (ZeroExtendTruncLsb InstSz (pack #shuffledBytes))).
+        Ret (STRUCT {
+                 "inst" ::= (ZeroExtendTruncLsb InstSz (pack #shuffledBytes));
+                 "badLower16?" ::= Const ty false;
+                 "error?" ::= Const ty false;
+                 "fault?" ::= Const ty false } : InstRet @# ty)).
   End LoadInst.
 
   Section LoadStore.
@@ -99,7 +110,15 @@ Section BankedMem.
       Defined.
     End CommonIdx.
 
-    Definition loadStoreReq: ActionT ty FullCapWithTag.
+    Definition DataRet := STRUCT_TYPE {
+                              "data" :: FullCapWithTag;
+                              "lowestByte" :: Bit (Nat.log2_up NumBanks);
+                              "dataError?" :: Bool;
+                              "dataFault?" :: Bool;
+                              "tagError?" :: Bool;
+                              "tagFault?" :: Bool }.
+
+    Definition loadStoreReq: ActionT ty DataRet.
       refine
         ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes) addr;
           LET idxPlus1 <- #idx + $1;
@@ -132,12 +151,22 @@ Section BankedMem.
                         (ITE isCap (data @% "tag") $$false)
                  else Retv;
                  Ret (Const ty Default) )
-          else callReadRegFile Bool tagRead #idx
+          else ( If isCap
+                 then callReadRegFile Bool tagRead #idx
+                 else Ret (Const ty Default)
+                 as retTag;
+                 Ret #retTag )
           as tag;
           Ret (STRUCT {
-                   "tag" ::= #tag;
-                   "cap" ::= #ldVal @% "cap";
-                   "val" ::= #ldVal @% "val" } : FullCapWithTag @# ty) ).
+                   "data" ::= (STRUCT {
+                                   "tag" ::= #tag;
+                                   "cap" ::= #ldVal @% "cap";
+                                   "val" ::= #ldVal @% "val" } : FullCapWithTag @# ty);
+                   "lowestByte" ::= $0;
+                   "dataError?" ::= Const ty false;
+                   "dataFault?" ::= Const ty false;
+                   "tagError?" ::= Const ty false;
+                   "tagFault?" ::= Const ty false } : DataRet @# ty) ).
       - abstract dischargeDiv8.
       - abstract (rewrite lengthMemBankInits; dischargeDiv8).
     Defined.

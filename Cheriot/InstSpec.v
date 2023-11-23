@@ -19,8 +19,9 @@ Section InstBaseSpec.
         "newIe" :: Bool;
         "exception?" :: Bool;
         "exceptionCause" :: Data;
+        "exceptionValue" :: Addr;
         "baseException?" :: Bool;
-        "pcException?" :: Bool;
+        "pcCapException?" :: Bool;
         "mem?" :: Bool;
         "memCap?" :: Bool;
         "memSize" :: MemSize;
@@ -55,7 +56,7 @@ Section InstBaseSpec.
         LETC cd : FullCapWithTag <-
                     STRUCT {
                         "tag" ::= inp @% "cdTag";
-                        "cap" ::= inp @% "cdCap";
+                        "cap" ::= ITE (inp @% "exception?") (inp @% "exceptionValue") (inp @% "cdCap");
                         "val" ::= (IF (inp @% "exception?") || (inp @% "interrupt?")
                                    then inp @% "exceptionCause"
                                    else inp @% "cdVal") };
@@ -78,7 +79,7 @@ Section InstBaseSpec.
                   "mem?" ::= inp @% "mem?";
                   "exception?" ::= inp @% "exception?";
                   "baseException?" ::= inp @% "baseException?";
-                  "pcException?" ::= inp @% "pcException?";
+                  "pcCapException?" ::= inp @% "pcCapException?";
                   "interrupt?" ::= inp @% "interrupt?";
                   "changeIe?" ::= inp @% "changeIe?";
                   "newIe" ::= inp @% "newIe";
@@ -836,6 +837,7 @@ Section InstBaseSpec.
                     @%[ "exceptionCause" <- if compressed
                                             then Const ty (natToWord Xlen 0)
                                             else $InstMisaligned ]
+                    @%[ "exceptionValue" <- #newAddr ]
                     @%[ "baseException?" <- $$true ]));
         instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
       |}.
@@ -1023,6 +1025,7 @@ Section InstBaseSpec.
                       @%[ "exceptionCause" <- if compressed
                                               then Const ty (natToWord Xlen 0)
                                               else $InstMisaligned ]
+                      @%[ "exceptionValue" <- #newAddr ]
                       @%[ "baseException?" <- $$true ]));
           instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := true |}
         |};
@@ -1060,6 +1063,7 @@ Section InstBaseSpec.
                       @%[ "pcCap" <- unseal capAccessors (cs1 @% "cap") ]
                       @%[ "exception?" <- #fullException @% "fst" @% "valid" ]
                       @%[ "exceptionCause" <- #fullException @% "fst" @% "data" ]
+                      @%[ "exceptionValue" <- #newAddr ]
                       @%[ "baseException?" <- #fullException @% "snd" ]
                       @%[ "changeIe?" <- #ieSentry || #idSentry ]
                       @%[ "newIe" <- #ieSentry ] ));
@@ -1111,7 +1115,7 @@ Section InstBaseSpec.
                       @%[ "exception?" <- #exception ]
                       @%[ "exceptionCause" <- #exceptionCause ]
                       @%[ "scrException?" <- #pcPerms @% "SR" ]
-                      @%[ "pcException?" <- !(#pcPerms @% "SR") ]));
+                      @%[ "pcCapException?" <- !(#pcPerms @% "SR") ]));
           instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := true; implicitIe := false |}
         |}
       ]
@@ -1139,6 +1143,7 @@ Section InstBaseSpec.
                       @%[ "exception?" <- (!isValidCsrs inst ||
                                              ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
+                      @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
                       @%[ "csrVal" <- cs1 @% "val" ]));
@@ -1156,6 +1161,7 @@ Section InstBaseSpec.
                       @%[ "exception?" <- (!isValidCsrs inst ||
                                              ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
+                      @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
                       @%[ "csrVal" <- csr .| (cs1 @% "val") ]));
@@ -1173,6 +1179,7 @@ Section InstBaseSpec.
                       @%[ "exception?" <- (!isValidCsrs inst ||
                                              ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
+                      @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
                       @%[ "csrVal" <- csr .& ~(cs1 @% "val") ]));
@@ -1190,6 +1197,7 @@ Section InstBaseSpec.
                       @%[ "exception?" <- (!isValidCsrs inst ||
                                              ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
+                      @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
                       @%[ "csrVal" <- ZeroExtendTruncLsb Xlen (rs1Fixed inst) ]));
@@ -1207,6 +1215,7 @@ Section InstBaseSpec.
                       @%[ "exception?" <- (!isValidCsrs inst ||
                                              ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
+                      @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
                       @%[ "csrVal" <- csr .| ZeroExtendTruncLsb Xlen (rs1Fixed inst) ]));
@@ -1224,6 +1233,7 @@ Section InstBaseSpec.
                       @%[ "exception?" <- (!isValidCsrs inst ||
                                              ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
+                      @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
                       @%[ "csrVal" <- csr .& ~(ZeroExtendTruncLsb Xlen (rs1Fixed inst)) ]));
@@ -1383,41 +1393,34 @@ Section InstBaseSpec.
                remember (field P) as sth eqn: Heq_sth; simpl in Heq_sth; rewrite Heq_sth; clear Heq_sth sth
            end.
 
-    (* Run the following only if the uniqId field or the instName field changes for any instruction.
-       (Corrollary: every time a new instruction is added, it must be run)
-     *)
+  Ltac checkUniq :=
+    unfold specBaseInsts, mkFuncEntry, insts, specBaseFuncUnit, instsFull,
+      localFuncInputFull, fold_left;
+    pose proof extsHasBase;
+    simplify_field (@extension procParams BaseOutput);
+    destruct (in_dec Extension_eq_dec Base supportedExts);
+    [| unfold getBool; rewrite ?andb_false_r; simpl; auto; constructor];
+    simplify_field (@xlens procParams BaseOutput);
+    let H := fresh in
+    destruct (xlenIs32_or_64) as [H | H]; repeat (rewrite H; simpl);
+      repeat constructor; unfold In, not; intros;
+      repeat match goal with
+        | H: ?p \/ ?q |- _ => destruct H; try discriminate
+        end; auto.
+
+  (* Run the following only if the uniqId field or the instName field changes for any instruction.
+     (Corrollary: every time a new instruction is added, it must be run)
+   *)
 
   (*
-  Theorem uniqAluIds: NoDup (map (@uniqId _ BaseOutput) specBaseInsts).
-  Proof.
-    unfold specBaseInsts, mkFuncEntry, insts, specBaseFuncUnit, instsFull,
-      localFuncInputFull, fold_left.
-    pose proof extsHasBase as base.
-    simplify_field (@extension procParams BaseOutput).
-    destruct (in_dec Extension_eq_dec Base supportedExts);
-      [| unfold getBool; rewrite ?andb_false_r; simpl; auto; constructor].
-    simplify_field (@xlens procParams BaseOutput).
-    destruct (xlenIs32_or_64) as [H | H]; repeat (rewrite H; simpl);
-      repeat constructor; unfold In, not; intros;
-      repeat match goal with
-        | H: ?p \/ ?q |- _ => destruct H; try discriminate
-        end; auto.
-  Qed.
-
   Theorem uniqAluNames: NoDup (map (@instName _ BaseOutput) specBaseInsts).
   Proof.
-    unfold specBaseInsts, mkFuncEntry, insts, specBaseFuncUnit, instsFull,
-      localFuncInputFull, fold_left.
-    pose proof extsHasBase as base.
-    simplify_field (@extension procParams BaseOutput).
-    destruct (in_dec Extension_eq_dec Base supportedExts);
-      [| unfold getBool; rewrite ?andb_false_r; simpl; auto; constructor].
-    simplify_field (@xlens procParams BaseOutput).
-    destruct (xlenIs32_or_64) as [H | H]; repeat (rewrite H; simpl);
-      repeat constructor; unfold In, not; intros;
-      repeat match goal with
-        | H: ?p \/ ?q |- _ => destruct H; try discriminate
-        end; auto.
+    checkUniq.
+  Qed.
+
+  Theorem uniqAluIds: NoDup (map (@uniqId _ BaseOutput) specBaseInsts).
+  Proof.
+    checkUniq.
   Qed.
    *)
 
