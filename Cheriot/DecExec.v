@@ -107,11 +107,6 @@ Section DecExec.
       Definition implicit3Prop := propertiesFuncEntry (fun p => Nat.eqb (implicit p) 3).
       Definition implicitMepccProp := propertiesFuncEntry implicitMepcc.
       Definition implicitIeProp := propertiesFuncEntry implicitIe.
-
-    (* TODOs :
-     - Write the efficient versions of "get" and "real" which calls propertiesFuncEntry only once
-     *)
-
     End allMatches.
 
     Definition execFuncEntry (allDecodes: DecodeFuncEntryStruct @# ty): Maybe FuncOutput ## ty.

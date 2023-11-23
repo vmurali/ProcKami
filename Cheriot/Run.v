@@ -95,8 +95,9 @@ Section Run.
                               "legal?" :: Bool;
                               "decodes" :: DecodeFuncEntryStruct funcEntries
                             }.
-  
-  Definition regReadDecode (uncompressOut: UncompressOut @# ty) : ActionT ty DecodeOut :=
+
+  (* Also performs reg read *)
+  Definition decode (uncompressOut: UncompressOut @# ty) : ActionT ty DecodeOut :=
     ( LET pc <- uncompressOut @% "pc";
       LET inst <- uncompressOut @% "inst";
       LETAE allMatches <- matchFuncEntry #inst funcEntries;
@@ -143,6 +144,7 @@ Section Run.
                     else ( readRegs csrs Data #getCsrIdx ) as retVal;
                     Ret #retVal );
 
+      (* TODO: see if ie can be combined with csr *)
       LETA ie <- ( If !#implicitIeProp
                    then ( Nondet rand: Bool;
                           Ret #rand)
@@ -272,6 +274,4 @@ Section Run.
 End Run.
 
 
-(* TODOs:
-- Wb: Takes FuncOutput with memory updates, implicitly writes to PC and registers.
-*)
+(* TODO: Wb: Takes FuncOutput with memory updates, implicitly writes to PC and registers. *)
