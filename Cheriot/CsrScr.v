@@ -3,22 +3,6 @@ Require Import Kami.AllNotations ProcKami.Cheriot.Types ProcKami.Cheriot.DecExec
 Section CsrScr.
   Context `{procParams: ProcParams}.
 
-  Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
-
-  Definition getAddrFromInfo (name: string) n (regs: list (RegInfo n)) :=
-    match find (fun x => String.eqb (fst (regInit x)) name) regs with
-    | Some x => regAddress x
-    | None => wzero _
-    end.
-
-  Local Open Scope kami_action.
-  Definition readRegs n (regs: list (RegInfo n)) k ty (e: Bit n @# ty) :=
-    redAction (@Kor _ k) (fun x => ( If (e == Const ty (regAddress x))
-                                        then ( Read retVal : k <- @^ (fst (regInit x));
-                                               Ret #retVal )
-                                     else Ret (Const ty Default) as ret;
-                                     Ret #ret ) ) regs.
-
   (* TODO: See how these can be not hardcoded. Also see how SCR inst entries can be made better *)
   Definition MStatusAddr := (snd immField) 'h"300".
 

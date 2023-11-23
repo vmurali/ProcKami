@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations.
+Require Import Kami.AllNotations ProcKami.Cheriot.Lib.
 
 Section CapAccessors.
   Variable CapSz: nat.
@@ -370,12 +370,33 @@ Section ParamDefinitions.
       regAddress : word n;
       regInit : RegInitT }.
 
+  Definition getAddrFromInfo (name: string) n (regs: list (RegInfo n)) :=
+    match find (fun x => String.eqb (fst (regInit x)) name) regs with
+    | Some x => regAddress x
+    | None => wzero _
+    end.
+
+  Local Open Scope kami_action.
+  Definition readRegs n (regs: list (RegInfo n)) k ty (e: Bit n @# ty) :=
+    redAction (@Kor _ k)
+      (fun x => ( match projT1 (snd (regInit x)) with
+                  | SyntaxKind k' =>
+                      if Kind_decb k k'
+                      then (If (e == Const ty (regAddress x))
+                            then ( Read retVal : k <- (procName ++ "_" ++ (fst (regInit x)))%string;
+                                   Ret #retVal )
+                            else Ret (Const ty Default) as ret;
+                            Ret #ret )
+                      else Ret (Const ty Default)
+                  | _ => Ret (Const ty Default)
+                  end)) regs.
+
   Definition callReadRegFile k (name: string) ty n (idx: Bit n @# ty) : ActionT ty k :=
     ( Call ret : Array 1 k <- name (idx: Bit n);
-      Ret (ReadArrayConst #ret Fin.F1) )%kami_action.
+      Ret (ReadArrayConst #ret Fin.F1) ).
     
   Definition callWriteRegFile (name: string) ty n (idx: Bit n @# ty) k (v: k @# ty) : ActionT ty Void :=
     ( Call name (STRUCT { "addr" ::= idx;
                           "data" ::= BuildArray (fun _ => v) } : WriteRq n (Array 1 k));
-      Retv )%kami_action.
+      Retv ).
 End ParamDefinitions.
