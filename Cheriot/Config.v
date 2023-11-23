@@ -217,6 +217,10 @@ End CapHelpers.
 Section Prefix.
   Local Notation prefix := ("cheriot_0").
   Local Notation "@^ x" := (prefix ++ "_" ++ x)%string (at level 0).
+  (*
+  Local Notation "@^ x" := ltac:(let y := eval cbn [append] in (prefix ++ "_" ++ x)%string in exact y)
+                                  (at level 0, only parsing).
+   *)
 
   Definition createMemRFParam (n: nat) : MemBankInit (Nat.pow 2 12) :=
     {|instRqName := @^"instRq";
@@ -233,8 +237,8 @@ Section Prefix.
       TrapAddr := _ 'h"100";
       supportedExts := [Base];
       extsHasBase := or_introl eq_refl;
-      RegIdSz := 4;
-      regIdSzIs4_or5 := or_introl eq_refl;
+      RegIdSz := 5;
+      regIdSzIs4_or5 := or_intror eq_refl;
       memBankInits := map createMemRFParam (zeroToN 8);
       lengthMemBankInits := eq_refl;
       procName := prefix;
@@ -258,5 +262,10 @@ Section Prefix.
       tagRead := @^"tagRead";
       tagWrite := @^"tagWrite";
       tagArray := @^"tagArray";
+      regsRead1 := @^"regsRead1";
+      regsRead2 := @^"regsRead2";
+      regsWrite := @^"regsWrite";
+      regsArray := @^"regsArray";
+      regsInit := RFNonFile 32 (Some Default);
     |}.
 End Prefix.

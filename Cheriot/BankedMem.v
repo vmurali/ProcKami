@@ -20,13 +20,16 @@ Section BankedMem.
 
   Definition memFiles := map createRegFile memBankInits.
 
-  Definition tagFile :=
+  (* On normal stores (i.e. stores of data, not stores of caps),
+     we may do two writes of false into consecutive tags;
+     therefore we have two-way banked booleans for tagFile *)
+  Definition tagFile (n : nat) :=
     {|rfIsWrMask := false;
       rfNum := 1;
-      rfDataArray := tagArray;
-      rfRead := Async [tagRead];
-      rfWrite := tagWrite;
-      rfIdxNum := NumMemBytes;
+      rfDataArray := (tagArray ++ natToBinStr n)%string;
+      rfRead := Async [(tagRead ++ natToBinStr n)%string];
+      rfWrite := (tagWrite ++ natToBinStr n)%string;
+      rfIdxNum := NumMemBytes/2;
       rfData := Bool;
       rfInit := RFNonFile _ (Some (ConstBool false)) |}.
 
@@ -109,9 +112,24 @@ Section BankedMem.
                             then TruncToDynamicSizeArraySigned #shuffledLdBytes size
                             else TruncToDynamicSizeArrayUnsigned #shuffledLdBytes size);
           LET ldVal <- unpack FullCap (castBits _ (pack #ldSignVal));
+          LET straddle <- ZeroExtend 1 #idxLsb + size <= $NumBanks;
+          LET tagIdx : Maybe _ <- Valid (ZeroExtendTruncMsb (Nat.log2_up (NumMemBytes/2)) #idx);
+          LET tagIdxPlus1 : Maybe _ <- (STRUCT { "valid" ::= #straddle;
+                                                 "data" ::= ZeroExtendTruncMsb (Nat.log2_up (NumMemBytes/2))
+                                                              #idxPlus1}: Maybe _ @# ty);
+          LET tagIdxLsbIs0 <- unpack Bool (ZeroExtendTruncLsb 1 #idx);
+          LET tag0Idx <- ITE #tagIdxLsbIs0 #tagIdx #tagIdxPlus1;
+          LET tag1Idx <- ITE #tagIdxLsbIs0 #tagIdxPlus1 #tagIdx;
+          (* For stores, if isCap, then tagIdx is valid and tagIdxPlus1 is invalid,
+             so only one of tag0Idx or tag1Idx is valid *)
           If isStore
-          then ( If isCap
-                 then callWriteRegFile tagWrite #idx (data @% "tag")
+          then ( If (#tag0Idx @% "valid")
+                 then callWriteRegFile (tagWrite ++ "0")%string (#tag0Idx @% "data")
+                        (ITE isCap (data @% "tag") $$false)
+                 else Retv;
+                 If (#tag1Idx @% "valid")
+                 then callWriteRegFile (tagWrite ++ "1")%string (#tag1Idx @% "data")
+                        (ITE isCap (data @% "tag") $$false)
                  else Retv;
                  Ret (Const ty Default) )
           else callReadRegFile Bool tagRead #idx

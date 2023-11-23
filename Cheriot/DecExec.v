@@ -249,25 +249,19 @@ Section DecExec.
           rewrite (finTagMapPrf x).
           exact id.
         Defined.
-        
-        Section RealVal.
-          Variable k: Kind.
-          Variable val: k @# ty.
-          Local Open Scope kami_action.
-          Definition realVal : ActionT ty k :=
-            ( If propertiesFuncEntry
-              then Ret val
-              else ( Nondet x : k;
-                     Ret #x ) as retVal;
-              Ret #retVal ).
-        End RealVal.
       End InstProperties.
 
-      Definition readC3 := propertiesFuncEntry (fun p => Nat.eqb (implicit p) 3).
-      Definition readMepcc := propertiesFuncEntry implicitMepcc.
-      Definition realCs2 := realVal hasCs2 cs2.
+      Definition hasCs1Prop := propertiesFuncEntry hasCs1.
+      Definition hasCs2Prop := propertiesFuncEntry hasCs2.
+      Definition hasScrProp := propertiesFuncEntry hasScr.
+      Definition hasCsrProp := propertiesFuncEntry hasCsr.
+      Definition implicit3Prop := propertiesFuncEntry (fun p => Nat.eqb (implicit p) 3).
+      Definition implicitMepccProp := propertiesFuncEntry implicitMepcc.
+      Definition implicitIeProp := propertiesFuncEntry implicitIe.
 
-      (* Must write cs1 (depends on c3), scr (depends on mepcc), csr (depends on ie) *)
+    (* TODOs :
+     - Write the efficient versions of "get" and "real" which calls propertiesFuncEntry only once
+     *)
 
     End allMatches.
 
@@ -281,6 +275,5 @@ Section DecExec.
       rewrite (finTagMapPrf x).
       exact id.
     Defined.
-
   End FuncEntry.
 End DecExec.

@@ -108,7 +108,9 @@ Class ProcParams :=
     extsHasBase: In Base supportedExts;
     RegIdSz: nat;
     regIdSzIs4_or5: RegIdSz = 4 \/ RegIdSz = 5;
-    NumMemBytes: nat;
+    LgNumMemBytes: nat;
+    (* NumMemBytes denotes the number of bytes in each bank. So total physical memory = NumBanks * NumMemBytes *)
+    NumMemBytes := Nat.pow 2 LgNumMemBytes;
     MemBankParams := MemBankInit NumMemBytes;
     memBankInits: list MemBankParams;
     NumBanks := (CapSz + Xlen) / 8;
@@ -133,24 +135,27 @@ Class ProcParams :=
     mepccValReg: string;
     tagRead: string;
     tagWrite: string;
-    tagArray: string }.
+    tagArray: string;
+    regsRead1: string;
+    regsRead2: string;
+    regsWrite: string;
+    regsArray: string;
+    Data := Bit Xlen;
+    Cap := Bit CapSz;
+    FullCapWithTag := STRUCT_TYPE { "tag" :: Bool;
+                                    "cap" :: Cap;
+                                    "val" :: Data };
+    regsInit: RegFileInitT (Nat.pow 2 RegIdSz) FullCapWithTag }.
 
 Section ParamDefinitions.
   Context {procParams: ProcParams}.
 
-  Definition Data := Bit Xlen.
   Definition Addr := Bit Xlen.
-  Definition Cap := Bit CapSz.
 
   Definition FullCap :=
     STRUCT_TYPE { "cap" :: Cap;
                   "val" :: Data }.
 
-  Definition FullCapWithTag :=
-    STRUCT_TYPE { "tag" :: Bool;
-                  "cap" :: Cap;
-                  "val" :: Data }.
-  
   Section Ty.
     Variable ty: Kind -> Type.
     Local Open Scope kami_expr.
@@ -246,6 +251,10 @@ Section ParamDefinitions.
         implicit      : nat ;
         implicitMepcc : bool ;
         implicitIe    : bool }.
+
+    (* TODO: See how these can be not hardcoded. Also see how SCR inst entries can be made better *)
+    Definition ImplicitRead := 3.
+
   End InstEncoding.
 
   Definition FenceI := 0.
@@ -356,9 +365,10 @@ Section ParamDefinitions.
           (instsFull fe) []
     |}.
 
-  Record CsrInfo := {
-      csrAddress : word (snd (immField));
-      csrReg : RegInitT }.
+  (* TODO: Index this with Kind of the register *)
+  Record RegInfo n := {
+      regAddress : word n;
+      regInit : RegInitT }.
 
   Definition callReadRegFile k (name: string) ty n (idx: Bit n @# ty) : ActionT ty k :=
     ( Call ret : Array 1 k <- name (idx: Bit n);

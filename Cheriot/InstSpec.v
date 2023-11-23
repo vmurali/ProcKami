@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Types.
+Require Import Kami.AllNotations ProcKami.Cheriot.Types ProcKami.Cheriot.CsrScr.
 
 Section InstBaseSpec.
   Context `{procParams: ProcParams}.
@@ -1117,15 +1117,11 @@ Section InstBaseSpec.
       ]
     |}.
 
-  Definition csrs : list CsrInfo := [
-      Build_CsrInfo (_ 'h"C01") ("time", existT _ (SyntaxKind Data) (Some (SyntaxConst (ConstBit (wzero _)))));
-      Build_CsrInfo (_ 'h"C81") ("timeh", existT _ (SyntaxKind Data) (Some (SyntaxConst (ConstBit (wzero _)))));
-      Build_CsrInfo (_ 'h"300") ("mstatus", existT _ (SyntaxKind Data) (Some (SyntaxConst (ConstBit (wzero _)))));
-      Build_CsrInfo (_ 'h"342") ("mcause", existT _ (SyntaxKind Data) None);
-      Build_CsrInfo (_ 'h"343") ("mtval", existT _ (SyntaxKind Data) None) ].
-  
-  Definition isValidCsrs ty (inst : Inst @# ty) :=
-    Kor (map (fun csr => (imm inst == Const ty (ConstBit (csrAddress csr)))%kami_expr) csrs).
+  Definition IeInvMask n ty : Array n Bool @# ty :=
+    Const ty (ConstArray (fun i => match i with
+                                   | Fin.FS _ (Fin.FS _ (Fin.FS _ (Fin.F1 _))) => false
+                                   | _ => true
+                                   end)).
 
   Definition csrInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
@@ -1135,10 +1131,13 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"001")];
           inputXform ty pc inst cs1 cs2 scr csr ie :=
-            ( RetE ((DefBaseOutput ty)
+            ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask Xlen ty));
+              LETC ieNotValid <- isNotZero ((cs1 @% "val") .& #ieInvMask);
+              RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
-                      @%[ "exception?" <- isValidCsrs inst ]
+                      @%[ "exception?" <- (!isValidCsrs inst ||
+                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
@@ -1149,10 +1148,13 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"010")];
           inputXform ty pc inst cs1 cs2 scr csr ie :=
-            ( RetE ((DefBaseOutput ty)
+            ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask Xlen ty));
+              LETC ieNotValid <- isNotZero ((cs1 @% "val") .& #ieInvMask);
+              RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
-                      @%[ "exception?" <- isValidCsrs inst ]
+                      @%[ "exception?" <- (!isValidCsrs inst ||
+                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
@@ -1163,10 +1165,13 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"011")];
           inputXform ty pc inst cs1 cs2 scr csr ie :=
-            ( RetE ((DefBaseOutput ty)
+            ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask Xlen ty));
+              LETC ieNotValid <- isNotZero ((cs1 @% "val") .& #ieInvMask);
+              RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
-                      @%[ "exception?" <- isValidCsrs inst ]
+                      @%[ "exception?" <- (!isValidCsrs inst ||
+                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
@@ -1177,10 +1182,13 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"101")];
           inputXform ty pc inst cs1 cs2 scr csr ie :=
-            ( RetE ((DefBaseOutput ty)
+            ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask (snd rs1FixedField) ty));
+              LETC ieNotValid <- isNotZero (rs1Fixed inst .& #ieInvMask);
+              RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
-                      @%[ "exception?" <- isValidCsrs inst ]
+                      @%[ "exception?" <- (!isValidCsrs inst ||
+                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
@@ -1191,10 +1199,13 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"110")];
           inputXform ty pc inst cs1 cs2 scr csr ie :=
-            ( RetE ((DefBaseOutput ty)
+            ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask (snd rs1FixedField) ty));
+              LETC ieNotValid <- isNotZero (rs1Fixed inst .& #ieInvMask);
+              RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
-                      @%[ "exception?" <- isValidCsrs inst ]
+                      @%[ "exception?" <- (!isValidCsrs inst ||
+                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
@@ -1205,10 +1216,13 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"111")];
           inputXform ty pc inst cs1 cs2 scr csr ie :=
-            ( RetE ((DefBaseOutput ty)
+            ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask (snd rs1FixedField) ty));
+              LETC ieNotValid <- isNotZero (rs1Fixed inst .& #ieInvMask);
+              RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
-                      @%[ "exception?" <- isValidCsrs inst ]
+                      @%[ "exception?" <- (!isValidCsrs inst ||
+                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
@@ -1293,7 +1307,7 @@ Section InstBaseSpec.
         {|instName := "CSpecialRW_MEPCC";
           uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
                      fieldVal funct3Field (3'h"0");
-                     fieldVal rs2FixedField (natToWord _ 31);
+                     fieldVal rs2FixedField (natToWord _ MepccAddr);
                      fieldVal funct7Field (7'h"1")];
           inputXform ty pc inst cs1 cs2 scr csr ie :=
             ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
@@ -1369,6 +1383,11 @@ Section InstBaseSpec.
                remember (field P) as sth eqn: Heq_sth; simpl in Heq_sth; rewrite Heq_sth; clear Heq_sth sth
            end.
 
+    (* Run the following only if the uniqId field or the instName field changes for any instruction.
+       (Corrollary: every time a new instruction is added, it must be run)
+     *)
+
+  (*
   Theorem uniqAluIds: NoDup (map (@uniqId _ BaseOutput) specBaseInsts).
   Proof.
     unfold specBaseInsts, mkFuncEntry, insts, specBaseFuncUnit, instsFull,
@@ -1378,11 +1397,28 @@ Section InstBaseSpec.
     destruct (in_dec Extension_eq_dec Base supportedExts);
       [| unfold getBool; rewrite ?andb_false_r; simpl; auto; constructor].
     simplify_field (@xlens procParams BaseOutput).
-    destruct (xlenIs32_or_64) as [H | H]; do 2 (rewrite H; simpl);
+    destruct (xlenIs32_or_64) as [H | H]; repeat (rewrite H; simpl);
       repeat constructor; unfold In, not; intros;
       repeat match goal with
         | H: ?p \/ ?q |- _ => destruct H; try discriminate
         end; auto.
   Qed.
+
+  Theorem uniqAluNames: NoDup (map (@instName _ BaseOutput) specBaseInsts).
+  Proof.
+    unfold specBaseInsts, mkFuncEntry, insts, specBaseFuncUnit, instsFull,
+      localFuncInputFull, fold_left.
+    pose proof extsHasBase as base.
+    simplify_field (@extension procParams BaseOutput).
+    destruct (in_dec Extension_eq_dec Base supportedExts);
+      [| unfold getBool; rewrite ?andb_false_r; simpl; auto; constructor].
+    simplify_field (@xlens procParams BaseOutput).
+    destruct (xlenIs32_or_64) as [H | H]; repeat (rewrite H; simpl);
+      repeat constructor; unfold In, not; intros;
+      repeat match goal with
+        | H: ?p \/ ?q |- _ => destruct H; try discriminate
+        end; auto.
+  Qed.
+   *)
 
 End InstBaseSpec.
