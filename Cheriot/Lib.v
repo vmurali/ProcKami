@@ -149,31 +149,25 @@ Section Reducer.
 End Reducer.
 
 Section RegAccess.  
-  (* TODO: Index this with Kind of the register *)
-  Record RegInfo n := {
-      regAddress : word n;
-      regInit : RegInitT }.
+  Record RegInfo n k := {
+      regAddr : word n;
+      regName : string;
+      regInit : RegInitValT (SyntaxKind k) }.
 
-  Definition getAddrFromInfo (name: string) n (regs: list (RegInfo n)) :=
-    match find (fun x => String.eqb (fst (regInit x)) name) regs with
-    | Some x => regAddress x
+  Definition getAddrFromInfo (name: string) n k (regs: list (RegInfo n k)) :=
+    match find (fun x => String.eqb name (regName x)) regs with
+    | Some x => regAddr x
     | None => wzero _
     end.
 
   Local Open Scope kami_action.
-  Definition readRegs prefix n (regs: list (RegInfo n)) k ty (e: Bit n @# ty) :=
+  Definition readRegs prefix n k (regs: list (RegInfo n k)) ty (e: Bit n @# ty) :=
     redAction (@Kor _ k)
-      (fun x => ( match projT1 (snd (regInit x)) with
-                  | SyntaxKind k' =>
-                      if Kind_decb k k'
-                      then (If (e == Const ty (regAddress x))
-                            then ( Read retVal : k <- (prefix ++ "_" ++ (fst (regInit x)))%string;
-                                   Ret #retVal )
-                            else Ret (Const ty Default) as ret;
-                            Ret #ret )
-                      else Ret (Const ty Default)
-                  | _ => Ret (Const ty Default)
-                  end)) regs.
+      (fun x => ( If (e == Const ty (regAddr x))
+                  then ( Read retVal : k <- (prefix ++ "_" ++ (regName x))%string;
+                         Ret #retVal )
+                  else Ret (Const ty Default) as ret;
+                  Ret #ret )) regs.
 
   Definition callReadRegFile k (name: string) ty n (idx: Bit n @# ty) : ActionT ty k :=
     ( Call ret : Array 1 k <- name (idx: Bit n);

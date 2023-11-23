@@ -136,13 +136,13 @@ Section Run.
       LETA scr <- ( If !(#hasScrProp || #implicitMepccProp)
                     then ( Nondet rand: FullCapWithTag;
                            Ret #rand)
-                    else ( readRegs procName scrs FullCapWithTag #getScrIdx ) as retVal;
+                    else ( readRegs procName scrs #getScrIdx ) as retVal;
                     Ret #retVal );
 
       LETA csr <- ( If !#hasCsrProp
                     then ( Nondet rand: Data;
                            Ret #rand)
-                    else ( readRegs procName csrs Data #getCsrIdx ) as retVal;
+                    else ( readRegs procName csrs #getCsrIdx ) as retVal;
                     Ret #retVal );
 
       (* TODO: see if ie can be combined with csr *)
