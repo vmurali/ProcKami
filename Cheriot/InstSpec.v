@@ -1110,7 +1110,8 @@ Section InstBaseSpec.
               LETE baseTop <- getCapBaseTop capAccessors (scr @% "cap") (scr @% "val");
               LETE baseTop2 <- getCapBaseTop capAccessors (scr @% "cap") #newMepc;
               LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
-              LETC exception <- !((scr @% "tag") && !isSealed capAccessors (scr @% "cap") && #representable);
+              LETC exception <- !((scr @% "tag") && !isSealed capAccessors (scr @% "cap") && #representable
+                                  && (#pcPerms @% "SR"));
               RetE ((DefBaseOutput ty)
                       @%[ "mayChangePc?" <- $$true ]
                       @%[ "taken?" <- $$true ]
@@ -1118,8 +1119,8 @@ Section InstBaseSpec.
                       @%[ "pcCap" <- scr @% "cap" ]
                       @%[ "exception?" <- #exception ]
                       @%[ "exceptionCause" <- #exceptionCause ]
-                      @%[ "scrException?" <- #pcPerms @% "SR" ]
-                      @%[ "pcCapException?" <- !(#pcPerms @% "SR") ]));
+                      @%[ "scrException?" <- !(#pcPerms @% "SR") ]
+                      @%[ "pcCapException?" <- #pcPerms @% "SR" ]));
           instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := true; implicitIe := false |}
         |}
       ]
