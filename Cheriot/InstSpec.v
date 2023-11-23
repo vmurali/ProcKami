@@ -96,7 +96,7 @@ Section InstBaseSpec.
         {|instName := "AddI";
           uniqId := [fieldVal opcodeField (5'b"00100");
                      fieldVal funct3Field (3'b"000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst)]));
@@ -105,7 +105,7 @@ Section InstBaseSpec.
         {|instName := "SLTI";
           uniqId := [fieldVal opcodeField (5'b"00100");
                      fieldVal funct3Field (3'b"010")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC in1 <- SignExtend 1 (cs1 @% "val");
               LETC in2 <- SignExtendTruncLsb (Xlen + 1) (imm inst);
               LETC res <- #in1 - #in2;
@@ -118,7 +118,7 @@ Section InstBaseSpec.
         {|instName := "SLTIU";
           uniqId := [fieldVal opcodeField (5'b"00100");
                      fieldVal funct3Field (3'b"011")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC in1 <- ZeroExtend 1 (cs1 @% "val");
               LETC in2 <- ZeroExtendTruncLsb (Xlen + 1) (imm inst);
               LETC res <- #in1 - #in2;
@@ -131,7 +131,7 @@ Section InstBaseSpec.
         {|instName := "XorI";
           uniqId := [fieldVal opcodeField (5'b"00100");
                      fieldVal funct3Field (3'b"100")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ((cs1 @% "val") .^ (SignExtendTruncLsb Xlen (imm inst))) ]));
@@ -140,7 +140,7 @@ Section InstBaseSpec.
         {|instName := "OrI";
           uniqId := [fieldVal opcodeField (5'b"00100");
                      fieldVal funct3Field (3'b"110")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ((cs1 @% "val") .| (SignExtendTruncLsb Xlen (imm inst))) ]));
@@ -149,7 +149,7 @@ Section InstBaseSpec.
         {|instName := "AndI";
           uniqId := [fieldVal opcodeField (5'b"00100");
                      fieldVal funct3Field (3'b"111")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ((cs1 @% "val") .& (SignExtendTruncLsb Xlen (imm inst))) ]));
@@ -161,7 +161,7 @@ Section InstBaseSpec.
                      if Xlen =? 32
                      then fieldVal funct7Field (7'b"0000000")
                      else fieldVal funct6Field (6'b"000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ((cs1 @% "val") <<
@@ -174,7 +174,7 @@ Section InstBaseSpec.
                      if Xlen =? 32
                      then fieldVal funct7Field (7'b"0000000")
                      else fieldVal funct6Field (6'b"000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
@@ -188,7 +188,7 @@ Section InstBaseSpec.
                      if Xlen =? 32
                      then fieldVal funct7Field (7'b"0100000")
                      else fieldVal funct6Field (6'b"010000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
@@ -200,7 +200,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01100");
                      fieldVal funct3Field (3'b"000");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") + (cs2 @% "val")]));
@@ -210,7 +210,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01100");
                      fieldVal funct3Field (3'b"000");
                      fieldVal funct7Field (7'b"0100000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") - (cs2 @% "val")]));
@@ -220,7 +220,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01100");
                      fieldVal funct3Field (3'b"010");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC in1 <- SignExtend 1 (cs1 @% "val");
               LETC in2 <- SignExtend 1 (cs2 @% "val");
               LETC res <- UniBit (TruncMsb Xlen 1) (#in1 - #in2);
@@ -233,7 +233,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01100");
                      fieldVal funct3Field (3'b"011");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC in1 <- ZeroExtend 1 (cs1 @% "val");
               LETC in2 <- ZeroExtend 1 (cs2 @% "val");
               LETC res <- UniBit (TruncMsb Xlen 1) (#in1 - #in2);
@@ -246,7 +246,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01100");
                      fieldVal funct3Field (3'b"100");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") .^ (cs2 @% "val")]));
@@ -256,7 +256,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01100");
                      fieldVal funct3Field (3'b"110");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") .| (cs2 @% "val")]));
@@ -266,7 +266,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01100");
                      fieldVal funct3Field (3'b"111");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") .& (cs2 @% "val")]));
@@ -276,7 +276,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01100");
                      fieldVal funct3Field (3'b"001");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") <<
@@ -287,7 +287,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01100");
                      fieldVal funct3Field (3'b"101");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
@@ -299,7 +299,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01100");
                      fieldVal funct3Field (3'b"101");
                      fieldVal funct7Field (7'b"0100000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
@@ -317,7 +317,7 @@ Section InstBaseSpec.
         {|instName := "AddIW";
           uniqId := [fieldVal opcodeField (5'b"00110");
                      fieldVal funct3Field (3'b"000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst))]));
@@ -327,7 +327,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"00110");
                      fieldVal funct3Field (3'b"001");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") <<
@@ -338,7 +338,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"00110");
                      fieldVal funct3Field (3'b"101");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (Trunc32Unsigned Xlen (cs1 @% "val")) >>>
@@ -349,7 +349,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"00110");
                      fieldVal funct3Field (3'b"101");
                      fieldVal funct7Field (7'b"0100000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (Trunc32Signed Xlen (cs1 @% "val")) >>>
@@ -360,7 +360,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01110");
                      fieldVal funct3Field (3'b"000");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") + (cs2 @% "val"))]));
@@ -370,7 +370,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01110");
                      fieldVal funct3Field (3'b"000");
                      fieldVal funct7Field (7'b"0100000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") - (cs2 @% "val"))]));
@@ -380,7 +380,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01110");
                      fieldVal funct3Field (3'b"001");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- Trunc32Signed Xlen
@@ -392,7 +392,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01110");
                      fieldVal funct3Field (3'b"101");
                      fieldVal funct7Field (7'b"0000000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (Trunc32Unsigned Xlen (cs1 @% "val")) >>>
@@ -403,7 +403,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"01110");
                      fieldVal funct3Field (3'b"101");
                      fieldVal funct7Field (7'b"0100000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (Trunc32Signed Xlen (cs1 @% "val")) >>>
@@ -419,7 +419,7 @@ Section InstBaseSpec.
       instEntries := [
         {|instName := "AUICGP";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"7b"))];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
               LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
               LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
@@ -433,7 +433,7 @@ Section InstBaseSpec.
         |};
         {|instName := "AUIPCC";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"17"))];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
               LETE baseTop <- getCapBaseTop capAccessors (pc @% "cap") (pc @% "val");
               LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
@@ -449,7 +449,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"d")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
               LETC newPerms <- unpack CapPerms (ZeroExtendTruncLsb (size CapPerms)
                                                   ((ZeroExtendTruncLsb Xlen (pack #perms)) .& (cs2 @% "val")));
@@ -466,7 +466,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"b");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- $$false ]
@@ -479,7 +479,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"f");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- cs1 @% "val" ]));
@@ -490,7 +490,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"2");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
@@ -502,7 +502,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"17");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- cs1 @% "cap" ]));
@@ -513,7 +513,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"3");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
               LETC len <- (#baseTop @% "top") - (ZeroExtend 1 (#baseTop @% "base"));
               LETC lenMsb <- unpack Bool (UniBit (TruncMsb Xlen 1) #len);
@@ -528,7 +528,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"0");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
@@ -540,7 +540,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"4");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen (pack (cs1 @% "tag")) ]));
@@ -551,7 +551,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"18");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
               LETC topMsb <- unpack Bool (UniBit (TruncMsb Xlen 1) (#baseTop @% "top"));
               LETC topLsb <- UniBit (TruncLsb Xlen 1) (#baseTop @% "top");
@@ -565,7 +565,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"1");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC oType <- getCapOType capAccessors (cs1 @% "cap");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
@@ -576,7 +576,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"11")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (cs1 @% "val") + (cs2 @% "val");
               LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
               LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
@@ -591,7 +591,7 @@ Section InstBaseSpec.
         {|instName := "CIncAddrImm";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"1")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
               LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
               LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
@@ -608,7 +608,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"a");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- cs1 @% "tag" ]
@@ -621,7 +621,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"9");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE capBounds <- getCapBounds capAccessors ($0) (cs1 @% "val");
               LETC mask <- $$(wones Xlen) << (#capBounds @% "exp");
               RetE ((DefBaseOutput ty)
@@ -634,7 +634,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"8");
                      fieldVal funct7Field (7'h"7f")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE capBounds <- getCapBounds capAccessors ($0) (cs1 @% "val");
               LETC mask <- $$(wones Xlen) << (#capBounds @% "exp");
               LETC repLen <- (cs1 @% "val" + (~#mask)) .& #mask;
@@ -647,7 +647,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"10")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- cs2 @% "val";
               LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
               LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
@@ -663,7 +663,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"8")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
               LETC baseBound <- (cs1 @% "val") >= (#baseTop @% "base");
               LETC topBound <- (ZeroExtend 1 (cs1 @% "val") + ZeroExtend 1 (cs2 @% "val")) <= (#baseTop @% "top");
@@ -682,7 +682,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"9")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
               LETC baseBound <- (cs1 @% "val") >= (#baseTop @% "base");
               LETC topBound <- (ZeroExtend 1 (cs1 @% "val") + ZeroExtend 1 (cs2 @% "val")) <= (#baseTop @% "top");
@@ -700,7 +700,7 @@ Section InstBaseSpec.
         {|instName := "CSetBoundsImm";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"2")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
               LETC baseBound <- (cs1 @% "val") >= (#baseTop @% "base");
               LETC topBound <- (ZeroExtend 1 (cs1 @% "val") +
@@ -720,7 +720,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"21")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC tagEq <- (cs1 @% "tag") == (cs2 @% "tag");
               LETC capEq <- (cs1 @% "cap") == (cs2 @% "cap");
               LETC valEq <- (cs1 @% "val") == (cs2 @% "val");
@@ -733,7 +733,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"16")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- $$false ]
@@ -745,7 +745,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"14")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") - (cs2 @% "val") ]));
@@ -755,7 +755,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"20")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
               LETE baseTop2 <- getCapBaseTop capAccessors (cs2 @% "cap") (cs2 @% "val");
               LETC baseBound <- (#baseTop2 @% "base") >= (#baseTop @% "base");
@@ -775,7 +775,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"b")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE baseTop2 <- getCapBaseTop capAccessors (cs2 @% "cap") (cs2 @% "val");
               LETC baseBound <- (cs2 @% "val") >= (#baseTop2 @% "base");
               LETC topBound <- ZeroExtend 1 (cs2 @% "val") + $1 <= (#baseTop2 @% "top");
@@ -797,7 +797,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"c")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE baseTop2 <- getCapBaseTop capAccessors (cs2 @% "cap") (cs2 @% "val");
               LETC baseBound <- (cs2 @% "val") >= (#baseTop2 @% "base");
               LETC topBound <- ZeroExtend 1 (cs2 @% "val") + $1 <= (#baseTop2 @% "top");
@@ -824,7 +824,7 @@ Section InstBaseSpec.
       {|instName := name;
         uniqId := [fieldVal opcodeField (5'b"11000");
                    fieldVal funct3Field funct3Val];
-        inputXform ty pc inst cs1 cs2 scr csr ie :=
+        inputXform ty pc inst cs1 cs2 scr csr :=
           ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen (branchOffset inst);
             LETE taken <- takenFn (cs1 @% "val") (cs2 @% "val");
             RetE ((DefBaseOutput ty)
@@ -875,7 +875,7 @@ Section InstBaseSpec.
     {|instName := name;
       uniqId := [fieldVal opcodeField (5'b"00000");
                  fieldVal funct3Field funct3Val];
-      inputXform ty pc inst cs1 cs2 scr csr ie :=
+      inputXform ty pc inst cs1 cs2 scr csr :=
         ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
           LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
           LETC baseBound <- #newAddr >= (#baseTop @% "base");
@@ -939,7 +939,7 @@ Section InstBaseSpec.
     {|instName := name;
       uniqId := [fieldVal opcodeField (5'b"01000");
                  fieldVal funct3Field funct3Val];
-      inputXform ty pc inst cs1 cs2 scr csr ie :=
+      inputXform ty pc inst cs1 cs2 scr csr :=
         ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
           LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
           LETC baseBound <- #newAddr >= (#baseTop @% "base");
@@ -1008,13 +1008,15 @@ Section InstBaseSpec.
       instEntries := [
         {|instName := "CJAL";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"6f"))];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen (jalOffset inst);
               LETC linkAddr <- (pc @% "val") + ITE (isInstNotCompressed inst) $4 $2;
+              LETC mstatusArr <- unpack (Array (S (Xlen-1)) Bool) (castBits XlenSXlenMinus1 csr);
+              LETC ie <- #mstatusArr ![ 3 ];
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- $$true ]
-                      @%[ "cdCap" <- seal capAccessors (getOTypeFromIe capAccessors ie) (pc @% "cap") ]
+                      @%[ "cdCap" <- seal capAccessors (getOTypeFromIe capAccessors #ie) (pc @% "cap") ]
                       @%[ "cdVal" <- #linkAddr ]
                       @%[ "mayChangePc?" <- $$true ]
                       @%[ "taken?" <- $$true ]
@@ -1032,7 +1034,7 @@ Section InstBaseSpec.
         {|instName := "CJALR";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"67"));
                      fieldVal funct3Field (3'h"0")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddrTemp <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
               LETC newAddr <- ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 1) #newAddrTemp, $$WO~0 >});
               LETC linkAddr <- (pc @% "val") + ITE (isInstNotCompressed inst) $4 $2;
@@ -1049,12 +1051,14 @@ Section InstBaseSpec.
                                  else if compressed
                                       then mkPair Invalid ($$false)
                                       else mkPair (Valid (Const ty (natToWord Xlen InstMisaligned))) ($$true))));
+              LETC mstatusArr <- unpack (Array (S (Xlen-1)) Bool) (castBits XlenSXlenMinus1 csr);
+              LETC ie <- #mstatusArr ![ 3 ];
               LETC ieSentry <- isIeSentry capAccessors (cs1 @% "cap");
               LETC idSentry <- isIdSentry capAccessors (cs1 @% "cap");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- $$true ]
-                      @%[ "cdCap" <- seal capAccessors (getOTypeFromIe capAccessors ie) (pc @% "cap") ]
+                      @%[ "cdCap" <- seal capAccessors (getOTypeFromIe capAccessors #ie) (pc @% "cap") ]
                       @%[ "cdVal" <- #linkAddr ]
                       @%[ "mayChangePc?" <- $$true ]
                       @%[ "taken?" <- $$true ]
@@ -1079,7 +1083,7 @@ Section InstBaseSpec.
         {|instName := "ECall";
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal (7, 25) (_ 'h"0")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefBaseOutput ty)
                         @%[ "exception?" <- $$true ]
                         @%[ "exceptionCause" <- Const ty (natToWord Xlen ECall) ]
@@ -1093,7 +1097,7 @@ Section InstBaseSpec.
                      fieldVal rs1FixedField (5'h"0");
                      fieldVal rs2FixedField (5'b"00010");
                      fieldVal funct7Field (7'b"0011000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
               LETC exceptionCause <- ITE (#pcPerms @% "SR")
                                        (Const ty (natToWord Xlen CapTagViolation))
@@ -1134,7 +1138,7 @@ Section InstBaseSpec.
         {|instName := "CSRRW";
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"001")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask Xlen ty));
               LETC ieNotValid <- isNotZero ((cs1 @% "val") .& #ieInvMask);
               RetE ((DefBaseOutput ty)
@@ -1152,7 +1156,7 @@ Section InstBaseSpec.
         {|instName := "CSRRS";
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"010")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask Xlen ty));
               LETC ieNotValid <- isNotZero ((cs1 @% "val") .& #ieInvMask);
               RetE ((DefBaseOutput ty)
@@ -1170,7 +1174,7 @@ Section InstBaseSpec.
         {|instName := "CSRRC";
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"011")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask Xlen ty));
               LETC ieNotValid <- isNotZero ((cs1 @% "val") .& #ieInvMask);
               RetE ((DefBaseOutput ty)
@@ -1188,7 +1192,7 @@ Section InstBaseSpec.
         {|instName := "CSRRWI";
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"101")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask (snd rs1FixedField) ty));
               LETC ieNotValid <- isNotZero (rs1Fixed inst .& #ieInvMask);
               RetE ((DefBaseOutput ty)
@@ -1206,7 +1210,7 @@ Section InstBaseSpec.
         {|instName := "CSRRSI";
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"110")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask (snd rs1FixedField) ty));
               LETC ieNotValid <- isNotZero (rs1Fixed inst .& #ieInvMask);
               RetE ((DefBaseOutput ty)
@@ -1224,7 +1228,7 @@ Section InstBaseSpec.
         {|instName := "CSRRCI";
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal funct3Field (3'b"111")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC ieInvMask <- castBits (Nat.mul_1_r _) (pack (IeInvMask (snd rs1FixedField) ty));
               LETC ieNotValid <- isNotZero (rs1Fixed inst .& #ieInvMask);
               RetE ((DefBaseOutput ty)
@@ -1251,7 +1255,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (natToWord _ 28);
                      fieldVal funct7Field (7'h"1")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
               LETC mtccVecMode <- ZeroExtendTruncLsb 2 (scr @% "val");
               LETC inpVecMode <- ZeroExtendTruncLsb 2 (cs1 @% "val");
@@ -1279,7 +1283,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (natToWord _ 29);
                      fieldVal funct7Field (7'h"1")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
@@ -1299,7 +1303,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (natToWord _ 30);
                      fieldVal funct7Field (7'h"1")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
@@ -1319,7 +1323,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (natToWord _ MepccAddr);
                      fieldVal funct7Field (7'h"1")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
               LETC newMepc <- if compressed
                               then ZeroExtendTruncLsb Xlen
@@ -1352,7 +1356,7 @@ Section InstBaseSpec.
         {|instName := "FenceI";
           uniqId := [fieldVal opcodeField (5'b"00011");
                      fieldVal funct3Field (3'b"001")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "interrupt?" <- $$true ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen FenceI) ]));
@@ -1365,7 +1369,7 @@ Section InstBaseSpec.
                      fieldVal rs1FixedField (5'b"00000");
                      fieldVal rs2FixedField (5'b"00101");
                      fieldVal funct7Field (7'b"0001000")];
-          inputXform ty pc inst cs1 cs2 scr csr ie :=
+          inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "interrupt?" <- $$true ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen WFI) ]));

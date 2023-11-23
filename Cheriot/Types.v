@@ -338,8 +338,7 @@ Section ParamDefinitions.
         uniqId         : UniqId;
         inputXform     : forall ty, FullCap @# ty -> Inst @# ty ->
                                     FullCapWithTag @# ty -> FullCapWithTag @# ty ->
-                                    FullCapWithTag @# ty -> Data @# ty ->
-                                    Bool @# ty -> ik ## ty;
+                                    FullCapWithTag @# ty -> Data @# ty -> ik ## ty;
         instProperties : InstProperties }.
 
     Record InstEntryFull := {
@@ -372,4 +371,10 @@ Section ParamDefinitions.
                       else []) ++ prev)
           (instsFull fe) []
     |}.
+
+  Theorem XlenSXlenMinus1: Xlen = ((S (Xlen - 1)) * 1)%nat.
+  Proof.
+    destruct procParams as [xlen xlen_vars].
+    destruct xlen_vars; subst; simpl; lia.
+  Qed.
 End ParamDefinitions.

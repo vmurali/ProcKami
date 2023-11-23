@@ -23,7 +23,7 @@ Section CsrScr.
       Build_RegInfo ($28) "MTCC" (Some (SyntaxConst Default));
       Build_RegInfo ($29) "MTDC" (Some (SyntaxConst Default));
       Build_RegInfo ($30) "MScratchC" None;
-      Build_RegInfo ($MepccAddr) "MEPCC" (Some (SyntaxConst Default)) ].
+      Build_RegInfo ($MepccAddr) "MEPCC" None ].
 
   Definition isValidScrs ty (inst : Inst @# ty) :=
     Kor (map (fun csr => (rs2Fixed inst == Const ty (regAddr csr))%kami_expr) scrs).

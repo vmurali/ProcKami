@@ -80,12 +80,6 @@ Section Run.
       rfData := FullCapWithTag;
       rfInit := regsInit |}.
 
-  Theorem XlenSXlenMinus1: Xlen = ((S (Xlen - 1)) * 1)%nat.
-  Proof.
-    destruct procParams as [xlen xlen_vars].
-    destruct xlen_vars; subst; simpl; lia.
-  Qed.
-
   Definition DecodeOut := STRUCT_TYPE {
                               "pc" :: FullCap;
                               "inst" :: Inst;
@@ -113,7 +107,7 @@ Section Run.
       LET getCs1Idx <- ITE #implicitReadProp $ImplicitRead (rs1 #inst);
       LET getCs2Idx <- rs2 #inst;
       LET getScrIdx <- ITE #implicitMepccProp $MepccAddr (rs2Fixed #inst);
-      LET getCsrIdx <- imm #inst;
+      LET getCsrIdx <- ITE #implicitIeProp $$MStatusAddr (imm #inst);
 
       LETA cs1 <- ( If !(#hasCs1Prop || #implicitReadProp)
                     then ( Nondet rand: FullCapWithTag;
@@ -139,24 +133,14 @@ Section Run.
                     else ( readRegs procName scrs #getScrIdx ) as retVal;
                     Ret #retVal );
 
-      LETA csr <- ( If !#hasCsrProp
+      LETA csr <- ( If !(#hasCsrProp || #implicitIeProp)
                     then ( Nondet rand: Data;
                            Ret #rand)
                     else ( readRegs procName csrs #getCsrIdx ) as retVal;
                     Ret #retVal );
 
-      (* TODO: see if ie can be combined with csr *)
-      LETA ie <- ( If !#implicitIeProp
-                   then ( Nondet rand: Bool;
-                          Ret #rand)
-                   else ( Read status : Bit Xlen <- procName ++ "_" ++ "mstatus";
-                          LET statusArr <- (unpack (Array (S (Xlen-1)) Bool)
-                                              (castBits XlenSXlenMinus1 #status));
-                          Ret (#statusArr ![ 3 ]) ) as retVal;
-                   Ret #retVal );
-
       LETAE decodes : DecodeFuncEntryStruct funcEntries <-
-                        decodeFuncEntry #pc #inst #cs1 #cs2 #scr #csr #ie #allMatches;
+                        decodeFuncEntry #pc #inst #cs1 #cs2 #scr #csr #allMatches;
       
       Ret ((STRUCT { "pc" ::= #pc;
                      "inst" ::= #inst;

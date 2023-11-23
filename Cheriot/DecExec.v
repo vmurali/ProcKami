@@ -11,7 +11,6 @@ Section DecExec.
   Variable cs2: FullCapWithTag @# ty.
   Variable scr: FullCapWithTag @# ty.
   Variable csr: Data @# ty.
-  Variable ie: Bool @# ty.
 
   Definition matchField (f: FieldRange) :=
     let '(existT (start, size) field) := f in
@@ -38,7 +37,7 @@ Section DecExec.
       Variable matches: MatchInstEntryStruct @# ty.
       Definition decodeInstEntry : Maybe ik ## ty :=
         redLet (@Kor _ (Maybe ik))
-          (fun x => ( LETE out <- inputXform (snd x) pc inst cs1 cs2 scr csr ie;
+          (fun x => ( LETE out <- inputXform (snd x) pc inst cs1 cs2 scr csr;
                       RetE ((ITE (castReadStructExpr _ (ReadStruct matches (fst x)))
                                (Valid #out)
                                Invalid) : Maybe ik @# ty)))
