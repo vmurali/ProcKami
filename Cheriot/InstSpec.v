@@ -1374,16 +1374,15 @@ Section InstBaseSpec.
       ]
     |}.
 
-  Definition specBaseFuncUnit : FuncEntryFull :=
-    {|funcNameFull := "base";
-      localFuncInputFull := BaseOutput;
-      localFuncFull ty x := baseOutputXform x;
-      instsFull := [aluInsts; alu64Insts; capInsts; branchInsts;
-                    ldInsts; ld32Insts; ld64Insts; stInsts; st32Insts; st64Insts;
-                    jumpInsts; exceptionInsts; csrInsts; cSpecialInsts; interruptInsts]
-    |}.
-
-  Definition specBaseInsts : list (InstEntry BaseOutput) := insts (mkFuncEntry specBaseFuncUnit).
+  Definition specFuncUnits : list FuncEntry := map mkFuncEntry [
+      {|funcNameFull := "base";
+        localFuncInputFull := BaseOutput;
+        localFuncFull ty x := baseOutputXform x;
+        instsFull := [aluInsts; alu64Insts; capInsts; branchInsts;
+                      ldInsts; ld32Insts; ld64Insts; stInsts; st32Insts; st64Insts;
+                      jumpInsts; exceptionInsts; csrInsts; cSpecialInsts; interruptInsts]
+      |}
+    ].
 
   Ltac simplify_field field :=
     repeat match goal with
@@ -1394,8 +1393,7 @@ Section InstBaseSpec.
            end.
 
   Ltac checkUniq :=
-    unfold specBaseInsts, mkFuncEntry, insts, specBaseFuncUnit, instsFull,
-      localFuncInputFull, fold_left;
+    cbn [specFuncUnits concat map mkFuncEntry insts instsFull localFuncInputFull fold_left localFuncInput];
     pose proof extsHasBase;
     simplify_field (@extension procParams BaseOutput);
     destruct (in_dec Extension_eq_dec Base supportedExts);
@@ -1413,12 +1411,12 @@ Section InstBaseSpec.
    *)
 
   (*
-  Theorem uniqAluNames: NoDup (map (@instName _ BaseOutput) specBaseInsts).
+  Theorem uniqAluNames: NoDup (concat (map (fun x => map (@instName _ _) (insts x)) specFuncUnits)).
   Proof.
     checkUniq.
   Qed.
 
-  Theorem uniqAluIds: NoDup (map (@uniqId _ BaseOutput) specBaseInsts).
+  Theorem uniqAluIds: NoDup (concat (map (fun x => map (@uniqId _ _) (insts x)) specFuncUnits)).
   Proof.
     checkUniq.
   Qed.
