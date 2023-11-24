@@ -178,7 +178,6 @@ Section Run.
                               "decodes" :: DecodeFuncEntryStruct funcEntries
                             }.
   
-  (* Also performs reg read *)
   Definition decode (regReadOut: RegReadOut @# ty) : ActionT ty DecodeOut :=
     ( LET uncompressOut <- regReadOut @% "uncompressOut";
       LET allMatches <- regReadOut @% "allMatches";
