@@ -96,15 +96,16 @@ Section Run.
     ( LET pc <- uncompressOut @% "pc";
       LET inst <- uncompressOut @% "inst";
       LETAE allMatches <- matchFuncEntry #inst funcEntries;
-      LET hasCs1Prop <- propertiesFuncEntry #allMatches hasCs1;
-      LET hasCs2Prop <- propertiesFuncEntry #allMatches hasCs2;
-      LET hasScrProp <- propertiesFuncEntry #allMatches hasScr;
-      LET hasCsrProp <- propertiesFuncEntry #allMatches hasCsr;
-      LET implicitReadProp <- propertiesFuncEntry #allMatches (fun p => Nat.eqb (implicit p) ImplicitRead);
-      LET implicitMepccProp <- propertiesFuncEntry #allMatches implicitMepcc;
-      LET implicitIeProp <- propertiesFuncEntry #allMatches implicitIe;
+      LET hasCs1Prop <- hasCs1PropFn #allMatches;
+      LET hasCs2Prop <- hasCs2PropFn #allMatches;
+      LET hasScrProp <- hasScrPropFn #allMatches;
+      LET hasCsrProp <- hasCsrPropFn #allMatches;
+      LET implicitReadVal <- implicitReadPropFn #allMatches;
+      LET implicitReadProp <- isNotZero #implicitReadVal;
+      LET implicitMepccProp <- implicitMepccPropFn #allMatches;
+      LET implicitIeProp <- implicitIePropFn #allMatches;
 
-      LET getCs1Idx <- ITE #implicitReadProp $ImplicitRead (rs1 #inst);
+      LET getCs1Idx <- ITE #implicitReadProp #implicitReadVal (rs1 #inst);
       LET getCs2Idx <- rs2 #inst;
       LET getScrIdx <- ITE #implicitMepccProp $MepccAddr (rs2Fixed #inst);
       LET getCsrIdx <- ITE #implicitIeProp $$MStatusAddr (imm #inst);

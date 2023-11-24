@@ -44,10 +44,12 @@ Section DecExec.
           finLs.
 
       Section InstProperties.
-        Variable f: InstProperties -> bool.
-        Definition propertiesInstEntry: Bool @# ty :=
-          Kor (map (fun x => Const ty (f (instProperties (snd x))) &&
-                               castReadStructExpr _ (ReadStruct matches (fst x)))
+        Variable k: Kind.
+        Variable f: InstEntry ik -> k @# ty.
+        Definition propertiesInstEntry: k @# ty :=
+          Kor (map (fun x => ITE (castReadStructExpr _ (ReadStruct matches (fst x)))
+                               (f (snd x))
+                               (Const ty Default) )
                  finLs).
       End InstProperties.
     End matches.
@@ -88,24 +90,27 @@ Section DecExec.
       Defined.
 
       Section InstProperties.
-        Variable f: InstProperties -> bool.
+        Variable k: Kind.
+        Variable f: forall ik, InstEntry ik -> k @# ty.
 
-        Definition propertiesFuncEntry: Bool @# ty.
+        Definition propertiesFuncEntry: k @# ty.
           refine
-            ((@Kor _ Bool)
-               (map (fun x => propertiesInstEntry (_ (ReadStruct allMatches (finTagMapFin x))) f) finLs)).
+            (Kor
+               (map (fun x => propertiesInstEntry (_ (ReadStruct allMatches (finTagMapFin x)))
+                                (@f _)) finLs)).
           rewrite (finTagMapPrf x).
           exact id.
         Defined.
       End InstProperties.
 
-      Definition hasCs1Prop := propertiesFuncEntry hasCs1.
-      Definition hasCs2Prop := propertiesFuncEntry hasCs2.
-      Definition hasScrProp := propertiesFuncEntry hasScr.
-      Definition hasCsrProp := propertiesFuncEntry hasCsr.
-      Definition implicit3Prop := propertiesFuncEntry (fun p => Nat.eqb (implicit p) 3).
-      Definition implicitMepccProp := propertiesFuncEntry implicitMepcc.
-      Definition implicitIeProp := propertiesFuncEntry implicitIe.
+      Definition hasCs1PropFn := propertiesFuncEntry (fun _ x => Const ty (hasCs1 (instProperties x))).
+      Definition hasCs2PropFn := propertiesFuncEntry (fun _ x => Const ty (hasCs2 (instProperties x))).
+      Definition hasScrPropFn := propertiesFuncEntry (fun _ x => Const ty (hasScr (instProperties x))).
+      Definition hasCsrPropFn := propertiesFuncEntry (fun _ x => Const ty (hasCsr (instProperties x))).
+      Definition implicitReadPropFn := propertiesFuncEntry
+                                         (fun _ x => Const ty (natToWord RegIdSz (implicit (instProperties x)))).
+      Definition implicitMepccPropFn := propertiesFuncEntry (fun _ x => Const ty (implicitMepcc (instProperties x))).
+      Definition implicitIePropFn := propertiesFuncEntry (fun _ x => Const ty (implicitIe (instProperties x))).
     End allMatches.
 
     Definition execFuncEntry (allDecodes: DecodeFuncEntryStruct @# ty): Maybe FuncOutput ## ty.

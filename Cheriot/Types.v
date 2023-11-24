@@ -251,10 +251,6 @@ Section ParamDefinitions.
         implicit      : nat ;
         implicitMepcc : bool ;
         implicitIe    : bool }.
-
-    (* TODO: See how these can be not hardcoded. Also see how SCR inst entries can be made better *)
-    Definition ImplicitRead := 3.
-
   End InstEncoding.
 
   Definition FenceI := 0.

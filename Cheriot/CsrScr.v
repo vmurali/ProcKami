@@ -7,8 +7,6 @@ Section CsrScr.
   Definition MStatusAddr := (snd immField) 'h"300".
 
   Definition csrs : list (RegInfo (snd immField) Data) := [
-      Build_RegInfo (_ 'h"C01") "time" (Some (SyntaxConst Default));
-      Build_RegInfo (_ 'h"C81") "timeh" (Some (SyntaxConst Default));
       Build_RegInfo MStatusAddr "mstatus" (Some (SyntaxConst Default));
       Build_RegInfo (_ 'h"342") "mcause" None;
       Build_RegInfo (_ 'h"343") "mtval" None ].
