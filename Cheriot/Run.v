@@ -72,6 +72,91 @@ Section Run.
     then uncompressValid fetchOut
     else uncompressInvalid fetchOut.
 
+  Definition RegReadId := STRUCT_TYPE {
+                              "cs1?" :: Bool;
+                              "cs1Idx" :: RegId;
+                              "cs2?" :: Bool;
+                              "cs2Idx" :: RegId;
+                              "scr?" :: Bool;
+                              "scrIdx" :: Bit 5;
+                              "csr?" :: Bool;
+                              "csrIdx" :: Bit (snd immField) }.
+
+  Definition RegReadIdOut := STRUCT_TYPE {
+                                 "uncompressOut" :: UncompressOut;
+                                 "allMatches" :: MatchFuncEntryStruct funcEntries;
+                                 "regReadId" :: RegReadId }.
+
+  Definition regReadId (uncompressOut: UncompressOut @# ty) :=
+    ( LET inst <- uncompressOut @% "inst";
+      LETAE allMatches <- matchFuncEntry #inst funcEntries;
+      LET hasCs1Prop <- hasCs1PropFn #allMatches;
+      LET hasCs2Prop <- hasCs2PropFn #allMatches;
+      LET hasScrProp <- hasScrPropFn #allMatches;
+      LET hasCsrProp <- hasCsrPropFn #allMatches;
+      LET implicitReadVal <- implicitReadPropFn #allMatches;
+      LET implicitReadProp <- isNotZero #implicitReadVal;
+      LET implicitMepccProp <- implicitMepccPropFn #allMatches;
+      LET implicitIeProp <- implicitIePropFn #allMatches;
+
+      Ret (STRUCT { "uncompressOut" ::= uncompressOut;
+                    "allMatches" ::= #allMatches;
+                    "regReadId" ::=
+                      (STRUCT { "cs1?" ::= (#hasCs1Prop || #implicitReadProp);
+                                "cs1Idx" ::= ITE #implicitReadProp #implicitReadVal (rs1 #inst);
+                                "cs2?" ::= #hasCs2Prop;
+                                "cs2Idx" ::= rs2 #inst;
+                                "scr?" ::= (#hasScrProp || #implicitMepccProp);
+                                "scrIdx" ::= ITE #implicitMepccProp $$(implicitScrAddr scrs) (rs2Fixed #inst);
+                                "csr?" ::= (#hasCsrProp || #implicitIeProp);
+                                "csrIdx" ::= ITE #implicitIeProp $$(implicitCsrAddr csrs) (imm #inst) }
+                        : RegReadId @# ty) } : RegReadIdOut @# ty ) ).
+
+  Definition RegRead := STRUCT_TYPE {
+                            "cs1" :: FullCapWithTag;
+                            "cs2" :: FullCapWithTag;
+                            "scr" :: FullCapWithTag;
+                            "csr" :: Data }.
+
+  Definition RegReadOut := STRUCT_TYPE {
+                               "uncompressOut" :: UncompressOut;
+                               "allMatches" :: MatchFuncEntryStruct funcEntries;
+                               "regRead" :: RegRead }.
+
+  Definition regReadNondet k (isRead: Bool @# ty) (val: ActionT ty k) :=
+    ( If !isRead
+      then ( Nondet rand: k;
+             Ret #rand )
+      else val
+      as ret;
+      Ret #ret ).
+
+  Definition regReadSpec (regReadIdOut: RegReadIdOut @# ty) :=
+    ( LET regReadId <- regReadIdOut @% "regReadId";
+      LET cs1Idx <- #regReadId @% "cs1Idx";
+      LET cs2Idx <- #regReadId @% "cs2Idx";
+      LETA cs1 <- regReadNondet (#regReadId @% "cs1?")
+                    ( If #cs1Idx == $0
+                      then Ret (Const ty Default)
+                      else callReadRegFile FullCapWithTag regsRead1 #cs1Idx as retVal;
+                      Ret #retVal);
+      LETA cs2 <- regReadNondet (#regReadId @% "cs2?")
+                    ( If #cs2Idx == $0
+                      then Ret (Const ty Default)
+                      else callReadRegFile FullCapWithTag regsRead2 #cs2Idx as retVal;
+                      Ret #retVal);
+      LETA scr <- regReadNondet (#regReadId @% "scr?")
+                    (readRegs procName (map scrRegInfo scrs) (#regReadId @% "scrIdx"));
+      LETA csr <- regReadNondet (#regReadId @% "csr?")
+                    (readRegs procName (map csrRegInfo csrs) (#regReadId @% "csrIdx"));
+      Ret (STRUCT { "uncompressOut" ::= regReadIdOut @% "uncompressOut";
+                    "allMatches" ::= regReadIdOut @% "allMatches";
+                    "regRead" ::=
+                      (STRUCT { "cs1" ::= #cs1;
+                                "cs2" ::= #cs2;
+                                "scr" ::= #scr;
+                                "csr" ::= #csr } : RegRead @# ty) } : RegReadOut @# ty ) ).
+
   Definition regsFile :=
     {|rfIsWrMask := false;
       rfNum := 1;
@@ -94,71 +179,35 @@ Section Run.
                             }.
   
   (* Also performs reg read *)
-  Definition decode (uncompressOut: UncompressOut @# ty) : ActionT ty DecodeOut :=
-    ( LET pc <- uncompressOut @% "pc";
-      LET inst <- uncompressOut @% "inst";
-      LETAE allMatches <- matchFuncEntry #inst funcEntries;
-      LET hasCs1Prop <- hasCs1PropFn #allMatches;
-      LET hasCs2Prop <- hasCs2PropFn #allMatches;
-      LET hasScrProp <- hasScrPropFn #allMatches;
-      LET hasCsrProp <- hasCsrPropFn #allMatches;
-      LET implicitReadVal <- implicitReadPropFn #allMatches;
-      LET implicitReadProp <- isNotZero #implicitReadVal;
-      LET implicitMepccProp <- implicitMepccPropFn #allMatches;
-      LET implicitIeProp <- implicitIePropFn #allMatches;
-
-      LET getCs1Idx <- ITE #implicitReadProp #implicitReadVal (rs1 #inst);
-      LET getCs2Idx <- rs2 #inst;
-      LET getScrIdx <- ITE #implicitMepccProp $$(implicitScrAddr scrs) (rs2Fixed #inst);
-      LET getCsrIdx <- ITE #implicitIeProp $$(implicitCsrAddr csrs) (imm #inst);
-
-      LETA cs1 <- ( If !(#hasCs1Prop || #implicitReadProp)
-                    then ( Nondet rand: FullCapWithTag;
-                           Ret #rand )
-                    else ( If #getCs1Idx == $0
-                           then Ret (Const ty Default)
-                           else callReadRegFile FullCapWithTag regsRead1 #getCs1Idx as retVal;
-                           Ret #retVal ) as ret;
-                    Ret #ret);
-
-      LETA cs2 <- ( If !#hasCs2Prop
-                    then ( Nondet rand: FullCapWithTag;
-                           Ret #rand )
-                    else ( If #getCs2Idx == $0
-                           then Ret (Const ty Default)
-                           else callReadRegFile FullCapWithTag regsRead2 #getCs2Idx as retVal;
-                           Ret #retVal ) as ret;
-                    Ret #ret);
-
-      LETA scr <- ( If !(#hasScrProp || #implicitMepccProp)
-                    then ( Nondet rand: FullCapWithTag;
-                           Ret #rand)
-                    else ( readRegs procName (map scrRegInfo scrs) #getScrIdx ) as retVal;
-                    Ret #retVal );
-
-      LETA csr <- ( If !(#hasCsrProp || #implicitIeProp)
-                    then ( Nondet rand: Data;
-                           Ret #rand)
-                    else ( readRegs procName (map csrRegInfo csrs) #getCsrIdx ) as retVal;
-                    Ret #retVal );
+  Definition decode (regReadOut: RegReadOut @# ty) : ActionT ty DecodeOut :=
+    ( LET uncompressOut <- regReadOut @% "uncompressOut";
+      LET allMatches <- regReadOut @% "allMatches";
+      LET regRead <- regReadOut @% "regRead";
+      LET pc <- #uncompressOut @% "pc";
+      LET inst <- #uncompressOut @% "inst";
 
       LETAE decodes : DecodeFuncEntryStruct funcEntries <-
-                        decodeFuncEntry #pc #inst #cs1 #cs2 #scr #csr #allMatches;
+                        decodeFuncEntry #pc #inst (#regRead @% "cs1") (#regRead @% "cs2")
+                          (#regRead @% "scr") (#regRead @% "csr") #allMatches;
       
       Ret ((STRUCT { "pc" ::= #pc;
                      "inst" ::= #inst;
-                     "badLower16?" ::= uncompressOut @% "badLower16?";
-                     "error?" ::= uncompressOut @% "error?";
-                     "fault?" ::= uncompressOut @% "fault?";
-                     "bounds?" ::= uncompressOut @% "bounds?";
-                     "legal?" ::= uncompressOut @% "legal?";
+                     "badLower16?" ::= #uncompressOut @% "badLower16?";
+                     "error?" ::= #uncompressOut @% "error?";
+                     "fault?" ::= #uncompressOut @% "fault?";
+                     "bounds?" ::= #uncompressOut @% "bounds?";
+                     "legal?" ::= #uncompressOut @% "legal?";
                      "decodes" ::= #decodes }) : DecodeOut @# ty) ).
 
   Definition ExecOut := STRUCT_TYPE {
                             "pc" :: Addr;
                             "notCompressed?" :: Bool;
-                            "result" :: FuncOutput
+                            "result" :: FuncOutput;
+                            "cdIdx" :: RegId;
+                            "csrIdx" :: Bit (snd immField)
                           }.
+
+  Definition getScrIdx (csrIdx: Bit (snd immField) @# ty) := UniBit (TruncLsb 5 _) csrIdx.
   
   Definition exec (decodeOut: DecodeOut @# ty) : ActionT ty ExecOut :=
     ( LETAE funcOut : Maybe FuncOutput <- execFuncEntry (decodeOut @% "decodes");
@@ -206,7 +255,9 @@ Section Run.
                                               "val" ::= #exceptionCause }) : FullCapWithTag @# ty) ];
       Ret ((STRUCT { "pc" ::= #pc;
                      "notCompressed?" ::= isInstNotCompressed #inst;
-                     "result" ::= #newFuncOut } : ExecOut @# ty)) ).
+                     "result" ::= #newFuncOut;
+                     "cdIdx" ::= rd #inst;
+                     "csrIdx" ::= imm #inst } : ExecOut @# ty)) ).
 
   Definition mem (execOut: ExecOut @# ty) : ActionT ty ExecOut :=
     ( LET funcOut : FuncOutput <- execOut @% "result";
