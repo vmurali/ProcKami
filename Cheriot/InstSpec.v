@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Types ProcKami.Cheriot.CsrScr.
+Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
 
 Section InstBaseSpec.
   Context `{procParams: ProcParams}.
@@ -1132,6 +1132,14 @@ Section InstBaseSpec.
                                    | _ => true
                                    end)).
 
+  Definition csrList : list CsrReg := [
+      {| csrRegInfo := Build_RegInfo (_ 'h"300") "mstatus" (Some (SyntaxConst Default)); isImplicitCsr := true |};
+      {| csrRegInfo := Build_RegInfo (_ 'h"342") "mcause" None; isImplicitCsr := false |};
+      {| csrRegInfo := Build_RegInfo (_ 'h"343") "mtval" None; isImplicitCsr := false |} ].
+  
+  Definition isValidCsrs ty (inst : Inst @# ty) :=
+    Kor (map (fun csr => (imm inst == Const ty (regAddr (csrRegInfo csr)))%kami_expr) csrList).
+
   Definition csrInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -1146,7 +1154,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
                       @%[ "exception?" <- (!isValidCsrs inst ||
-                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
+                                             ((imm inst == $$(implicitCsrAddr csrList)) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
@@ -1164,7 +1172,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
                       @%[ "exception?" <- (!isValidCsrs inst ||
-                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
+                                             ((imm inst == $$(implicitCsrAddr csrList)) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
@@ -1182,7 +1190,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
                       @%[ "exception?" <- (!isValidCsrs inst ||
-                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
+                                             ((imm inst == $$(implicitCsrAddr csrList)) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
@@ -1200,7 +1208,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
                       @%[ "exception?" <- (!isValidCsrs inst ||
-                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
+                                             ((imm inst == $$(implicitCsrAddr csrList)) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
@@ -1218,7 +1226,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
                       @%[ "exception?" <- (!isValidCsrs inst ||
-                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
+                                             ((imm inst == $$(implicitCsrAddr csrList)) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
@@ -1236,7 +1244,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- csr ]
                       @%[ "exception?" <- (!isValidCsrs inst ||
-                                             ((imm inst == $$MStatusAddr) && #ieNotValid)) ]
+                                             ((imm inst == $$(implicitCsrAddr csrList)) && #ieNotValid)) ]
                       @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
                       @%[ "exceptionValue" <- ZeroExtendTruncLsb Xlen inst ]
                       @%[ "baseException?" <- $$true ]
@@ -1247,113 +1255,91 @@ Section InstBaseSpec.
       ]
     |}.
   
+  Definition scrList : list ScrReg := [
+      {|scrRegInfo := Build_RegInfo ($28)%word "MTCC" (Some (SyntaxConst Default));
+        legalizeScrRead := None;
+        legalizeScrWrite :=
+          Some (fun ty (cs1Val scrVal: Data @# ty) =>
+                  ( LETC mtccVecMode <- ZeroExtendTruncLsb 2 scrVal;
+                    LETC inpVecMode <- ZeroExtendTruncLsb 2 cs1Val;
+                    LETC inpVecModeIllegal <- (unpack Bool (UniBit (TruncMsb 1 1) #inpVecMode));
+                    RetE (ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) cs1Val,
+                                ITE #inpVecModeIllegal #mtccVecMode #inpVecMode >}))) );
+        isImplicitScr := false |};
+      {|scrRegInfo := Build_RegInfo ($29)%word "MTDC" (Some (SyntaxConst Default));
+        legalizeScrRead := None;
+        legalizeScrWrite := None;
+        isImplicitScr := false |};
+      {|scrRegInfo := Build_RegInfo ($30)%word "MScratchC" None;
+        legalizeScrRead := None;
+        legalizeScrWrite := None;
+        isImplicitScr := false |};
+      {|scrRegInfo := Build_RegInfo ($31)%word "MEPCC" None;
+        legalizeScrRead :=
+          Some (fun ty (scrVal: Data @# ty) =>
+                  ( RetE (if compressed
+                          then ZeroExtendTruncLsb Xlen
+                                 ({< ZeroExtendTruncMsb (Xlen - 1) scrVal, $$WO~0 >})
+                          else ZeroExtendTruncLsb Xlen
+                                 ({< ZeroExtendTruncMsb (Xlen - 2) scrVal, $$(2'b"00") >}))) );
+        legalizeScrWrite := None;
+        isImplicitScr := true |}
+    ].
+
   Definition cSpecialInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
-      instEntries := [
-        {|instName := "CSpecialRW_MTCC";
-          uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
-                     fieldVal funct3Field (3'h"0");
-                     fieldVal rs2FixedField (natToWord _ 28);
-                     fieldVal funct7Field (7'h"1")];
-          inputXform ty pc inst cs1 cs2 scr csr :=
-            ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
-              LETC mtccVecMode <- ZeroExtendTruncLsb 2 (scr @% "val");
-              LETC inpVecMode <- ZeroExtendTruncLsb 2 (cs1 @% "val");
-              LETC inpVecModeIllegal <- (unpack Bool (UniBit (TruncMsb 1 1) #inpVecMode));
-              LETC newMtcc <- ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) (cs1 @% "val"),
-                                    ITE #inpVecModeIllegal #mtccVecMode #inpVecMode >});
-              LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newMtcc;
-              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
-              RetE ((DefBaseOutput ty)
-                      @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- scr @% "tag" ]
-                      @%[ "cdCap" <- scr @% "cap" ]
-                      @%[ "cdVal" <- scr @% "val" ]
-                      @%[ "exception?" <- !(#pcPerms @% "SR") ]
-                      @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
-                      @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
-                      @%[ "scrTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "cap") && #representable ]
-                      @%[ "scrCap" <- cs1 @% "cap" ]
-                      @%[ "scrVal" <- #newMtcc ]
-                      @%[ "scrException?" <- $$true ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := true; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
-        |};
-        {|instName := "CSpecialRW_MTDC";
-          uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
-                     fieldVal funct3Field (3'h"0");
-                     fieldVal rs2FixedField (natToWord _ 29);
-                     fieldVal funct7Field (7'h"1")];
-          inputXform ty pc inst cs1 cs2 scr csr :=
-            ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
-              RetE ((DefBaseOutput ty)
-                      @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- scr @% "tag" ]
-                      @%[ "cdCap" <- scr @% "cap" ]
-                      @%[ "cdVal" <- scr @% "val" ]
-                      @%[ "exception?" <- !(#pcPerms @% "SR") ]
-                      @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
-                      @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
-                      @%[ "scrTag" <- cs1 @% "tag" ]
-                      @%[ "scrCap" <- cs1 @% "cap" ]
-                      @%[ "scrVal" <- cs1 @% "val" ]
-                      @%[ "scrException?" <- $$true ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := true; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
-        |};
-        {|instName := "CSpecialRW_MScratchC";
-          uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
-                     fieldVal funct3Field (3'h"0");
-                     fieldVal rs2FixedField (natToWord _ 30);
-                     fieldVal funct7Field (7'h"1")];
-          inputXform ty pc inst cs1 cs2 scr csr :=
-            ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
-              RetE ((DefBaseOutput ty)
-                      @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- scr @% "tag" ]
-                      @%[ "cdCap" <- scr @% "cap" ]
-                      @%[ "cdVal" <- scr @% "val" ]
-                      @%[ "exception?" <- !(#pcPerms @% "SR") ]
-                      @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
-                      @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
-                      @%[ "scrTag" <- cs1 @% "tag" ]
-                      @%[ "scrCap" <- cs1 @% "cap" ]
-                      @%[ "scrVal" <- cs1 @% "val" ]
-                      @%[ "scrException?" <- $$true ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := true; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
-        |};
-        {|instName := "CSpecialRW_MEPCC";
-          uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
-                     fieldVal funct3Field (3'h"0");
-                     fieldVal rs2FixedField (natToWord _ MepccAddr);
-                     fieldVal funct7Field (7'h"1")];
-          inputXform ty pc inst cs1 cs2 scr csr :=
-            ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
-              LETC newMepc <- if compressed
-                              then ZeroExtendTruncLsb Xlen
-                                     ({< ZeroExtendTruncMsb (Xlen - 1) (scr @% "val"), $$WO~0 >})
-                              else ZeroExtendTruncLsb Xlen
-                                     ({< ZeroExtendTruncMsb (Xlen - 2) (scr @% "val"), $$(2'b"00") >});
-              LETE baseTop <- getCapBaseTop capAccessors (scr @% "cap") (scr @% "val");
-              LETE baseTop2 <- getCapBaseTop capAccessors (scr @% "cap") #newMepc;
-              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
-              RetE ((DefBaseOutput ty)
-                      @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- (scr @% "tag") && !isSealed capAccessors (scr @% "cap") && #representable ]
-                      @%[ "cdCap" <- scr @% "cap" ]
-                      @%[ "cdVal" <- #newMepc ]
-                      @%[ "exception?" <- !(#pcPerms @% "SR" )]
-                      @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
-                      @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
-                      @%[ "scrTag" <- cs1 @% "tag" ]
-                      @%[ "scrCap" <- cs1 @% "cap" ]
-                      @%[ "scrVal" <- cs1 @% "val" ]
-                      @%[ "scrException?" <- $$true ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := true; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
-        |}
-      ]
+      instEntries :=
+        map (fun '(Build_ScrReg (Build_RegInfo addr name _) readFn writeFn isImplicit) =>
+               {|instName := ("CSpecialRW_" ++ name)%string;
+                 uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
+                            fieldVal funct3Field (3'h"0");
+                            fieldVal rs2FixedField addr;
+                            fieldVal funct7Field (7'h"1")];
+                 inputXform ty pc inst cs1 cs2 scr csr :=
+                   ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
+                     LETE fixScrVal : Data <- match readFn with
+                                              | Some f => f ty (scr @% "val")
+                                              | None => RetE (scr @% "val")
+                                              end;
+                     LETE fixScrTag <- 
+                       match writeFn with
+                       | Some _ =>
+                           ( LETE baseTop <- getCapBaseTop capAccessors (scr @% "cap") (scr @% "val");
+                             LETE baseTop2 <- getCapBaseTop capAccessors (scr @% "cap") #fixScrVal;
+                             LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+                             RetE (scr @% "tag" && !isSealed capAccessors (scr @% "cap") && #representable) )
+                       | None => RetE (scr @% "tag")
+                       end;
+                     LETE fixCs1Val <- match writeFn with
+                                       | Some f => f ty (cs1 @% "val") (scr @% "val")
+                                       | None => RetE (cs1 @% "val")
+                                       end;
+                     LETE fixCs1Tag <-
+                       match writeFn with
+                       | Some _ =>
+                           ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
+                             LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #fixCs1Val;
+                             LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+                             RetE (cs1 @% "tag" && !isSealed capAccessors (cs1 @% "cap") && #representable) )
+                       | None => RetE (cs1 @% "tag")
+                       end;
+                     RetE ((DefBaseOutput ty)
+                             @%[ "wb?" <- $$true ]
+                             @%[ "cdTag" <- #fixScrTag ]
+                             @%[ "cdCap" <- scr @% "cap" ]
+                             @%[ "cdVal" <- #fixScrVal ]
+                             @%[ "exception?" <- !(#pcPerms @% "SR") ]
+                             @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
+                             @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
+                             @%[ "scrTag" <- #fixCs1Tag ]
+                             @%[ "scrCap" <- cs1 @% "cap" ]
+                             @%[ "scrVal" <- #fixCs1Val ]
+                             @%[ "scrException?" <- $$true ]));
+                 instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := true; hasCsr := false; implicit := 0; implicitMepcc := isImplicit; implicitIe := false |}
+               |}) scrList
     |}.
-  
+
   Definition interruptInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;

@@ -121,18 +121,6 @@ Class ProcParams :=
     prevPcCapReg: string;
     prevPcValReg: string;
     takenReg: string;
-    mtccTagReg: string; 
-    mtccCapReg: string;
-    mtccValReg: string;
-    mtdcTagReg: string;
-    mtdcCapReg: string;
-    mtdcValReg: string;
-    mscratchcTagReg: string;
-    mscratchcCapReg: string;
-    mscratchcValReg: string;
-    mepccTagReg: string;
-    mepccCapReg: string;
-    mepccValReg: string;
     tagRead: string;
     tagWrite: string;
     tagArray: string;
@@ -367,6 +355,26 @@ Section ParamDefinitions.
                       else []) ++ prev)
           (instsFull fe) []
     |}.
+
+  Record ScrReg :=
+    { scrRegInfo       : RegInfo (snd rs2FixedField) FullCapWithTag;
+      legalizeScrRead  : option (forall ty, Data @# ty -> Data ## ty);
+      legalizeScrWrite : option (forall ty, Data @# ty -> Data @# ty -> Data ## ty);
+      isImplicitScr    : bool }.
+
+  Definition implicitScrAddr (scrs: list ScrReg) := match find (fun x => isImplicitScr x) scrs with
+                                                    | Some idx => regAddr (scrRegInfo idx)
+                                                    | None => wzero _
+                                                    end.
+  
+  Record CsrReg :=
+    { csrRegInfo    : RegInfo (snd immField) Data;
+      isImplicitCsr : bool }.
+
+  Definition implicitCsrAddr (csrs: list CsrReg) := match find (fun x => isImplicitCsr x) csrs with
+                                                    | Some idx => regAddr (csrRegInfo idx)
+                                                    | None => wzero _
+                                                    end.
 
   Theorem XlenSXlenMinus1: Xlen = ((S (Xlen - 1)) * 1)%nat.
   Proof.

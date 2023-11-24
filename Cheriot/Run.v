@@ -1,6 +1,6 @@
 Require Import Kami.AllNotations.
 Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
-Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.BankedMem ProcKami.Cheriot.CsrScr.
+Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.BankedMem.
 
 Section Run.
   Context `{procParams: ProcParams}.
@@ -10,6 +10,8 @@ Section Run.
 
   Variable uncompressFn: CompInst @# ty -> Maybe Inst ## ty.
   Variable funcEntries: list FuncEntry.
+  Variable scrs: list ScrReg.
+  Variable csrs: list CsrReg.
 
   Definition FetchOut := STRUCT_TYPE {
                              "pc" :: FullCap;
@@ -90,7 +92,7 @@ Section Run.
                               "legal?" :: Bool;
                               "decodes" :: DecodeFuncEntryStruct funcEntries
                             }.
-
+  
   (* Also performs reg read *)
   Definition decode (uncompressOut: UncompressOut @# ty) : ActionT ty DecodeOut :=
     ( LET pc <- uncompressOut @% "pc";
@@ -107,8 +109,8 @@ Section Run.
 
       LET getCs1Idx <- ITE #implicitReadProp #implicitReadVal (rs1 #inst);
       LET getCs2Idx <- rs2 #inst;
-      LET getScrIdx <- ITE #implicitMepccProp $MepccAddr (rs2Fixed #inst);
-      LET getCsrIdx <- ITE #implicitIeProp $$MStatusAddr (imm #inst);
+      LET getScrIdx <- ITE #implicitMepccProp $$(implicitScrAddr scrs) (rs2Fixed #inst);
+      LET getCsrIdx <- ITE #implicitIeProp $$(implicitCsrAddr csrs) (imm #inst);
 
       LETA cs1 <- ( If !(#hasCs1Prop || #implicitReadProp)
                     then ( Nondet rand: FullCapWithTag;
@@ -131,13 +133,13 @@ Section Run.
       LETA scr <- ( If !(#hasScrProp || #implicitMepccProp)
                     then ( Nondet rand: FullCapWithTag;
                            Ret #rand)
-                    else ( readRegs procName scrs #getScrIdx ) as retVal;
+                    else ( readRegs procName (map scrRegInfo scrs) #getScrIdx ) as retVal;
                     Ret #retVal );
 
       LETA csr <- ( If !(#hasCsrProp || #implicitIeProp)
                     then ( Nondet rand: Data;
                            Ret #rand)
-                    else ( readRegs procName csrs #getCsrIdx ) as retVal;
+                    else ( readRegs procName (map csrRegInfo csrs) #getCsrIdx ) as retVal;
                     Ret #retVal );
 
       LETAE decodes : DecodeFuncEntryStruct funcEntries <-
