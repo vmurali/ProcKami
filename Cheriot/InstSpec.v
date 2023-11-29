@@ -1128,9 +1128,9 @@ Section InstBaseSpec.
                                    end)).
 
   Definition csrList : list CsrReg := [
-      {| csrRegInfo := Build_RegInfo (_ 'h"300") "mstatus" (Some (SyntaxConst Default)); isImplicitCsr := true |};
-      {| csrRegInfo := Build_RegInfo (_ 'h"342") "mcause" None; isImplicitCsr := false |};
-      {| csrRegInfo := Build_RegInfo (_ 'h"343") "mtval" None; isImplicitCsr := false |} ].
+      {| csrRegInfo := Build_RegInfo (_ 'h"300") "MStatus" (Some (SyntaxConst Default)); isImplicitCsr := true |};
+      {| csrRegInfo := Build_RegInfo (_ 'h"342") "MCause" None; isImplicitCsr := false |};
+      {| csrRegInfo := Build_RegInfo (_ 'h"343") "MTVal" None; isImplicitCsr := false |} ].
   
   Definition isValidCsrs ty (inst : Inst @# ty) :=
     Kor (map (fun csr => (imm inst == Const ty (regAddr (csrRegInfo csr)))%kami_expr) csrList).

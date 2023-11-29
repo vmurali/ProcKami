@@ -376,7 +376,7 @@ Section Run.
           Write prevTakenReg : Bool <- !(#result @% "exception?") && (#result @% "taken?");
           Write reqJustFenceIReg : Bool <- !(#result @% "exception?") && (#result @% "fenceI?");
           If !(#result @% "exception?") && (#result @% "changeIe?")
-          then ( Write @^"mstatus" : Data <- castBits (@Nat.mul_1_r Xlen) (pack #mstatusArr);
+          then ( Write @^"MStatus" : Data <- castBits (@Nat.mul_1_r Xlen) (pack #mstatusArr);
                  Retv )
           else Retv;
           If !(#result @% "exception?") && (#result @% "wb?") && isNotZero (execOut @% "cdIdx")
@@ -395,17 +395,29 @@ Section Run.
           then ( Write @^"MEPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
                                                               "cap" ::= ITE #prevTaken #prevPcCap #pcCap;
                                                               "val" ::= ITE #prevTaken #prevPcVal #pcVal };
-                 Write @^"mcause" : Data <- ITE (#result @% "baseException?") (#data @% "val") $CapException;
-                 Write @^"mtval" : Data <- (IF (#result @% "baseException?")
-                                            then #data @% "cap"
-                                            else ZeroExtendTruncLsb Xlen (pack (STRUCT { "S" ::= (#result @% "scrException?");
-                                                                                         "capIdx" ::= (IF (#result @% "pcCapException?")
-                                                                                                       then $0
-                                                                                                       else ZeroExtendTruncLsb 5 (execOut @% "cs1Idx"));
-                                                                                         "cause" ::= ZeroExtendTruncLsb 5 (#data @% "cap") } )));
+                 Write @^"MCause" : Data <- ITE (#result @% "baseException?") (#data @% "val") $CapException;
+                 Write @^"MTval" :
+                   Data <- (IF (#result @% "baseException?")
+                            then #data @% "cap"
+                            else ZeroExtendTruncLsb Xlen
+                                   (pack (STRUCT { "S" ::= (#result @% "scrException?");
+                                                   "capIdx" ::= (IF (#result @% "pcCapException?")
+                                                                 then $0
+                                                                 else ZeroExtendTruncLsb 5 (execOut @% "cs1Idx"));
+                                                   "cause" ::= ZeroExtendTruncLsb 5 (#data @% "cap") } )));
                  Retv )
           else Retv;
           Retv )
       else Retv;
       Retv ).
+
+  Definition runSpec : ActionT ty Void :=
+    ( LETA fetchOut <- fetchSpec;
+      LETA uncompressOut <- uncompress #fetchOut;
+      LETA regReadIdOut <- regReadId #uncompressOut;
+      LETA regReadOut <- regReadSpec #regReadIdOut;
+      LETA decodeOut <- decode #regReadOut;
+      LETA execOut <- exec #decodeOut;
+      LETA memOut <- memSpec #execOut;
+      wb #memOut ).
 End Run.
