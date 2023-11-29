@@ -1121,6 +1121,91 @@ Section InstBaseSpec.
       ]
     |}.
 
+  Definition scrList : list ScrReg := [
+      {|scrRegInfo := Build_RegInfo ($28)%word "MTCC" (Some (SyntaxConst Default));
+        legalizeScrRead := None;
+        legalizeScrWrite :=
+          Some (fun ty (cs1Val scrVal: Data @# ty) =>
+                  ( LETC mtccVecMode <- ZeroExtendTruncLsb 2 scrVal;
+                    LETC inpVecMode <- ZeroExtendTruncLsb 2 cs1Val;
+                    LETC inpVecModeIllegal <- (unpack Bool (UniBit (TruncMsb 1 1) #inpVecMode));
+                    RetE (ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) cs1Val,
+                                ITE #inpVecModeIllegal #mtccVecMode #inpVecMode >}))) );
+        isImplicitScr := false |};
+      {|scrRegInfo := Build_RegInfo ($29)%word "MTDC" (Some (SyntaxConst Default));
+        legalizeScrRead := None;
+        legalizeScrWrite := None;
+        isImplicitScr := false |};
+      {|scrRegInfo := Build_RegInfo ($30)%word "MScratchC" None;
+        legalizeScrRead := None;
+        legalizeScrWrite := None;
+        isImplicitScr := false |};
+      {|scrRegInfo := Build_RegInfo ($31)%word "MEPCC" None;
+        legalizeScrRead :=
+          Some (fun ty (scrVal: Data @# ty) =>
+                  ( RetE (if compressed
+                          then ZeroExtendTruncLsb Xlen
+                                 ({< ZeroExtendTruncMsb (Xlen - 1) scrVal, $$WO~0 >})
+                          else ZeroExtendTruncLsb Xlen
+                                 ({< ZeroExtendTruncMsb (Xlen - 2) scrVal, $$(2'b"00") >}))) );
+        legalizeScrWrite := None;
+        isImplicitScr := true |}
+    ].
+
+  Definition scrInsts: InstEntryFull BaseOutput :=
+    {|xlens := [32; 64];
+      extension := Base;
+      instEntries :=
+        map (fun '(Build_ScrReg (Build_RegInfo addr name _) readFn writeFn isImplicit) =>
+               {|instName := ("CSpecialRW_" ++ name)%string;
+                 uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
+                            fieldVal funct3Field (3'h"0");
+                            fieldVal rs2FixedField addr;
+                            fieldVal funct7Field (7'h"1")];
+                 inputXform ty pc inst cs1 cs2 scr csr :=
+                   ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
+                     LETE fixScrVal : Data <- match readFn with
+                                              | Some f => f ty (scr @% "val")
+                                              | None => RetE (scr @% "val")
+                                              end;
+                     LETE fixScrTag <- 
+                       match writeFn with
+                       | Some _ =>
+                           ( LETE baseTop <- getCapBaseTop capAccessors (scr @% "cap") (scr @% "val");
+                             LETE baseTop2 <- getCapBaseTop capAccessors (scr @% "cap") #fixScrVal;
+                             LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+                             RetE (scr @% "tag" && !isSealed capAccessors (scr @% "cap") && #representable) )
+                       | None => RetE (scr @% "tag")
+                       end;
+                     LETE fixCs1Val <- match writeFn with
+                                       | Some f => f ty (cs1 @% "val") (scr @% "val")
+                                       | None => RetE (cs1 @% "val")
+                                       end;
+                     LETE fixCs1Tag <-
+                       match writeFn with
+                       | Some _ =>
+                           ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
+                             LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #fixCs1Val;
+                             LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+                             RetE (cs1 @% "tag" && !isSealed capAccessors (cs1 @% "cap") && #representable) )
+                       | None => RetE (cs1 @% "tag")
+                       end;
+                     RetE ((DefBaseOutput ty)
+                             @%[ "wb?" <- $$true ]
+                             @%[ "cdTag" <- #fixScrTag ]
+                             @%[ "cdCap" <- scr @% "cap" ]
+                             @%[ "cdVal" <- #fixScrVal ]
+                             @%[ "exception?" <- !(#pcPerms @% "SR") ]
+                             @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
+                             @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
+                             @%[ "scrTag" <- #fixCs1Tag ]
+                             @%[ "scrCap" <- cs1 @% "cap" ]
+                             @%[ "scrVal" <- #fixCs1Val ]
+                             @%[ "scrException?" <- $$true ]));
+                 instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := true; hasCsr := false; implicit := 0; implicitMepcc := isImplicit; implicitIe := false |}
+               |}) scrList
+    |}.
+
   Definition IeInvMask n ty : Array n Bool @# ty :=
     Const ty (ConstArray (fun i => match i with
                                    | Fin.FS _ (Fin.FS _ (Fin.FS _ (Fin.F1 _))) => false
@@ -1250,91 +1335,6 @@ Section InstBaseSpec.
       ]
     |}.
   
-  Definition scrList : list ScrReg := [
-      {|scrRegInfo := Build_RegInfo ($28)%word "MTCC" (Some (SyntaxConst Default));
-        legalizeScrRead := None;
-        legalizeScrWrite :=
-          Some (fun ty (cs1Val scrVal: Data @# ty) =>
-                  ( LETC mtccVecMode <- ZeroExtendTruncLsb 2 scrVal;
-                    LETC inpVecMode <- ZeroExtendTruncLsb 2 cs1Val;
-                    LETC inpVecModeIllegal <- (unpack Bool (UniBit (TruncMsb 1 1) #inpVecMode));
-                    RetE (ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) cs1Val,
-                                ITE #inpVecModeIllegal #mtccVecMode #inpVecMode >}))) );
-        isImplicitScr := false |};
-      {|scrRegInfo := Build_RegInfo ($29)%word "MTDC" (Some (SyntaxConst Default));
-        legalizeScrRead := None;
-        legalizeScrWrite := None;
-        isImplicitScr := false |};
-      {|scrRegInfo := Build_RegInfo ($30)%word "MScratchC" None;
-        legalizeScrRead := None;
-        legalizeScrWrite := None;
-        isImplicitScr := false |};
-      {|scrRegInfo := Build_RegInfo ($31)%word "MEPCC" None;
-        legalizeScrRead :=
-          Some (fun ty (scrVal: Data @# ty) =>
-                  ( RetE (if compressed
-                          then ZeroExtendTruncLsb Xlen
-                                 ({< ZeroExtendTruncMsb (Xlen - 1) scrVal, $$WO~0 >})
-                          else ZeroExtendTruncLsb Xlen
-                                 ({< ZeroExtendTruncMsb (Xlen - 2) scrVal, $$(2'b"00") >}))) );
-        legalizeScrWrite := None;
-        isImplicitScr := true |}
-    ].
-
-  Definition cSpecialInsts: InstEntryFull BaseOutput :=
-    {|xlens := [32; 64];
-      extension := Base;
-      instEntries :=
-        map (fun '(Build_ScrReg (Build_RegInfo addr name _) readFn writeFn isImplicit) =>
-               {|instName := ("CSpecialRW_" ++ name)%string;
-                 uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
-                            fieldVal funct3Field (3'h"0");
-                            fieldVal rs2FixedField addr;
-                            fieldVal funct7Field (7'h"1")];
-                 inputXform ty pc inst cs1 cs2 scr csr :=
-                   ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
-                     LETE fixScrVal : Data <- match readFn with
-                                              | Some f => f ty (scr @% "val")
-                                              | None => RetE (scr @% "val")
-                                              end;
-                     LETE fixScrTag <- 
-                       match writeFn with
-                       | Some _ =>
-                           ( LETE baseTop <- getCapBaseTop capAccessors (scr @% "cap") (scr @% "val");
-                             LETE baseTop2 <- getCapBaseTop capAccessors (scr @% "cap") #fixScrVal;
-                             LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
-                             RetE (scr @% "tag" && !isSealed capAccessors (scr @% "cap") && #representable) )
-                       | None => RetE (scr @% "tag")
-                       end;
-                     LETE fixCs1Val <- match writeFn with
-                                       | Some f => f ty (cs1 @% "val") (scr @% "val")
-                                       | None => RetE (cs1 @% "val")
-                                       end;
-                     LETE fixCs1Tag <-
-                       match writeFn with
-                       | Some _ =>
-                           ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-                             LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #fixCs1Val;
-                             LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
-                             RetE (cs1 @% "tag" && !isSealed capAccessors (cs1 @% "cap") && #representable) )
-                       | None => RetE (cs1 @% "tag")
-                       end;
-                     RetE ((DefBaseOutput ty)
-                             @%[ "wb?" <- $$true ]
-                             @%[ "cdTag" <- #fixScrTag ]
-                             @%[ "cdCap" <- scr @% "cap" ]
-                             @%[ "cdVal" <- #fixScrVal ]
-                             @%[ "exception?" <- !(#pcPerms @% "SR") ]
-                             @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
-                             @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
-                             @%[ "scrTag" <- #fixCs1Tag ]
-                             @%[ "scrCap" <- cs1 @% "cap" ]
-                             @%[ "scrVal" <- #fixCs1Val ]
-                             @%[ "scrException?" <- $$true ]));
-                 instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := true; hasCsr := false; implicit := 0; implicitMepcc := isImplicit; implicitIe := false |}
-               |}) scrList
-    |}.
-
   Definition iFenceInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -1356,7 +1356,7 @@ Section InstBaseSpec.
         localFuncFull ty x := baseOutputXform x;
         instsFull := [aluInsts; alu64Insts; capInsts; branchInsts;
                       ldInsts; ld32Insts; ld64Insts; stInsts; st32Insts; st64Insts;
-                      jumpInsts; exceptionInsts; csrInsts; cSpecialInsts; iFenceInsts]
+                      jumpInsts; exceptionInsts; scrInsts; csrInsts; iFenceInsts]
       |}
     ].
 
