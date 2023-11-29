@@ -52,30 +52,30 @@ Section Run.
                                   "bounds?" :: Bool;
                                   "legal?" :: Bool }.
 
-  Definition uncompressValid (fetchOut: FetchOut @# ty) : ActionT ty UncompressOut :=
-    ( LET notCompressed <- isInstNotCompressed (fetchOut @% "inst");      
-      LETAE maybeUncompressedInst <- uncompressFn (ZeroExtendTruncLsb CompInstSz (fetchOut @% "inst"));
-      Ret ((STRUCT { "pc" ::= fetchOut @% "pc";
-                     "inst" ::= ITE #notCompressed (fetchOut @% "inst") (#maybeUncompressedInst @% "data");
-                     "badLower16?" ::= fetchOut @% "badLower16?";
-                     "error?" ::= fetchOut @% "error?";
-                     "fault?" ::= fetchOut @% "fault?";
-                     "justFenceI?" ::= fetchOut @% "justFenceI?";
-                     "bounds?" ::= fetchOut @% "bounds?";
-                     "legal?" ::= #maybeUncompressedInst @% "valid" }) : UncompressOut @# ty)).
+  Definition uncompressValid (fetchOut: FetchOut @# ty) : UncompressOut ## ty :=
+    ( LETC notCompressed <- isInstNotCompressed (fetchOut @% "inst");      
+      LETE maybeUncompressedInst <- uncompressFn (ZeroExtendTruncLsb CompInstSz (fetchOut @% "inst"));
+      RetE ((STRUCT { "pc" ::= fetchOut @% "pc";
+                      "inst" ::= ITE #notCompressed (fetchOut @% "inst") (#maybeUncompressedInst @% "data");
+                      "badLower16?" ::= fetchOut @% "badLower16?";
+                      "error?" ::= fetchOut @% "error?";
+                      "fault?" ::= fetchOut @% "fault?";
+                      "justFenceI?" ::= fetchOut @% "justFenceI?";
+                      "bounds?" ::= fetchOut @% "bounds?";
+                      "legal?" ::= #maybeUncompressedInst @% "valid" }) : UncompressOut @# ty)).
 
-  Definition uncompressInvalid (fetchOut: FetchOut @# ty) : ActionT ty UncompressOut :=
-    ( LET notCompressed <- isInstNotCompressed (fetchOut @% "inst");
-      Ret ((STRUCT { "pc" ::= fetchOut @% "pc";
-                     "inst" ::= fetchOut @% "inst";
-                     "badLower16?" ::= fetchOut @% "badLower16?";
-                     "error?" ::= fetchOut @% "error?";
-                     "fault?" ::= fetchOut @% "fault?";
-                     "justFenceI?" ::= fetchOut @% "justFenceI?";
-                     "bounds?" ::= fetchOut @% "bounds?";
-                     "legal?" ::= #notCompressed }) : UncompressOut @# ty)).
+  Definition uncompressInvalid (fetchOut: FetchOut @# ty) : UncompressOut ## ty :=
+    ( LETC notCompressed <- isInstNotCompressed (fetchOut @% "inst");
+      RetE ((STRUCT { "pc" ::= fetchOut @% "pc";
+                      "inst" ::= fetchOut @% "inst";
+                      "badLower16?" ::= fetchOut @% "badLower16?";
+                      "error?" ::= fetchOut @% "error?";
+                      "fault?" ::= fetchOut @% "fault?";
+                      "justFenceI?" ::= fetchOut @% "justFenceI?";
+                      "bounds?" ::= fetchOut @% "bounds?";
+                      "legal?" ::= #notCompressed }) : UncompressOut @# ty)).
 
-  Definition uncompress (fetchOut: FetchOut @# ty): ActionT ty UncompressOut :=
+  Definition uncompress (fetchOut: FetchOut @# ty): UncompressOut ## ty :=
     if compressed
     then uncompressValid fetchOut
     else uncompressInvalid fetchOut.
@@ -96,29 +96,29 @@ Section Run.
                                  "regReadId" :: RegReadId }.
 
   Definition regReadId (uncompressOut: UncompressOut @# ty) :=
-    ( LET inst <- uncompressOut @% "inst";
-      LETAE allMatches <- matchFuncEntry #inst funcEntries;
-      LET hasCs1Prop <- hasCs1PropFn #allMatches;
-      LET hasCs2Prop <- hasCs2PropFn #allMatches;
-      LET hasScrProp <- hasScrPropFn #allMatches;
-      LET hasCsrProp <- hasCsrPropFn #allMatches;
-      LET implicitReadVal <- implicitReadPropFn #allMatches;
-      LET implicitReadProp <- isNotZero #implicitReadVal;
-      LET implicitMepccProp <- implicitMepccPropFn #allMatches;
-      LET implicitIeProp <- implicitIePropFn #allMatches;
+    ( LETC inst <- uncompressOut @% "inst";
+      LETE allMatches <- matchFuncEntry #inst funcEntries;
+      LETC hasCs1Prop <- hasCs1PropFn #allMatches;
+      LETC hasCs2Prop <- hasCs2PropFn #allMatches;
+      LETC hasScrProp <- hasScrPropFn #allMatches;
+      LETC hasCsrProp <- hasCsrPropFn #allMatches;
+      LETC implicitReadVal <- implicitReadPropFn #allMatches;
+      LETC implicitReadProp <- isNotZero #implicitReadVal;
+      LETC implicitMepccProp <- implicitMepccPropFn #allMatches;
+      LETC implicitIeProp <- implicitIePropFn #allMatches;
 
-      Ret (STRUCT { "uncompressOut" ::= uncompressOut;
-                    "allMatches" ::= #allMatches;
-                    "regReadId" ::=
-                      (STRUCT { "cs1?" ::= (#hasCs1Prop || #implicitReadProp);
-                                "cs1Idx" ::= ITE #implicitReadProp #implicitReadVal (rs1 #inst);
-                                "cs2?" ::= #hasCs2Prop;
-                                "cs2Idx" ::= rs2 #inst;
-                                "scr?" ::= (#hasScrProp || #implicitMepccProp);
-                                "scrIdx" ::= ITE #implicitMepccProp $$(implicitScrAddr scrs) (rs2Fixed #inst);
-                                "csr?" ::= (#hasCsrProp || #implicitIeProp);
-                                "csrIdx" ::= ITE #implicitIeProp $$(implicitCsrAddr csrs) (imm #inst) }
-                        : RegReadId @# ty) } : RegReadIdOut @# ty ) ).
+      RetE (STRUCT { "uncompressOut" ::= uncompressOut;
+                     "allMatches" ::= #allMatches;
+                     "regReadId" ::=
+                       (STRUCT { "cs1?" ::= (#hasCs1Prop || #implicitReadProp);
+                                 "cs1Idx" ::= ITE #implicitReadProp #implicitReadVal (rs1 #inst);
+                                 "cs2?" ::= #hasCs2Prop;
+                                 "cs2Idx" ::= rs2 #inst;
+                                 "scr?" ::= (#hasScrProp || #implicitMepccProp);
+                                 "scrIdx" ::= ITE #implicitMepccProp $$(implicitScrAddr scrs) (rs2Fixed #inst);
+                                 "csr?" ::= (#hasCsrProp || #implicitIeProp);
+                                 "csrIdx" ::= ITE #implicitIeProp $$(implicitCsrAddr csrs) (imm #inst) }
+                         : RegReadId @# ty) } : RegReadIdOut @# ty ) ).
 
   Definition RegRead := STRUCT_TYPE {
                             "cs1" :: FullCapWithTag;
@@ -190,26 +190,26 @@ Section Run.
                               "decodes" :: DecodeFuncEntryStruct funcEntries
                             }.
   
-  Definition decode (regReadOut: RegReadOut @# ty) : ActionT ty DecodeOut :=
-    ( LET uncompressOut <- regReadOut @% "uncompressOut";
-      LET allMatches <- regReadOut @% "allMatches";
-      LET regRead <- regReadOut @% "regRead";
-      LET pc <- #uncompressOut @% "pc";
-      LET inst <- #uncompressOut @% "inst";
+  Definition decode (regReadOut: RegReadOut @# ty) : DecodeOut ## ty :=
+    ( LETC uncompressOut <- regReadOut @% "uncompressOut";
+      LETC allMatches <- regReadOut @% "allMatches";
+      LETC regRead <- regReadOut @% "regRead";
+      LETC pc <- #uncompressOut @% "pc";
+      LETC inst <- #uncompressOut @% "inst";
 
-      LETAE decodes : DecodeFuncEntryStruct funcEntries <-
+      LETE decodes : DecodeFuncEntryStruct funcEntries <-
                         decodeFuncEntry #pc #inst (#regRead @% "cs1") (#regRead @% "cs2")
                           (#regRead @% "scr") (#regRead @% "csr") #allMatches;
       
-      Ret ((STRUCT { "pc" ::= #pc;
-                     "inst" ::= #inst;
-                     "badLower16?" ::= #uncompressOut @% "badLower16?";
-                     "error?" ::= #uncompressOut @% "error?";
-                     "fault?" ::= #uncompressOut @% "fault?";
-                     "justFenceI?" ::= #uncompressOut @% "justFenceI?";
-                     "bounds?" ::= #uncompressOut @% "bounds?";
-                     "legal?" ::= #uncompressOut @% "legal?";
-                     "decodes" ::= #decodes }) : DecodeOut @# ty) ).
+      RetE ((STRUCT { "pc" ::= #pc;
+                      "inst" ::= #inst;
+                      "badLower16?" ::= #uncompressOut @% "badLower16?";
+                      "error?" ::= #uncompressOut @% "error?";
+                      "fault?" ::= #uncompressOut @% "fault?";
+                      "justFenceI?" ::= #uncompressOut @% "justFenceI?";
+                      "bounds?" ::= #uncompressOut @% "bounds?";
+                      "legal?" ::= #uncompressOut @% "legal?";
+                      "decodes" ::= #decodes }) : DecodeOut @# ty) ).
 
   Definition ExecOut := STRUCT_TYPE {
                             "pc" :: Addr;
@@ -223,57 +223,57 @@ Section Run.
 
   Definition getScrIdx (csrIdx: Bit (snd immField) @# ty) := UniBit (TruncLsb 5 _) csrIdx.
   
-  Definition exec (decodeOut: DecodeOut @# ty) : ActionT ty ExecOut :=
-    ( LETAE funcOut : Maybe FuncOutput <- execFuncEntry (decodeOut @% "decodes");
-      LET funcOutData <- #funcOut @% "data";
-      LET pc <- decodeOut @% "pc" @% "val";
-      LET inst <- decodeOut @% "inst";
-      LET funcOutDataData <- #funcOutData @% "data";
-      LET exception <- !(decodeOut @% "bounds?")
-                       || (decodeOut @% "error?")
-                       || (decodeOut @% "fault?")
-                       || !(decodeOut @% "legal?")
-                       || !(#funcOut @% "valid")
-                       || (#funcOutData @% "exception?");
-      LET exceptionCause : Data <-
-                             ( IF !(decodeOut @% "bounds?")
-                               then $CapBoundsViolation
-                               else ( IF decodeOut @% "error?"
-                                      then $InstAccessFault
-                                      else ( IF decodeOut @% "fault?"
-                                             then $InstPageFault
-                                             else ( IF !(decodeOut @% "legal?") || !(#funcOut @% "valid")
-                                                    then $InstIllegal
-                                                    else #funcOutDataData @% "val" ))));
-      LET baseException <- ( IF !(decodeOut @% "bounds?")
-                             then $$false
-                             else ( IF (decodeOut @% "error?") || (decodeOut @% "fault?") ||
-                                      !(decodeOut @% "legal?") || !(#funcOut @% "valid")
-                                    then $$true
-                                    else #funcOutData @% "baseException?" ) );
-      LET pcCapException <- ( IF !(decodeOut @% "bounds?")
-                              then $$true
-                              else #funcOutData @% "pcCapException?" );
-      LET exceptionValue <- ( IF decodeOut @% "error?" || decodeOut @% "fault?"
-                              then #pc + ITE (decodeOut @% "badLower16?") $0 $2
-                              else ( IF !(decodeOut @% "legal?") || !(#funcOut @% "valid")
-                                     then ZeroExtendTruncLsb CapSz #inst
-                                     else #funcOutDataData @% "cap" ) );
-      LET result : FuncOutput <- #funcOutData
-                                   @%[ "exception?" <- #exception ]
-                                   @%[ "baseException?" <- #baseException ]
-                                   @%[ "pcCapException?" <- #pcCapException ]
-                                   @%[ "data" <- ((STRUCT {
-                                                       "tag" ::= #funcOutDataData @% "tag";
-                                                       "cap" ::= #exceptionValue;
-                                                       "val" ::= #exceptionCause }) : FullCapWithTag @# ty) ];
-      Ret ((STRUCT { "pc" ::= #pc;
-                     "notCompressed?" ::= isInstNotCompressed #inst;
-                     "result" ::= #result;
-                     "cs1Idx" ::= rs1 #inst;
-                     "cdIdx" ::= rd #inst;
-                     "csrIdx" ::= imm #inst;
-                     "justFenceI?" ::= decodeOut @% "justFenceI?"} : ExecOut @# ty)) ).
+  Definition exec (decodeOut: DecodeOut @# ty) : ExecOut ## ty :=
+    ( LETE funcOut : Maybe FuncOutput <- execFuncEntry (decodeOut @% "decodes");
+      LETC funcOutData <- #funcOut @% "data";
+      LETC pc <- decodeOut @% "pc" @% "val";
+      LETC inst <- decodeOut @% "inst";
+      LETC funcOutDataData <- #funcOutData @% "data";
+      LETC exception <- !(decodeOut @% "bounds?")
+                        || (decodeOut @% "error?")
+                        || (decodeOut @% "fault?")
+                        || !(decodeOut @% "legal?")
+                        || !(#funcOut @% "valid")
+                        || (#funcOutData @% "exception?");
+      LETC exceptionCause : Data <-
+                              ( IF !(decodeOut @% "bounds?")
+                                then $CapBoundsViolation
+                                else ( IF decodeOut @% "error?"
+                                       then $InstAccessFault
+                                       else ( IF decodeOut @% "fault?"
+                                              then $InstPageFault
+                                              else ( IF !(decodeOut @% "legal?") || !(#funcOut @% "valid")
+                                                     then $InstIllegal
+                                                     else #funcOutDataData @% "val" ))));
+      LETC baseException <- ( IF !(decodeOut @% "bounds?")
+                              then $$false
+                              else ( IF (decodeOut @% "error?") || (decodeOut @% "fault?") ||
+                                       !(decodeOut @% "legal?") || !(#funcOut @% "valid")
+                                     then $$true
+                                     else #funcOutData @% "baseException?" ) );
+      LETC pcCapException <- ( IF !(decodeOut @% "bounds?")
+                               then $$true
+                               else #funcOutData @% "pcCapException?" );
+      LETC exceptionValue <- ( IF decodeOut @% "error?" || decodeOut @% "fault?"
+                               then #pc + ITE (decodeOut @% "badLower16?") $0 $2
+                               else ( IF !(decodeOut @% "legal?") || !(#funcOut @% "valid")
+                                      then ZeroExtendTruncLsb CapSz #inst
+                                      else #funcOutDataData @% "cap" ) );
+      LETC result : FuncOutput <- #funcOutData
+                                    @%[ "exception?" <- #exception ]
+                                    @%[ "baseException?" <- #baseException ]
+                                    @%[ "pcCapException?" <- #pcCapException ]
+                                    @%[ "data" <- ((STRUCT {
+                                                        "tag" ::= #funcOutDataData @% "tag";
+                                                        "cap" ::= #exceptionValue;
+                                                        "val" ::= #exceptionCause }) : FullCapWithTag @# ty) ];
+      RetE ((STRUCT { "pc" ::= #pc;
+                      "notCompressed?" ::= isInstNotCompressed #inst;
+                      "result" ::= #result;
+                      "cs1Idx" ::= rs1 #inst;
+                      "cdIdx" ::= rd #inst;
+                      "csrIdx" ::= imm #inst;
+                      "justFenceI?" ::= decodeOut @% "justFenceI?"} : ExecOut @# ty)) ).
 
   Definition memRetProcess (funcOut: FuncOutput @# ty) (memInfo: MemOpInfo @# ty) (memRet: DataRet @# ty) : FuncOutput ## ty :=
     ( LETC isStore <- memInfo @% "op" == $StOp;
@@ -413,11 +413,11 @@ Section Run.
 
   Definition runSpec : ActionT ty Void :=
     ( LETA fetchOut <- fetchSpec;
-      LETA uncompressOut <- uncompress #fetchOut;
-      LETA regReadIdOut <- regReadId #uncompressOut;
+      LETAE uncompressOut <- uncompress #fetchOut;
+      LETAE regReadIdOut <- regReadId #uncompressOut;
       LETA regReadOut <- regReadSpec #regReadIdOut;
-      LETA decodeOut <- decode #regReadOut;
-      LETA execOut <- exec #decodeOut;
+      LETAE decodeOut <- decode #regReadOut;
+      LETAE execOut <- exec #decodeOut;
       LETA memOut <- memSpec #execOut;
       wb #memOut ).
 End Run.
