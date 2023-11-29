@@ -246,7 +246,8 @@ Section Prefix.
       pcValReg := @^"pcVal";
       prevPcCapReg := @^"prevPcCap";
       prevPcValReg := @^"prevPcVal";
-      takenReg := @^"takenReg";
+      prevTakenReg := @^"prevTakenReg";
+      reqJustFenceIReg := @^"reqJustFenceIReg";
       tagRead := @^"tagRead";
       tagWrite := @^"tagWrite";
       tagArray := @^"tagArray";

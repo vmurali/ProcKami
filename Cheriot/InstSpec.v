@@ -10,7 +10,6 @@ Section InstBaseSpec.
         "cdTag" :: Bool;
         "cdCap" :: Cap;
         "cdVal" :: Data;
-        "mayChangePc?" :: Bool;
         "taken?" :: Bool;
         "pcMemAddr" :: Addr;
         "changePcCap?" :: Bool;
@@ -28,7 +27,7 @@ Section InstBaseSpec.
         "store?" :: Bool;
         "ldSigned?" :: Bool;
         "ldPerms" :: CapPerms;
-        "interrupt?" :: Bool;
+        "fenceI?" :: Bool;
         "wbScr?" :: Bool;
         "scrTag" :: Bool;
         "scrCap" :: Cap;
@@ -57,7 +56,7 @@ Section InstBaseSpec.
                     STRUCT {
                         "tag" ::= inp @% "cdTag";
                         "cap" ::= ITE (inp @% "exception?") (inp @% "exceptionValue") (inp @% "cdCap");
-                        "val" ::= (IF (inp @% "exception?") || (inp @% "interrupt?")
+                        "val" ::= (IF (inp @% "exception?")
                                    then inp @% "exceptionCause"
                                    else inp @% "cdVal") };
         RetE (STRUCT {
@@ -73,14 +72,13 @@ Section InstBaseSpec.
                                                  then inp @% "csrVal"
                                                  else inp @% "pcMemAddr"));
                   "wb?" ::= inp @% "wb?";
-                  "mayChangePc?" ::= inp @% "mayChangePc?";
                   "taken?" ::= inp @% "taken?";
                   "changePcCap?" ::= inp @% "changePcCap?";
                   "mem?" ::= inp @% "mem?";
                   "exception?" ::= inp @% "exception?";
                   "baseException?" ::= inp @% "baseException?";
                   "pcCapException?" ::= inp @% "pcCapException?";
-                  "interrupt?" ::= inp @% "interrupt?";
+                  "fenceI?" ::= inp @% "fenceI?";
                   "changeIe?" ::= inp @% "changeIe?";
                   "newIe" ::= inp @% "newIe";
                   "wbScr?" ::= inp @% "wbScr?";
@@ -828,7 +826,6 @@ Section InstBaseSpec.
           ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen (branchOffset inst);
             LETE taken <- takenFn (cs1 @% "val") (cs2 @% "val");
             RetE ((DefBaseOutput ty)
-                    @%[ "mayChangePc?" <- $$true ]
                     @%[ "taken?" <- #taken ]
                     @%[ "pcMemAddr" <- #newAddr ]
                     @%[ "exception?" <- if compressed
@@ -896,6 +893,7 @@ Section InstBaseSpec.
                                           (Valid (Const ty (natToWord Xlen CapLdMisaligned)))
                                           Invalid))));
           RetE ((DefBaseOutput ty)
+                  @%[ "wb?" <- $$true ]
                   @%[ "exception?" <- #fullException @% "valid" ]
                   @%[ "exceptionCause" <- #fullException @% "data" ]
                   @%[ "pcMemAddr" <- #newAddr ]
@@ -1018,7 +1016,6 @@ Section InstBaseSpec.
                       @%[ "cdTag" <- $$true ]
                       @%[ "cdCap" <- seal capAccessors (getOTypeFromIe capAccessors #ie) (pc @% "cap") ]
                       @%[ "cdVal" <- #linkAddr ]
-                      @%[ "mayChangePc?" <- $$true ]
                       @%[ "taken?" <- $$true ]
                       @%[ "pcMemAddr" <- #newAddr ]
                       @%[ "exception?" <- if compressed
@@ -1060,7 +1057,6 @@ Section InstBaseSpec.
                       @%[ "cdTag" <- $$true ]
                       @%[ "cdCap" <- seal capAccessors (getOTypeFromIe capAccessors #ie) (pc @% "cap") ]
                       @%[ "cdVal" <- #linkAddr ]
-                      @%[ "mayChangePc?" <- $$true ]
                       @%[ "taken?" <- $$true ]
                       @%[ "pcMemAddr" <- #newAddr ]
                       @%[ "changePcCap?" <- $$true ]
@@ -1113,7 +1109,6 @@ Section InstBaseSpec.
               LETC exception <- !((scr @% "tag") && !isSealed capAccessors (scr @% "cap") && #representable
                                   && (#pcPerms @% "SR"));
               RetE ((DefBaseOutput ty)
-                      @%[ "mayChangePc?" <- $$true ]
                       @%[ "taken?" <- $$true ]
                       @%[ "pcMemAddr" <- #newMepc ]
                       @%[ "pcCap" <- scr @% "cap" ]
@@ -1340,7 +1335,7 @@ Section InstBaseSpec.
                |}) scrList
     |}.
 
-  Definition interruptInsts: InstEntryFull BaseOutput :=
+  Definition iFenceInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
       instEntries := [
@@ -1349,21 +1344,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'b"001")];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
-                      @%[ "interrupt?" <- $$true ]
-                      @%[ "exceptionCause" <- Const ty (natToWord Xlen FenceI) ]));
-          instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
-        |};
-        {|instName := "WFI";
-          uniqId := [fieldVal opcodeField (5'b"11100");
-                     fieldVal rdFixedField (5'b"00000");
-                     fieldVal funct3Field (3'b"000");
-                     fieldVal rs1FixedField (5'b"00000");
-                     fieldVal rs2FixedField (5'b"00101");
-                     fieldVal funct7Field (7'b"0001000")];
-          inputXform ty pc inst cs1 cs2 scr csr :=
-            ( RetE ((DefBaseOutput ty)
-                      @%[ "interrupt?" <- $$true ]
-                      @%[ "exceptionCause" <- Const ty (natToWord Xlen WFI) ]));
+                      @%[ "fenceI?" <- $$true ] ));
           instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
         |}
       ]
@@ -1375,7 +1356,7 @@ Section InstBaseSpec.
         localFuncFull ty x := baseOutputXform x;
         instsFull := [aluInsts; alu64Insts; capInsts; branchInsts;
                       ldInsts; ld32Insts; ld64Insts; stInsts; st32Insts; st64Insts;
-                      jumpInsts; exceptionInsts; csrInsts; cSpecialInsts; interruptInsts]
+                      jumpInsts; exceptionInsts; csrInsts; cSpecialInsts; iFenceInsts]
       |}
     ].
 

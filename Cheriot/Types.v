@@ -120,7 +120,8 @@ Class ProcParams :=
     pcValReg: string;
     prevPcCapReg: string;
     prevPcValReg: string;
-    takenReg: string;
+    prevTakenReg: string;
+    reqJustFenceIReg: string;
     tagRead: string;
     tagWrite: string;
     tagArray: string;
@@ -241,9 +242,7 @@ Section ParamDefinitions.
         implicitIe    : bool }.
   End InstEncoding.
 
-  Definition FenceI := 0.
-  Definition WFI := 1.
-
+  Definition CapException        := N.to_nat (hex "1c").
   Definition CapBoundsViolation  := 1.  (* Reg/PC *)
   Definition CapTagViolation     := 2.  (* Reg *)
   Definition CapSealViolation    := 3.  (* Reg *)
@@ -300,14 +299,13 @@ Section ParamDefinitions.
         "pcOrScrCapOrMemOp" :: Cap;
         "addrOrScrOrCsrVal" :: Addr;
         "wb?"               :: Bool;
-        "mayChangePc?"      :: Bool;
         "taken?"            :: Bool;
         "changePcCap?"      :: Bool;
         "mem?"              :: Bool;
         "exception?"        :: Bool;
         "baseException?"    :: Bool; (* non-cap exception *)
         "pcCapException?"   :: Bool; (* cap exception caused by PC *)
-        "interrupt?"        :: Bool;
+        "fenceI?"           :: Bool;
         "changeIe?"         :: Bool;
         "newIe"             :: Bool;
         "wbScr?"            :: Bool;

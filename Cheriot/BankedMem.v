@@ -61,7 +61,8 @@ Section BankedMem.
                               "inst" :: Inst;
                               "badLower16?" :: Bool;
                               "error?" :: Bool;
-                              "fault?" :: Bool
+                              "fault?" :: Bool;
+                              "justFenceI?" :: Bool
                             }.
     
     Definition instReq: ActionT ty InstRet :=
@@ -74,7 +75,8 @@ Section BankedMem.
                  "inst" ::= (ZeroExtendTruncLsb InstSz (pack #shuffledBytes));
                  "badLower16?" ::= Const ty false;
                  "error?" ::= Const ty false;
-                 "fault?" ::= Const ty false } : InstRet @# ty)).
+                 "fault?" ::= Const ty false;
+                 "justFenceI?" ::= Const ty false } : InstRet @# ty)).
   End LoadInst.
 
   Section LoadStore.

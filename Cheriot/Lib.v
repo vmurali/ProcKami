@@ -161,13 +161,19 @@ Section RegAccess.
     end.
 
   Local Open Scope kami_action.
-  Definition readRegs prefix n k (regs: list (RegInfo n k)) ty (e: Bit n @# ty) :=
+  Definition readRegs prefix n k (regs: list (RegInfo n k)) ty (addr: Bit n @# ty) :=
     redAction (@Kor _ k)
-      (fun x => ( If (e == Const ty (regAddr x))
+      (fun x => ( If (addr == Const ty (regAddr x))
                   then ( Read retVal : k <- (prefix ++ "_" ++ (regName x))%string;
                          Ret #retVal )
                   else Ret (Const ty Default) as ret;
                   Ret #ret )) regs.
+
+  Definition writeRegs prefix n k (regs: list (RegInfo n k)) ty (addr: Bit n @# ty) (val: k @# ty) :=
+    fold_right (fun x rest => ( If (addr == Const ty (regAddr x))
+                                then ( Write (prefix ++ "_" ++ (regName x))%string : k <- val; Retv )
+                                else Retv;
+                                rest ) ) Retv regs.
 
   Definition callReadRegFile k (name: string) ty n (idx: Bit n @# ty) : ActionT ty k :=
     ( Call ret : Array 1 k <- name (idx: Bit n);
