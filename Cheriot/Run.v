@@ -40,7 +40,7 @@ Section Run.
     ( Read pcCap : Cap <- pcCapReg;
       Read pcVal : Addr <- pcValReg;
       LETA instRet <- instReq #pcVal;
-      convertLetExprSyntax_ActionT (instRetProcess #pcCap #pcVal #instRet) ).
+      RetAE (instRetProcess #pcCap #pcVal #instRet) ).
 
   Definition UncompressOut := STRUCT_TYPE {
                                   "pc" :: FullCap;
@@ -319,7 +319,7 @@ Section Run.
       then (
           LETA memRet : DataRet <- loadStoreReq (#memInfo @% "op" == $StOp) (#funcOut @% "addrOrScrOrCsrVal") (#memInfo @% "size")
                                      (#memInfo @% "cap?") (#funcOut @% "data") (#memInfo @% "sign?");
-          convertLetExprSyntax_ActionT (memRetProcess #funcOut #memInfo #memRet) )
+          RetAE (memRetProcess #funcOut #memInfo #memRet) )
       else Ret #funcOut
       as retFuncOut;
       Ret (execOut @%[ "result" <- #retFuncOut ]) ).
