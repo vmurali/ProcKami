@@ -213,11 +213,9 @@ Section Run.
 
   Definition ExecOut := STRUCT_TYPE {
                             "pc" :: Addr;
+                            "inst" :: Inst;
                             "notCompressed?" :: Bool;
                             "result" :: FuncOutput;
-                            "cs1Idx" :: RegId;
-                            "cdIdx" :: RegId;
-                            "csrIdx" :: Bit (snd immField);
                             "justFenceI?" :: Bool
                           }.
 
@@ -268,11 +266,9 @@ Section Run.
                                                         "cap" ::= #exceptionValue;
                                                         "val" ::= #exceptionCause }) : FullCapWithTag @# ty) ];
       RetE ((STRUCT { "pc" ::= #pc;
+                      "inst" ::= #inst;
                       "notCompressed?" ::= isInstNotCompressed #inst;
                       "result" ::= #result;
-                      "cs1Idx" ::= rs1 #inst;
-                      "cdIdx" ::= rd #inst;
-                      "csrIdx" ::= imm #inst;
                       "justFenceI?" ::= decodeOut @% "justFenceI?"} : ExecOut @# ty)) ).
 
   Definition memRetProcess (funcOut: FuncOutput @# ty) (memInfo: MemOpInfo @# ty) (memRet: DataRet @# ty) : FuncOutput ## ty :=
@@ -364,7 +360,10 @@ Section Run.
                                               | _ => Const ty false
                                               end );
 
-      LET csrIdx <- execOut @% "csrIdx";
+      LET inst <- execOut @% "inst";
+      LET csrIdx <- imm #inst;
+      LET cdIdx <- rd #inst;
+      LET cs1Idx <- rs1 #inst;
       LET data <- #result @% "data";
 
       If !#reqJustFenceI || execOut @% "justFenceI?"
@@ -379,8 +378,8 @@ Section Run.
           then ( Write @^"MStatus" : Data <- castBits (@Nat.mul_1_r Xlen) (pack #mstatusArr);
                  Retv )
           else Retv;
-          If !(#result @% "exception?") && (#result @% "wb?") && isNotZero (execOut @% "cdIdx")
-          then callWriteRegFile regsWrite (execOut @% "cdIdx") #data
+          If !(#result @% "exception?") && (#result @% "wb?") && isNotZero #cdIdx
+          then callWriteRegFile regsWrite #cdIdx #data
           else Retv;
           If !(#result @% "exception?") && (#result @%"wbScr?")
           then writeRegs procName scrRegInfos (UniBit (TruncLsb 5 _) #csrIdx)
@@ -403,7 +402,7 @@ Section Run.
                                    (pack (STRUCT { "S" ::= (#result @% "scrException?");
                                                    "capIdx" ::= (IF (#result @% "pcCapException?")
                                                                  then $0
-                                                                 else ZeroExtendTruncLsb 5 (execOut @% "cs1Idx"));
+                                                                 else ZeroExtendTruncLsb 5 #cs1Idx);
                                                    "cause" ::= ZeroExtendTruncLsb 5 (#data @% "cap") } )));
                  Retv )
           else Retv;
