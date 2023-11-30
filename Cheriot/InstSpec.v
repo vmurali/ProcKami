@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
+Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.DecExec.
 
 Section InstBaseSpec.
   Context `{procParams: ProcParams}.
@@ -868,6 +868,9 @@ Section InstBaseSpec.
       ]
     |}.
 
+  Definition isBranchInsts ty (inst: Inst @# ty) :=
+    redLet (@Kor _ _) (fun x => RetE (matchUniqId inst (uniqId x))) (filterInsts [branchInsts]).
+
   Definition mkLdInst (name: string) funct3Val (size: nat) (isCap sign: bool) :=
     {|instName := name;
       uniqId := [fieldVal opcodeField (5'b"00000");
@@ -1072,6 +1075,10 @@ Section InstBaseSpec.
       ]
     |}.
 
+  Definition isJumpInsts ty (inst: Inst @# ty) :=
+    redLet (@Kor _ _) (fun x => RetE (matchUniqId inst (uniqId x))) (filterInsts [jumpInsts]).
+
+
   Definition exceptionInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -1120,6 +1127,9 @@ Section InstBaseSpec.
         |}
       ]
     |}.
+
+  Definition isERetInst ty (inst: Inst @# ty) :=
+    redLet (@Kor _ _) (fun x => RetE (matchUniqId inst (uniqId x))) (filter (fun x => String.eqb (instName x) "ECall") (filterInsts [jumpInsts])).
 
   Definition scrList : list ScrReg := [
       {|scrRegInfo := Build_RegInfo ($28)%word "MTCC" (Some (SyntaxConst Default));

@@ -341,17 +341,18 @@ Section ParamDefinitions.
       localFunc       : forall ty, localFuncInput @# ty -> FuncOutput ## ty;
       insts           : list (InstEntry localFuncInput) }.
 
+  Definition filterInsts k (ls: list (InstEntryFull k)) :=
+    fold_right (fun new rest =>
+                  (if (getBool (in_dec Nat.eq_dec Xlen (xlens new)) &&
+                         getBool (in_dec Extension_eq_dec (extension new) supportedExts))%bool
+                   then instEntries new
+                   else []) ++ rest) [] ls.
+  
   Definition mkFuncEntry (fe : FuncEntryFull) :=
     {|funcName := funcNameFull fe;
       localFuncInput := localFuncInputFull fe;
       localFunc := localFuncFull fe;
-      insts :=
-        fold_left (fun prev new =>
-                     (if (getBool (in_dec Nat.eq_dec Xlen (xlens new)) &&
-                            getBool (in_dec Extension_eq_dec (extension new) supportedExts))%bool
-                      then instEntries new
-                      else []) ++ prev)
-          (instsFull fe) []
+      insts := filterInsts (instsFull fe)
     |}.
 
   Record ScrReg :=
