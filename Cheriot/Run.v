@@ -216,7 +216,8 @@ Section Run.
                             "inst" :: Inst;
                             "notCompressed?" :: Bool;
                             "result" :: FuncOutput;
-                            "justFenceI?" :: Bool
+                            "justFenceI?" :: Bool;
+                            "bounds?" :: Bool
                           }.
 
   Definition getScrIdx (csrIdx: Bit (snd immField) @# ty) := UniBit (TruncLsb 5 _) csrIdx.
@@ -269,7 +270,8 @@ Section Run.
                       "inst" ::= #inst;
                       "notCompressed?" ::= isInstNotCompressed #inst;
                       "result" ::= #result;
-                      "justFenceI?" ::= decodeOut @% "justFenceI?"} : ExecOut @# ty)) ).
+                      "justFenceI?" ::= decodeOut @% "justFenceI?";
+                      "bounds?" ::= decodeOut @% "bounds?" } : ExecOut @# ty)) ).
 
   Definition memRetProcess (funcOut: FuncOutput @# ty) (memInfo: MemOpInfo @# ty) (memRet: DataRet @# ty) : FuncOutput ## ty :=
     ( LETC isStore <- memInfo @% "op" == $StOp;
@@ -365,6 +367,7 @@ Section Run.
       LET cdIdx <- rd #inst;
       LET cs1Idx <- rs1 #inst;
       LET data <- #result @% "data";
+      LET prevPcForMepcc <- !(execOut @% "bounds?") && #prevTaken;
 
       If !#reqJustFenceI || execOut @% "justFenceI?"
       then
@@ -392,8 +395,8 @@ Section Run.
           else Retv;
           If #result @% "exception?"
           then ( Write @^"MEPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
-                                                              "cap" ::= ITE #prevTaken #prevPcCap #pcCap;
-                                                              "val" ::= ITE #prevTaken #prevPcVal #pcVal };
+                                                              "cap" ::= ITE #prevPcForMepcc #prevPcCap #pcCap;
+                                                              "val" ::= ITE #prevPcForMepcc #prevPcVal #pcVal };
                  Write @^"MCause" : Data <- ITE (#result @% "baseException?") (#data @% "val") $CapException;
                  Write @^"MTval" :
                    Data <- (IF (#result @% "baseException?")

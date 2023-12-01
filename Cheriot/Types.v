@@ -1,5 +1,6 @@
 Require Import Kami.AllNotations ProcKami.Cheriot.Lib.
-
+Require Import RecordUpdate.RecordUpdate.
+  
 Section CapAccessors.
   Variable CapSz: nat.
   Variable AddrSz: nat.
@@ -73,12 +74,37 @@ Proof.
   decide equality.
 Qed.
 
-Definition PccValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen) (pcCap: word CapSz) (pcAddr: word Xlen)
-  (compressed: bool) :=
-  evalLetExpr ( LETE perms <- getCapPerms capAccessors (Const type pcCap);
-                RetE (Var type (SyntaxKind CapPerms) perms @% "EX"))%kami_expr = true /\
-    evalExpr ((isSealed capAccessors (Const _ pcCap))) = false /\
-    (compressed = false -> truncLsb pcAddr = ZToWord 2 0).
+Section VarType.
+  Local Notation "## x" := (Var type (SyntaxKind _) x) (no associativity, at level 0).
+
+  Local Open Scope kami_expr.
+  Definition PccValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen) (pcCap: word CapSz) (pcAddr: word Xlen)
+    (compressed: bool) :=
+    evalLetExpr ( LETE perms <- getCapPerms capAccessors (Const type pcCap);
+                  RetE (##perms @% "EX")) = true /\
+      evalExpr ((isSealed capAccessors (Const _ pcCap))) = false /\
+      (compressed = false -> truncLsb pcAddr = ZToWord 2 0).
+
+  Definition MtccValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen)
+    (mtccCap: word CapSz) (mtccVal: word Xlen) :=
+    evalLetExpr ( LETE perms <- getCapPerms capAccessors (Const type mtccCap);
+                  LETC sealed <- isSealed capAccessors (Const type mtccCap);
+                  LETC aligned <- isZero (ZeroExtendTruncLsb 2 (Const type mtccVal));
+                  LETE baseTop <- getCapBaseTop capAccessors (Const type mtccCap) (Const type mtccVal);
+                  LETC baseBound <- Const type mtccVal >= (##baseTop @% "base");
+                  LETC topBound <- (ZeroExtend 1 (Const type mtccVal) + Const type (natToWord _ 4) <=
+                                      (##baseTop @% "top"));
+                  RetE ((##perms @% "EX") && (##perms @% "SR") && !##sealed && ##aligned
+                        && (##baseBound && ##topBound))) = true.
+
+  Definition MtdcValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen)
+    (mtdcCap: word CapSz) (mtdcVal: word Xlen) :=
+    evalLetExpr ( LETE baseTop <- getCapBaseTop capAccessors (Const type mtdcCap) (Const type mtdcVal);
+                  LETC baseBound <- Const type mtdcVal >= (##baseTop @% "base");
+                  LETC topBound <- (ZeroExtend 1 (Const type mtdcVal) + Const type (natToWord _ 8) <=
+                                      (##baseTop @% "top"));
+                  RetE (##baseBound && ##topBound)) = true.  
+End VarType.
 
 (* Changes from CherIoT:
    - All PC out-of-bounds exceptions are caught only when executing
@@ -103,7 +129,13 @@ Class ProcParams :=
     PcAddr: word Xlen;
     compressed: bool;
     pccValid: PccValid capAccessors PcCap PcAddr compressed;
-    TrapAddr: word (Xlen + CapSz);
+    MtccCap: word CapSz;
+    MtccVal: word Xlen;
+    (* mtccValid: MtccValid capAccessors MtccCap MtccVal; *)
+    MtdcCap: word CapSz;
+    MtdcVal: word Xlen;
+    (* mtdcValid: MtdcValid capAccessors MtdcCap MtdcVal; *)
+    IeInit: bool;
     supportedExts: list Extension;
     extsHasBase: In Base supportedExts;
     RegIdSz: nat;
@@ -185,17 +217,13 @@ Section ParamDefinitions.
     Definition funct3Field := (12, 3).
     Definition funct7Field := (25, 7).
     Definition funct6Field := (26, 6).
-    Definition funct5Field := (27, 5).
     Definition immField := (20, 12).
-    Definition rmField := (12, 3).
-    Definition fmtField := (25, 2).
     Definition rs1Field := (15, RegIdSz).
     Definition rs2Field := (20, RegIdSz).
     Definition rs3Field := (27, RegIdSz).
     Definition rdField := (7, RegIdSz).
     Definition rs1FixedField := (15, 5).
     Definition rs2FixedField := (20, 5).
-    Definition rs3FixedField := (27, 5).
     Definition rdFixedField := (7, 5).
     Definition auiLuiField := (12, 20).
 
@@ -214,21 +242,21 @@ Section ParamDefinitions.
       Definition funct3 := extractFieldFromInst funct3Field.
       Definition funct7 := extractFieldFromInst funct7Field.
       Definition funct6 := extractFieldFromInst funct6Field.
-      Definition funct5 := extractFieldFromInst funct5Field.
       Definition imm := extractFieldFromInst immField.
-      Definition rm := extractFieldFromInst rmField.
-      Definition fmt := extractFieldFromInst fmtField.
-      Definition branchOffset := {< (inst$[31:31]), (inst$[7:7]),  (inst$[30:25]), (inst$[11:8]), $$(WO~0) >}.
-      Definition jalOffset := {< inst$[31:31], (inst$[19:12]), (inst$[20:20]), (inst$[30:21]), $$(WO~0) >}.
-      Definition memSubOOpcode := {< (inst$[5:5]), (inst$[3:3])>}.
+      Definition branchOffset := ({< extractFieldFromInst (31, 1),
+                                     extractFieldFromInst ( 7, 1),
+                                     extractFieldFromInst (25, 6),
+                                     extractFieldFromInst ( 8, 4), $$(WO~0) >}).
+      Definition jalOffset := ({< extractFieldFromInst (31,  1),
+                                  extractFieldFromInst (12,  8),
+                                  extractFieldFromInst (20,  1),
+                                  extractFieldFromInst (21, 10), $$(WO~0) >}).
       Definition auiLuiOffset := extractFieldFromInst auiLuiField.
       Definition rs1 := extractFieldFromInstDynamic rs1Field.
       Definition rs2 := extractFieldFromInstDynamic rs2Field.
-      Definition rs3 := extractFieldFromInstDynamic rs3Field.
       Definition rd := extractFieldFromInstDynamic rdField.
       Definition rs1Fixed := extractFieldFromInst rs1FixedField.
       Definition rs2Fixed := extractFieldFromInst rs2FixedField.
-      Definition rs3Fixed := extractFieldFromInst rs3FixedField.
       Definition rdFixed := extractFieldFromInst rdFixedField.
     End Fields.
 
@@ -240,6 +268,20 @@ Section ParamDefinitions.
         implicit      : nat ;
         implicitMepcc : bool ;
         implicitIe    : bool }.
+    
+    Global Instance InstPropertiesEtaX : Settable _ :=
+      settable!
+        Build_InstProperties
+      < hasCs1 ; hasCs2 ; hasScr ; hasCsr ; implicit ; implicitMepcc ; implicitIe >.
+    
+    Definition DefProperties :=
+      {|hasCs1        := false ;
+        hasCs2        := false ;
+        hasScr        := false ;
+        hasCsr        := false ;
+        implicit      := 0 ;
+        implicitMepcc := false ;
+        implicitIe    := false |}.    
   End InstEncoding.
 
   Definition CapException        := N.to_nat (hex "1c").

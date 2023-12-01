@@ -1,4 +1,5 @@
 Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.DecExec.
+Require Import RecordUpdate.RecordUpdate.
 
 Section InstBaseSpec.
   Context `{procParams: ProcParams}.
@@ -98,7 +99,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst)]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "SLTI";
           uniqId := [fieldVal opcodeField (5'b"00100");
@@ -111,7 +112,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #msb]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "SLTIU";
           uniqId := [fieldVal opcodeField (5'b"00100");
@@ -124,7 +125,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #msb]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "XorI";
           uniqId := [fieldVal opcodeField (5'b"00100");
@@ -133,7 +134,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ((cs1 @% "val") .^ (SignExtendTruncLsb Xlen (imm inst))) ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "OrI";
           uniqId := [fieldVal opcodeField (5'b"00100");
@@ -142,7 +143,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ((cs1 @% "val") .| (SignExtendTruncLsb Xlen (imm inst))) ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "AndI";
           uniqId := [fieldVal opcodeField (5'b"00100");
@@ -151,7 +152,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ((cs1 @% "val") .& (SignExtendTruncLsb Xlen (imm inst))) ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "SLLI";
           uniqId := [fieldVal opcodeField (5'b"00100");
@@ -164,7 +165,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ((cs1 @% "val") <<
                                         (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "SRLI";
           uniqId := [fieldVal opcodeField (5'b"00100");
@@ -178,7 +179,7 @@ Section InstBaseSpec.
                       @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
                                        ((ZeroExtend 1 (cs1 @% "val")) >>>
                                           (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "SRAI";
           uniqId := [fieldVal opcodeField (5'b"00100");
@@ -192,7 +193,7 @@ Section InstBaseSpec.
                       @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
                                        ((SignExtend 1 (cs1 @% "val")) >>>
                                           (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "Add";
           uniqId := [fieldVal opcodeField (5'b"01100");
@@ -202,7 +203,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") + (cs2 @% "val")]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "Sub";
           uniqId := [fieldVal opcodeField (5'b"01100");
@@ -212,7 +213,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") - (cs2 @% "val")]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "SLT";
           uniqId := [fieldVal opcodeField (5'b"01100");
@@ -225,7 +226,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #res]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "SLTU";
           uniqId := [fieldVal opcodeField (5'b"01100");
@@ -238,7 +239,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #res]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "Xor";
           uniqId := [fieldVal opcodeField (5'b"01100");
@@ -248,7 +249,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") .^ (cs2 @% "val")]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "Or";
           uniqId := [fieldVal opcodeField (5'b"01100");
@@ -258,7 +259,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") .| (cs2 @% "val")]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "And";
           uniqId := [fieldVal opcodeField (5'b"01100");
@@ -268,7 +269,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") .& (cs2 @% "val")]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "SLL";
           uniqId := [fieldVal opcodeField (5'b"01100");
@@ -279,7 +280,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") <<
                                        (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val"))]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "SRL";
           uniqId := [fieldVal opcodeField (5'b"01100");
@@ -291,7 +292,7 @@ Section InstBaseSpec.
                       @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
                                        ((ZeroExtend 1 (cs1 @% "val")) >>>
                                           (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val")))]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "SRA";
           uniqId := [fieldVal opcodeField (5'b"01100");
@@ -303,7 +304,7 @@ Section InstBaseSpec.
                       @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
                                        ((SignExtend 1 (cs1 @% "val")) >>>
                                           (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val")))]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |}
       ]
     |}.
@@ -319,7 +320,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst))]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "SLLIW";
           uniqId := [fieldVal opcodeField (5'b"00110");
@@ -330,7 +331,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") <<
                                                            (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "SRLIW";
           uniqId := [fieldVal opcodeField (5'b"00110");
@@ -341,7 +342,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (Trunc32Unsigned Xlen (cs1 @% "val")) >>>
                                        (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst))]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "SRAIW";
           uniqId := [fieldVal opcodeField (5'b"00110");
@@ -352,7 +353,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (Trunc32Signed Xlen (cs1 @% "val")) >>>
                                        (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst))]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "AddW";
           uniqId := [fieldVal opcodeField (5'b"01110");
@@ -362,7 +363,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") + (cs2 @% "val"))]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "SubW";
           uniqId := [fieldVal opcodeField (5'b"01110");
@@ -372,7 +373,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") - (cs2 @% "val"))]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "SLLW";
           uniqId := [fieldVal opcodeField (5'b"01110");
@@ -384,7 +385,7 @@ Section InstBaseSpec.
                       @%[ "cdVal" <- Trunc32Signed Xlen
                                        ((cs1 @% "val") <<
                                           (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val")))]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "SRLW";
           uniqId := [fieldVal opcodeField (5'b"01110");
@@ -395,7 +396,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (Trunc32Unsigned Xlen (cs1 @% "val")) >>>
                                        (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val"))]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "SRAW";
           uniqId := [fieldVal opcodeField (5'b"01110");
@@ -406,10 +407,33 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (Trunc32Signed Xlen (cs1 @% "val")) >>>
                                        (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val"))]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |}
       ]
     |}.
+
+  Definition justFullCap ty (x: FullCapWithTag @# ty) : FullCap @# ty :=
+    STRUCT { "cap" ::= x @% "cap";
+             "val" ::= x @% "val" }.
+        
+
+  Definition representableFn ty (cs1: FullCap @# ty) (addr: Addr @# ty) : Bool ## ty :=
+    ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
+      LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") addr;
+      RetE ((#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase")) ).
+
+  Definition setBounds ty (cs1: FullCapWithTag @# ty) (len: Data @# ty) (isExact: Bool @# ty): FullCapWithTag ## ty :=
+    ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
+      LETC baseBound <- (cs1 @% "val") >= (#baseTop @% "base");
+      LETC topBound <- (ZeroExtend 1 (cs1 @% "val") + ZeroExtend 1 len) <= (#baseTop @% "top");
+      LETE capBounds <- getCapBounds capAccessors (cs1 @% "val") len;
+      LETC newCap <- setCapBounds capAccessors
+                       (cs1 @% "cap") (#capBounds @% "B") (#capBounds @% "T") (#capBounds @% "exp");
+      RetE (STRUCT {
+                "tag" ::= (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "cap") && (#baseBound && #topBound)
+                          && (!isExact || (#capBounds @% "exact?"));
+                "cap" ::= #newCap;
+                "val" ::= cs1 @% "val" } : FullCapWithTag @# ty) ).
 
   Definition capInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
@@ -419,29 +443,25 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"7b"))];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
-              LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
-              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+              LETE representable <- representableFn (justFullCap cs1) #newAddr;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "cap") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
-          instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 3; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| implicit := 3 |>
         |};
         {|instName := "AUIPCC";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"17"))];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
-              LETE baseTop <- getCapBaseTop capAccessors (pc @% "cap") (pc @% "val");
-              LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
-              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+              LETE representable <- representableFn pc #newAddr;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- #representable ]
                       @%[ "cdCap" <- pc @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
-          instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties
         |};
         {|instName := "CAndPerm";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -457,7 +477,7 @@ Section InstBaseSpec.
                       @%[ "cdTag" <- cs1 @% "tag" ]
                       @%[ "cdCap" <- #newCap ]
                       @%[ "cdVal" <- cs1 @% "val" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "CClearTag";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -470,7 +490,7 @@ Section InstBaseSpec.
                       @%[ "cdTag" <- $$false ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- cs1 @% "val" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CGetAddr";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -481,7 +501,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- cs1 @% "val" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CGetBase";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -493,7 +513,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- #baseTop @% "base" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CGetHigh";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -504,7 +524,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- cs1 @% "cap" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CGetLen";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -519,7 +539,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ITE #lenMsb $$(wones Xlen) #lenLsb ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CGetPerm";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -531,7 +551,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen (pack #perms) ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CGetTag";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -542,7 +562,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen (pack (cs1 @% "tag")) ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CGetTop";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -556,7 +576,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ITE #topMsb $$(wones Xlen) #topLsb ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CGetType";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -568,7 +588,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #oType ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CIncAddr";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -576,30 +596,26 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"11")];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (cs1 @% "val") + (cs2 @% "val");
-              LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
-              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+              LETE representable <- representableFn (justFullCap cs1) #newAddr;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "CIncAddrImm";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"1")];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
-              LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
-              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+              LETE representable <- representableFn (justFullCap cs1) #newAddr;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CMove";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -612,7 +628,7 @@ Section InstBaseSpec.
                       @%[ "cdTag" <- cs1 @% "tag" ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- cs1 @% "val" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CRepresentableAlignmentMask";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -625,7 +641,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- #mask ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CRoundRepresentableLength";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -639,7 +655,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- #repLen ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CSetAddr";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -647,72 +663,51 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"10")];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- cs2 @% "val";
-              LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #newAddr;
-              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+              LETE representable <- representableFn (justFullCap cs1) #newAddr;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "CSetBounds";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"8")];
           inputXform ty pc inst cs1 cs2 scr csr :=
-            ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC baseBound <- (cs1 @% "val") >= (#baseTop @% "base");
-              LETC topBound <- (ZeroExtend 1 (cs1 @% "val") + ZeroExtend 1 (cs2 @% "val")) <= (#baseTop @% "top");
-              LETE capBounds <- getCapBounds capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC newCap <- setCapBounds capAccessors
-                               (cs1 @% "cap") (#capBounds @% "B") (#capBounds @% "T") (#capBounds @% "exp");
+            ( LETE newCd <- setBounds cs1 (cs2 @% "val") $$false;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") &&
-                                       (#baseBound && #topBound) ]
-                      @%[ "cdCap" <- #newCap ]
-                      @%[ "cdVal" <- cs1 @% "val" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+                      @%[ "cdTag" <- #newCd @% "tag" ]
+                      @%[ "cdCap" <- #newCd @% "cap" ]
+                      @%[ "cdVal" <- #newCd @% "val" ]));
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "CSetBoundsExact";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal funct7Field (7'h"9")];
           inputXform ty pc inst cs1 cs2 scr csr :=
-            ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC baseBound <- (cs1 @% "val") >= (#baseTop @% "base");
-              LETC topBound <- (ZeroExtend 1 (cs1 @% "val") + ZeroExtend 1 (cs2 @% "val")) <= (#baseTop @% "top");
-              LETE capBounds <- getCapBounds capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC newCap <- setCapBounds capAccessors
-                               (cs1 @% "cap") (#capBounds @% "B") (#capBounds @% "T") (#capBounds @% "exp");
+            ( LETE newCd <- setBounds cs1 (cs2 @% "val") $$true;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") &&
-                                       (#baseBound && #topBound) && (#capBounds @% "exact?")]
-                      @%[ "cdCap" <- #newCap ]
-                      @%[ "cdVal" <- cs1 @% "val" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+                      @%[ "cdTag" <- #newCd @% "tag" ]
+                      @%[ "cdCap" <- #newCd @% "cap" ]
+                      @%[ "cdVal" <- #newCd @% "val" ]));
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "CSetBoundsImm";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"2")];
           inputXform ty pc inst cs1 cs2 scr csr :=
-            ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC baseBound <- (cs1 @% "val") >= (#baseTop @% "base");
-              LETC topBound <- (ZeroExtend 1 (cs1 @% "val") +
-                                  ZeroExtendTruncLsb (Xlen + 1) (imm inst)) <= (#baseTop @% "top");
-              LETE capBounds <- getCapBounds capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETC newCap <- setCapBounds capAccessors
-                               (cs1 @% "cap") (#capBounds @% "B") (#capBounds @% "T") (#capBounds @% "exp");
+            ( LETE newCd <- setBounds cs1 (ZeroExtendTruncLsb Xlen (imm inst)) $$false;
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
-                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") &&
-                                       (#baseBound && #topBound) ]
-                      @%[ "cdCap" <- #newCap ]
-                      @%[ "cdVal" <- cs1 @% "val" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+                      @%[ "cdTag" <- #newCd @% "tag" ]
+                      @%[ "cdCap" <- #newCd @% "cap" ]
+                      @%[ "cdVal" <- #newCd @% "val" ]));
+          instProperties := DefProperties<| hasCs1 := true |>
         |};
         {|instName := "CSetEqualExact";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -725,7 +720,7 @@ Section InstBaseSpec.
               RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen (pack (#tagEq && #capEq && #valEq)) ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "CSetHigh";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -737,7 +732,7 @@ Section InstBaseSpec.
                       @%[ "cdTag" <- $$false ]
                       @%[ "cdCap" <- cs2 @% "val" ]
                       @%[ "cdVal" <- cs1 @% "val" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "CSub";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -747,7 +742,7 @@ Section InstBaseSpec.
             ( RetE ((DefBaseOutput ty)
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <- (cs1 @% "val") - (cs2 @% "val") ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "CTestSubset";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -767,7 +762,7 @@ Section InstBaseSpec.
                       @%[ "wb?" <- $$true ]
                       @%[ "cdVal" <-
                             ZeroExtendTruncLsb Xlen (pack (#baseBound && #topBound && #tagEq && #permsSub)) ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "CSeal";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -789,7 +784,7 @@ Section InstBaseSpec.
                                        !isSealed capAccessors (cs1 @% "cap") && (#perms2 @% "SE") && #validSealAddr]
                       @%[ "cdCap" <- #newCap ]
                       @%[ "cdVal" <- cs1 @% "val" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |};
         {|instName := "CUnseal";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
@@ -813,7 +808,7 @@ Section InstBaseSpec.
                                        isSealed capAccessors (cs1 @% "cap") && (#perms2 @% "US") && #oTypeEq]
                       @%[ "cdCap" <- #newCap ]
                       @%[ "cdVal" <- cs1 @% "val" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
         |}
       ]
     |}.
@@ -831,12 +826,10 @@ Section InstBaseSpec.
                     @%[ "exception?" <- if compressed
                                         then $$false
                                         else isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
-                    @%[ "exceptionCause" <- if compressed
-                                            then Const ty (natToWord Xlen 0)
-                                            else $InstMisaligned ]
+                    @%[ "exceptionCause" <- Const ty (natToWord Xlen InstMisaligned) ]
                     @%[ "exceptionValue" <- #newAddr ]
                     @%[ "baseException?" <- $$true ]));
-        instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+        instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
       |}.
 
   Definition branchInsts: InstEntryFull BaseOutput :=
@@ -905,7 +898,7 @@ Section InstBaseSpec.
                   @%[ "mem?" <- $$true ]
                   @%[ "ldSigned?" <- $$sign ]
                   @%[ "ldPerms" <- #perms ]));
-      instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+      instProperties := DefProperties<| hasCs1 := true |>
     |}.
 
   Definition ldInsts: InstEntryFull BaseOutput :=
@@ -941,7 +934,7 @@ Section InstBaseSpec.
       uniqId := [fieldVal opcodeField (5'b"01000");
                  fieldVal funct3Field funct3Val];
       inputXform ty pc inst cs1 cs2 scr csr :=
-        ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
+        ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen ({< funct7 inst, rdFixed inst >});
           LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
           LETC baseBound <- #newAddr >= (#baseTop @% "base");
           LETC topBound <- ZeroExtend 1 #newAddr + $size <= (#baseTop @% "top");
@@ -975,7 +968,7 @@ Section InstBaseSpec.
                   @%[ "cdTag" <- cs2 @% "tag"]
                   @%[ "cdCap" <- cs2 @% "cap"]
                   @%[ "cdVal" <- cs2 @% "val"] ));
-      instProperties := {| hasCs1 := true; hasCs2 := true; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+      instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
     |}.
 
   Definition stInsts: InstEntryFull BaseOutput :=
@@ -1024,12 +1017,10 @@ Section InstBaseSpec.
                       @%[ "exception?" <- if compressed
                                           then $$false
                                           else isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
-                      @%[ "exceptionCause" <- if compressed
-                                              then Const ty (natToWord Xlen 0)
-                                              else $InstMisaligned ]
+                      @%[ "exceptionCause" <- Const ty (natToWord Xlen InstMisaligned) ]
                       @%[ "exceptionValue" <- #newAddr ]
                       @%[ "baseException?" <- $$true ]));
-          instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := true |}
+          instProperties := DefProperties <| implicitIe := true |>
         |};
         {|instName := "CJALR";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"67"));
@@ -1048,9 +1039,9 @@ Section InstBaseSpec.
                            then mkPair (Valid (Const ty (natToWord Xlen CapSealViolation))) ($$false)
                            else (IF !(#perms @% "EX")
                                  then mkPair (Valid (Const ty (natToWord Xlen CapExecViolation))) ($$false)
-                                 else if compressed
-                                      then mkPair Invalid ($$false)
-                                      else mkPair (Valid (Const ty (natToWord Xlen InstMisaligned))) ($$true))));
+                                 else StaticIf (negb compressed) (isNotZero (ZeroExtendTruncLsb 2 #newAddr))
+                                               (mkPair (Valid (Const ty (natToWord Xlen InstMisaligned))) ($$true))
+                                               (mkPair Invalid ($$false)))));
               LETC mstatusArr <- unpack (Array (S (Xlen-1)) Bool) (castBits XlenSXlenMinus1 csr);
               LETC ie <- #mstatusArr ![ 3 ];
               LETC ieSentry <- isIeSentry capAccessors (cs1 @% "cap");
@@ -1070,7 +1061,7 @@ Section InstBaseSpec.
                       @%[ "baseException?" <- #fullException @% "snd" ]
                       @%[ "changeIe?" <- #ieSentry || #idSentry ]
                       @%[ "newIe" <- #ieSentry ] ));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := true |}
+          instProperties := DefProperties<| hasCs1 := true |><| implicitIe := true |>
         |}
       ]
     |}.
@@ -1091,7 +1082,7 @@ Section InstBaseSpec.
                         @%[ "exception?" <- $$true ]
                         @%[ "exceptionCause" <- Const ty (natToWord Xlen ECall) ]
                         @%[ "baseException?" <- $$true ]));
-          instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties
         |};
         {|instName := "ERet";
           uniqId := [fieldVal opcodeField (5'b"11100");
@@ -1110,9 +1101,7 @@ Section InstBaseSpec.
                                      ({< ZeroExtendTruncMsb (Xlen - 1) (scr @% "val"), $$WO~0 >})
                               else ZeroExtendTruncLsb Xlen
                                      ({< ZeroExtendTruncMsb (Xlen - 2) (scr @% "val"), $$(2'b"00") >});
-              LETE baseTop <- getCapBaseTop capAccessors (scr @% "cap") (scr @% "val");
-              LETE baseTop2 <- getCapBaseTop capAccessors (scr @% "cap") #newMepc;
-              LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+              LETE representable <- representableFn (justFullCap scr) #newMepc;
               LETC exception <- !((scr @% "tag") && !isSealed capAccessors (scr @% "cap") && #representable
                                   && (#pcPerms @% "SR"));
               RetE ((DefBaseOutput ty)
@@ -1123,26 +1112,31 @@ Section InstBaseSpec.
                       @%[ "exceptionCause" <- #exceptionCause ]
                       @%[ "scrException?" <- !(#pcPerms @% "SR") ]
                       @%[ "pcCapException?" <- #pcPerms @% "SR" ]));
-          instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := true; implicitIe := false |}
+          instProperties := DefProperties<| implicitMepcc := true |>
         |}
       ]
     |}.
 
   Definition isERetInst ty (inst: Inst @# ty) :=
-    redLet (@Kor _ _) (fun x => RetE (matchUniqId inst (uniqId x))) (filter (fun x => String.eqb (instName x) "ECall") (filterInsts [jumpInsts])).
+    redLet (@Kor _ _) (fun x => RetE (matchUniqId inst (uniqId x)))
+      (filter (fun x => String.eqb (instName x) "ECall") (filterInsts [exceptionInsts])).
+
+  Definition MTCCInit : ConstT (FullCapWithTag) := STRUCT_CONST { "tag" ::= true;
+                                                                  "cap" ::= MtccCap;
+                                                                  "val" ::= MtccVal }.
+
+  Definition MTDCInit : ConstT (FullCapWithTag) := STRUCT_CONST { "tag" ::= true;
+                                                                  "cap" ::= MtdcCap;
+                                                                  "val" ::= MtdcVal }.
 
   Definition scrList : list ScrReg := [
-      {|scrRegInfo := Build_RegInfo ($28)%word "MTCC" (Some (SyntaxConst Default));
+      {|scrRegInfo := Build_RegInfo ($28)%word "MTCC" (Some (SyntaxConst MTCCInit));
         legalizeScrRead := None;
         legalizeScrWrite :=
           Some (fun ty (cs1Val scrVal: Data @# ty) =>
-                  ( LETC mtccVecMode <- ZeroExtendTruncLsb 2 scrVal;
-                    LETC inpVecMode <- ZeroExtendTruncLsb 2 cs1Val;
-                    LETC inpVecModeIllegal <- (unpack Bool (UniBit (TruncMsb 1 1) #inpVecMode));
-                    RetE (ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) cs1Val,
-                                ITE #inpVecModeIllegal #mtccVecMode #inpVecMode >}))) );
+                  ( RetE (ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) cs1Val, $$(wzero 2) >}))) );
         isImplicitScr := false |};
-      {|scrRegInfo := Build_RegInfo ($29)%word "MTDC" (Some (SyntaxConst Default));
+      {|scrRegInfo := Build_RegInfo ($29)%word "MTDC" (Some (SyntaxConst MTDCInit));
         legalizeScrRead := None;
         legalizeScrWrite := None;
         isImplicitScr := false |};
@@ -1181,9 +1175,7 @@ Section InstBaseSpec.
                      LETE fixScrTag <- 
                        match writeFn with
                        | Some _ =>
-                           ( LETE baseTop <- getCapBaseTop capAccessors (scr @% "cap") (scr @% "val");
-                             LETE baseTop2 <- getCapBaseTop capAccessors (scr @% "cap") #fixScrVal;
-                             LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+                           ( LETE representable <- representableFn (justFullCap scr) #fixScrVal;
                              RetE (scr @% "tag" && !isSealed capAccessors (scr @% "cap") && #representable) )
                        | None => RetE (scr @% "tag")
                        end;
@@ -1194,9 +1186,7 @@ Section InstBaseSpec.
                      LETE fixCs1Tag <-
                        match writeFn with
                        | Some _ =>
-                           ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-                             LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") #fixCs1Val;
-                             LETC representable <- (#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase");
+                           ( LETE representable <- representableFn (justFullCap cs1) #fixCs1Val;
                              RetE (cs1 @% "tag" && !isSealed capAccessors (cs1 @% "cap") && #representable) )
                        | None => RetE (cs1 @% "tag")
                        end;
@@ -1212,7 +1202,8 @@ Section InstBaseSpec.
                              @%[ "scrCap" <- cs1 @% "cap" ]
                              @%[ "scrVal" <- #fixCs1Val ]
                              @%[ "scrException?" <- $$true ]));
-                 instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := true; hasCsr := false; implicit := 0; implicitMepcc := isImplicit; implicitIe := false |}
+                 instProperties :=
+                   DefProperties<| hasCs1 := true |><| hasScr := true |><| implicitMepcc := isImplicit |>
                |}) scrList
     |}.
 
@@ -1222,8 +1213,10 @@ Section InstBaseSpec.
                                    | _ => true
                                    end)).
 
+  Definition MStatusInit := if IeInit then Xlen 'h"8" else wzero Xlen.
+
   Definition csrList : list CsrReg := [
-      {| csrRegInfo := Build_RegInfo (_ 'h"300") "MStatus" (Some (SyntaxConst Default)); isImplicitCsr := true |};
+      {| csrRegInfo := Build_RegInfo (_ 'h"300") "MStatus" (Some (SyntaxConst MStatusInit)); isImplicitCsr := true |};
       {| csrRegInfo := Build_RegInfo (_ 'h"342") "MCause" None; isImplicitCsr := false |};
       {| csrRegInfo := Build_RegInfo (_ 'h"343") "MTVal" None; isImplicitCsr := false |} ].
   
@@ -1250,7 +1243,7 @@ Section InstBaseSpec.
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
                       @%[ "csrVal" <- cs1 @% "val" ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := true; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCsr := true |>
         |};
         {|instName := "CSRRS";
           uniqId := [fieldVal opcodeField (5'b"11100");
@@ -1268,7 +1261,7 @@ Section InstBaseSpec.
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- isNotZero (rs1Fixed inst) ]
                       @%[ "csrVal" <- csr .| (cs1 @% "val") ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := true; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCsr := true |>
         |};
         {|instName := "CSRRC";
           uniqId := [fieldVal opcodeField (5'b"11100");
@@ -1286,7 +1279,7 @@ Section InstBaseSpec.
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- isNotZero (rs1Fixed inst) ]
                       @%[ "csrVal" <- csr .& ~(cs1 @% "val") ]));
-          instProperties := {| hasCs1 := true; hasCs2 := false; hasScr := false; hasCsr := true; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCs1 := true |><| hasCsr := true |>
         |};
         {|instName := "CSRRWI";
           uniqId := [fieldVal opcodeField (5'b"11100");
@@ -1304,7 +1297,7 @@ Section InstBaseSpec.
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- $$true ]
                       @%[ "csrVal" <- ZeroExtendTruncLsb Xlen (rs1Fixed inst) ]));
-          instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := true; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCsr := true |>
         |};
         {|instName := "CSRRSI";
           uniqId := [fieldVal opcodeField (5'b"11100");
@@ -1322,7 +1315,7 @@ Section InstBaseSpec.
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- isNotZero (rs1Fixed inst) ]
                       @%[ "csrVal" <- csr .| ZeroExtendTruncLsb Xlen (rs1Fixed inst) ]));
-          instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := true; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCsr := true |>
         |};
         {|instName := "CSRRCI";
           uniqId := [fieldVal opcodeField (5'b"11100");
@@ -1340,7 +1333,7 @@ Section InstBaseSpec.
                       @%[ "baseException?" <- $$true ]
                       @%[ "wbCsr?" <- isNotZero (rs1Fixed inst) ]
                       @%[ "csrVal" <- csr .& ~(ZeroExtendTruncLsb Xlen (rs1Fixed inst)) ]));
-          instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := true; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties<| hasCsr := true |>
         |}
       ]
     |}.
@@ -1355,7 +1348,7 @@ Section InstBaseSpec.
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefBaseOutput ty)
                       @%[ "fenceI?" <- $$true ] ));
-          instProperties := {| hasCs1 := false; hasCs2 := false; hasScr := false; hasCsr := false; implicit := 0; implicitMepcc := false; implicitIe := false |}
+          instProperties := DefProperties
         |}
       ]
     |}.

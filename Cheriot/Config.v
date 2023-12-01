@@ -199,15 +199,30 @@ Section CapHelpers.
 
   Definition PcCapInit := evalExpr (@pack _ CapStruct
                                       (STRUCT {
-                                           "R" ::= Const _ (natToWord _ 0);
+                                           "R" ::= Const _ (wzero _);
                                            "p" ::= Const _ ('b"101111");
-                                           "oType" ::= Const _ (natToWord _ 0);
+                                           "oType" ::= Const _ (wzero _);
                                            "E" ::= Const _ (wones _);
-                                           "B" ::= Const _ (natToWord _ 0);
+                                           "B" ::= Const _ (wzero _);
                                            "T" ::= Const _ (_ 'h"100") })%kami_expr).
 
   Definition PcAddrInit := (AddrSz 'h"1000").
+
+  Definition MtccCapInit := PcCapInit.
+
+  Definition MtccValInit := (AddrSz 'h"800").
+
+  Definition MtdcCapInit := evalExpr (@pack _ CapStruct
+                                        ( STRUCT {
+                                              "R" ::= Const _ (natToWord _ 0);
+                                              "p" ::= Const _ ('b"111111");
+                                              "oType" ::= Const _ (wzero _);
+                                              "E" ::= Const _ (wones _);
+                                              "B" ::= Const _ (wzero _);
+                                              "T" ::= Const _ (_ 'h"100") })%kami_expr).
   
+  Definition MtdcValInit := (AddrSz 'h"400").
+
   Theorem pccValidThm: PccValid capAccessorsInit PcCapInit PcAddrInit false.
   Proof.
     repeat constructor; auto.
@@ -234,7 +249,11 @@ Section Prefix.
       xlenIs32_or_64 := or_introl eq_refl;
       capAccessors := capAccessorsInit;
       pccValid := pccValidThm;
-      TrapAddr := _ 'h"100";
+      MtccCap := MtccCapInit;
+      MtccVal := MtccValInit;
+      MtdcCap := MtdcCapInit;
+      MtdcVal := MtdcValInit;
+      IeInit := false;
       supportedExts := [Base];
       extsHasBase := or_introl eq_refl;
       RegIdSz := 5;
