@@ -135,6 +135,8 @@ Class ProcParams :=
     MtdcCap: word CapSz;
     MtdcVal: word Xlen;
     (* mtdcValid: MtdcValid capAccessors MtdcCap MtdcVal; *)
+    MScratchCap: word CapSz;
+    MScratchVal: word Xlen;
     IeInit: bool;
     supportedExts: list Extension;
     extsHasBase: In Base supportedExts;
@@ -220,7 +222,6 @@ Section ParamDefinitions.
     Definition immField := (20, 12).
     Definition rs1Field := (15, RegIdSz).
     Definition rs2Field := (20, RegIdSz).
-    Definition rs3Field := (27, RegIdSz).
     Definition rdField := (7, RegIdSz).
     Definition rs1FixedField := (15, 5).
     Definition rs2FixedField := (20, 5).

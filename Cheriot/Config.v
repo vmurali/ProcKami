@@ -14,7 +14,7 @@ Section CapHelpers.
   Section ty.
     Variable ty: Kind -> Type.
     Local Open Scope kami_expr.
-    Definition decodePerms (rawPerms: Array 6 Bool @# ty) :=
+    Definition decodePerms (rawPerms: Array 6 Bool @# ty) : CapPerms @# ty :=
       (IF rawPerms ![4]
        then (IF rawPerms ![3]
              then (STRUCT {
@@ -110,7 +110,7 @@ Section CapHelpers.
                       else (IF perms @% "SD" && perms @% "MC"
                             then Const ty (5'b"10000")
                             else (IF perms @% "LD" || perms @% "SD"
-                                  then {< Const ty (2'b"01"), pack (perms @% "SR"), pack (perms @% "LM"), pack (perms @% "LG") >}
+                                  then {< Const ty (3'b"100"), pack (perms @% "LD"), pack (perms @% "SD") >}
                                   else {< Const ty (2'b"00"), pack (perms @% "U0"), pack (perms @% "SE"), pack (perms @% "US") >})))))%kami_expr >}.
     
     Definition capExpFromE (E: Bit 4 @# ty) : Bit (Nat.log2_up AddrSz) @# ty :=  ITE (E == Const ty (wones _)) $24 (ZeroExtendTruncLsb _ E).
@@ -214,7 +214,7 @@ Section CapHelpers.
 
   Definition MtdcCapInit := evalExpr (@pack _ CapStruct
                                         ( STRUCT {
-                                              "R" ::= Const _ (natToWord _ 0);
+                                              "R" ::= Const _ (wzero _);
                                               "p" ::= Const _ ('b"111111");
                                               "oType" ::= Const _ (wzero _);
                                               "E" ::= Const _ (wones _);
@@ -222,6 +222,17 @@ Section CapHelpers.
                                               "T" ::= Const _ (_ 'h"100") })%kami_expr).
   
   Definition MtdcValInit := (AddrSz 'h"400").
+
+  Definition MScratchCapInit := evalExpr (@pack _ CapStruct
+                                            (STRUCT {
+                                                 "R" ::= Const _ (wzero _);
+                                                 "p" ::= Const _ ('b"100111");
+                                                 "oType" ::= Const _ (wzero _);
+                                                 "E" ::= Const _ (wones _);
+                                                 "B" ::= Const _ (wzero _);
+                                                 "T" ::= Const _ (_ 'h"100") })%kami_expr).
+
+  Definition MScratchValInit := (AddrSz 'h"0").
 
   Theorem pccValidThm: PccValid capAccessorsInit PcCapInit PcAddrInit false.
   Proof.
@@ -232,16 +243,13 @@ End CapHelpers.
 Section Prefix.
   Local Notation prefix := ("cheriot_0").
   Local Notation "@^ x" := (prefix ++ "_" ++ x)%string (at level 0).
-  (*
-  Local Notation "@^ x" := ltac:(let y := eval cbn [append] in (prefix ++ "_" ++ x)%string in exact y)
-                                  (at level 0, only parsing).
-   *)
+  Local Notation stringify x n := (prefix ++ "_" ++ (x ++ "_" ++ natToHexStr n)%string)%string.
 
   Definition createMemRFParam (n: nat) : MemBankInit (Nat.pow 2 12) :=
-    {|instRqName := @^"instRq";
-      loadRqName := @^"loadRq";
-      storeRqName := @^"storeRq";
-      memArrayName := @^"memArray";
+    {|instRqName := stringify "instRq" n;
+      loadRqName := stringify "loadRq" n;
+      storeRqName := stringify "storeRq" n;
+      memArrayName := stringify "memArray" n;
       regFileInit := RFNonFile _ (Some (ConstBit (wzero _)) ) |}.
 
   Definition procParams : ProcParams :=
@@ -253,6 +261,8 @@ Section Prefix.
       MtccVal := MtccValInit;
       MtdcCap := MtdcCapInit;
       MtdcVal := MtdcValInit;
+      MScratchCap := MScratchCapInit;
+      MScratchVal := MScratchValInit;
       IeInit := false;
       supportedExts := [Base];
       extsHasBase := or_introl eq_refl;
@@ -274,6 +284,6 @@ Section Prefix.
       regsRead2 := @^"regsRead2";
       regsWrite := @^"regsWrite";
       regsArray := @^"regsArray";
-      regsInit := RFNonFile 32 (Some Default);
+      regsInit := RFNonFile 32 None;
     |}.
 End Prefix.
