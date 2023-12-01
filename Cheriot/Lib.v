@@ -148,6 +148,13 @@ Section Reducer.
   End Red.
 End Reducer.
 
+Notation "'WriteIf' pred 'Then' reg : kind <- expr ; cont " :=
+  ( ReadReg reg (SyntaxKind kind)
+      (fun oldVal =>
+         ( @WriteReg _ _ reg (SyntaxKind kind) (ITE pred expr (Var _ (SyntaxKind kind) oldVal))
+             cont)))%kami_action
+    (at level 13, right associativity, reg at level 99) : kami_action_scope.
+
 Section RegAccess.  
   Record RegInfo n k := {
       regAddr : word n;
@@ -169,6 +176,13 @@ Section RegAccess.
                   else Ret (Const ty Default) as ret;
                   Ret #ret )) regs.
 
+  Definition writeRegsPred prefix n k (regs: list (RegInfo n k)) ty
+    (pred: Bool @# ty) (addr: Bit n @# ty) (val: k @# ty) :=
+    fold_right (fun x rest => ( If (addr == Const ty (regAddr x))
+                                then (WriteIf pred Then (prefix ++ "_" ++ (regName x))%string : k <- val; Retv)
+                                else Retv;
+                                rest ) ) Retv regs.
+
   Definition writeRegs prefix n k (regs: list (RegInfo n k)) ty (addr: Bit n @# ty) (val: k @# ty) :=
     fold_right (fun x rest => ( If (addr == Const ty (regAddr x))
                                 then ( Write (prefix ++ "_" ++ (regName x))%string : k <- val; Retv )
@@ -184,4 +198,3 @@ Section RegAccess.
                           "data" ::= BuildArray (fun _ => v) } : WriteRq n (Array 1 k));
       Retv ).
 End RegAccess.
-

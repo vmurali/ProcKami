@@ -333,8 +333,9 @@ Section Run.
 
   Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
 
-  Definition wb (execOut: ExecOut @# ty) : ActionT ty Void :=
+  Definition wb (spec : bool) (execOut: ExecOut @# ty) : ActionT ty Void :=
     ( LET result <- execOut @% "result";
+      LET exception <- #result @% "exception?";
       Read pcCap : Cap <- pcCapReg;
       Read pcVal : Addr <- pcValReg;
       Read prevPcCap: Cap <- prevPcCapReg;
@@ -344,14 +345,18 @@ Section Run.
       Read mtcc : FullCapWithTag <- @^"MTCC";
       Read mstatus: Data <- @^"mstatus";
 
-      LET nextPcVal <- (IF #result @% "exception?"
-                        then #mtcc @% "val"
+      LET prevPcForMepcc <- !(execOut @% "bounds?") && #prevTaken;
+      LET mepccCap <- ITE #prevPcForMepcc #prevPcCap #pcCap;
+      LET mepccVal <- ITE #prevPcForMepcc #prevPcVal #pcVal;
+
+      LET nextPcVal <- (IF #exception
+                        then (if spec then #mepccVal else (#mtcc @% "val"))
                         else (IF #result @% "taken?"
                               then #result @% "addrOrScrOrCsrVal"
                               else #pcVal + (ITE (execOut @% "notCompressed?") $4 $2)));
 
-      LET nextPcCap <- (IF #result @% "exception?"
-                        then #mtcc @% "cap"
+      LET nextPcCap <- (IF #exception
+                        then (if spec then #mepccCap else (#mtcc @% "cap"))
                         else (IF #result @% "changePcCap?"
                               then #result @% "pcOrScrCapOrMemOp"
                               else #prevPcCap));
@@ -366,51 +371,51 @@ Section Run.
       LET csrIdx <- imm #inst;
       LET cdIdx <- rd #inst;
       LET cs1Idx <- rs1 #inst;
+      LET cs2Idx <- rs2Fixed #inst;
       LET data <- #result @% "data";
-      LET prevPcForMepcc <- !(execOut @% "bounds?") && #prevTaken;
 
-      If !#reqJustFenceI || execOut @% "justFenceI?"
-      then
-        ( Write pcCapReg : Cap <- #nextPcCap;
-          Write pcValReg : Addr <- #nextPcVal;
-          Write prevPcCapReg : Cap <- #pcCap;
-          Write prevPcValReg : Addr <- #pcVal;
-          Write prevTakenReg : Bool <- !(#result @% "exception?") && (#result @% "taken?");
-          Write reqJustFenceIReg : Bool <- !(#result @% "exception?") && (#result @% "fenceI?");
-          If !(#result @% "exception?") && (#result @% "changeIe?")
-          then ( Write @^"MStatus" : Data <- castBits (@Nat.mul_1_r Xlen) (pack #mstatusArr);
-                 Retv )
-          else Retv;
-          If !(#result @% "exception?") && (#result @% "wb?") && isNotZero #cdIdx
-          then callWriteRegFile regsWrite #cdIdx #data
-          else Retv;
-          If !(#result @% "exception?") && (#result @%"wbScr?")
-          then writeRegs procName scrRegInfos (UniBit (TruncLsb 5 _) #csrIdx)
-                 (STRUCT { "tag" ::= #result @% "scrTag";
-                           "cap" ::= #result @% "pcOrScrCapOrMemOp";
-                           "val" ::= #result @% "addrOrScrOrCsrVal" } : FullCapWithTag @# ty)
-          else Retv;
-          If !(#result @% "exception?") && (#result @%"wbCsr?")
-          then writeRegs procName csrRegInfos #csrIdx (#result @% "addrOrScrOrCsrVal")
-          else Retv;
-          If #result @% "exception?"
-          then ( Write @^"MEPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
-                                                              "cap" ::= ITE #prevPcForMepcc #prevPcCap #pcCap;
-                                                              "val" ::= ITE #prevPcForMepcc #prevPcVal #pcVal };
-                 Write @^"MCause" : Data <- ITE (#result @% "baseException?") (#data @% "val") $CapException;
-                 Write @^"MTval" :
-                   Data <- (IF (#result @% "baseException?")
-                            then #data @% "cap"
-                            else ZeroExtendTruncLsb Xlen
-                                   (pack (STRUCT { "S" ::= (#result @% "scrException?");
-                                                   "capIdx" ::= (IF (#result @% "pcCapException?")
-                                                                 then $0
-                                                                 else ZeroExtendTruncLsb 5 #cs1Idx);
-                                                   "cause" ::= ZeroExtendTruncLsb 5 (#data @% "cap") } )));
-                 Retv )
-          else Retv;
-          Retv )
+      LET noDrop <- (!#reqJustFenceI || execOut @% "justFenceI?") && (execOut @% "pc" == #pcVal);
+
+      WriteIf #noDrop Then pcCapReg : Cap <- #nextPcCap;
+      WriteIf #noDrop Then pcValReg : Addr <- #nextPcVal;
+      WriteIf #noDrop Then prevPcCapReg : Cap <- #pcCap;
+      WriteIf #noDrop Then prevPcValReg : Addr <- #pcVal;
+      WriteIf #noDrop Then prevTakenReg : Bool <- !#exception && (#result @% "taken?");
+      WriteIf #noDrop Then reqJustFenceIReg : Bool <- !#exception && (#result @% "fenceI?");
+
+      WriteIf (#noDrop && !#exception && (#result @% "changeIe?")) Then
+        @^"MStatus" : Data <- castBits (@Nat.mul_1_r Xlen) (pack #mstatusArr);
+      
+      LETA _ <- writeRegsPred procName scrRegInfos (#noDrop && !#exception && (#result @% "wbScr?"))
+                  #cs2Idx (STRUCT { "tag" ::= #result @% "scrTag";
+                                    "cap" ::= #result @% "pcOrScrCapOrMemOp";
+                                    "val" ::= #result @% "addrOrScrOrCsrVal" } : FullCapWithTag @# ty);
+
+      LETA _ <- writeRegsPred procName csrRegInfos (#noDrop && !#exception && (#result @% "wbCsr?"))
+                  #csrIdx (#result @% "addrOrScrOrCsrVal");
+
+      WriteIf (#noDrop && #exception) Then
+        @^"MEPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
+                                               "cap" ::= #mepccCap;
+                                               "val" ::= #mepccVal };
+
+      WriteIf (#noDrop && #exception) Then
+        @^"MCause" : Data <- ITE (#result @% "baseException?") (#data @% "val") $CapException;
+
+      WriteIf (#noDrop && #exception) Then
+        @^"MTVal" : Data <- (IF (#result @% "baseException?")
+                             then #data @% "cap"
+                             else ZeroExtendTruncLsb Xlen
+                                    (pack (STRUCT { "S" ::= (#result @% "scrException?");
+                                                    "capIdx" ::= (IF (#result @% "pcCapException?")
+                                                                  then $0
+                                                                  else ZeroExtendTruncLsb 5 #cs1Idx);
+                                                    "cause" ::= ZeroExtendTruncLsb 5 (#data @% "val") } )));
+      
+      If !#exception && (#result @% "wb?") && isNotZero #cdIdx
+      then callWriteRegFile regsWrite #cdIdx #data
       else Retv;
+                            
       Retv ).
 
   Definition runSpec : ActionT ty Void :=
@@ -421,5 +426,5 @@ Section Run.
       LETAE decodeOut <- decode #regReadOut;
       LETAE execOut <- exec #decodeOut;
       LETA memOut <- memSpec #execOut;
-      wb #memOut ).
+      wb true #memOut ).
 End Run.

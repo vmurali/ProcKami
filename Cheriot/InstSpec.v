@@ -826,7 +826,9 @@ Section InstBaseSpec.
                     @%[ "exception?" <- if compressed
                                         then $$false
                                         else isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
-                    @%[ "exceptionCause" <- Const ty (natToWord Xlen InstMisaligned) ]
+                    @%[ "exceptionCause" <- if compressed
+                                            then $0
+                                            else Const ty (natToWord Xlen InstMisaligned) ]
                     @%[ "exceptionValue" <- #newAddr ]
                     @%[ "baseException?" <- $$true ]));
         instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
@@ -1017,7 +1019,9 @@ Section InstBaseSpec.
                       @%[ "exception?" <- if compressed
                                           then $$false
                                           else isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
-                      @%[ "exceptionCause" <- Const ty (natToWord Xlen InstMisaligned) ]
+                      @%[ "exceptionCause" <- if compressed
+                                              then $0
+                                              else Const ty (natToWord Xlen InstMisaligned) ]
                       @%[ "exceptionValue" <- #newAddr ]
                       @%[ "baseException?" <- $$true ]));
           instProperties := DefProperties <| implicitIe := true |>
