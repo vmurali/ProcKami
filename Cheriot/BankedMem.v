@@ -71,12 +71,20 @@ Section BankedMem.
         LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
         LETA bytes <- instReqCallHelp #idx #idxPlus1 #idxLsb memBankInits [] 0;
         LET shuffledBytes <- ShuffleArray #bytes #idxLsb;
+        Read justFenceI : Bool <- justFenceIReg;
+        Write justFenceIReg : Bool <- $$false;
         Ret (STRUCT {
                  "inst" ::= (ZeroExtendTruncLsb InstSz (pack #shuffledBytes));
                  "badLower16?" ::= Const ty false;
                  "error?" ::= Const ty false;
                  "fault?" ::= Const ty false;
-                 "justFenceI?" ::= Const ty false } : InstRet @# ty)).
+                 "justFenceI?" ::= #justFenceI } : InstRet @# ty)).
+
+    Definition startFenceIRule: ActionT ty Void :=
+      ( Read startFenceI : Bool <- startFenceIReg;
+        WriteIf #startFenceI Then justFenceIReg : Bool <- $$true;
+        Write startFenceIReg : Bool <- $$false;
+        Retv ).
   End LoadInst.
 
   Section LoadStore.

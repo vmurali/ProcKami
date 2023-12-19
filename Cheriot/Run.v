@@ -212,9 +212,7 @@ Section Run.
                       "decodes" ::= #decodes }) : DecodeOut @# ty) ).
 
   Definition ExecOut := STRUCT_TYPE {
-                            "pc" :: Addr;
                             "inst" :: Inst;
-                            "notCompressed?" :: Bool;
                             "result" :: FuncOutput;
                             "justFenceI?" :: Bool;
                             "bounds?" :: Bool
@@ -266,9 +264,7 @@ Section Run.
                                                         "tag" ::= #funcOutDataData @% "tag";
                                                         "cap" ::= #exceptionValue;
                                                         "val" ::= #exceptionCause }) : FullCapWithTag @# ty) ];
-      RetE ((STRUCT { "pc" ::= #pc;
-                      "inst" ::= #inst;
-                      "notCompressed?" ::= isInstNotCompressed #inst;
+      RetE ((STRUCT { "inst" ::= #inst;
                       "result" ::= #result;
                       "justFenceI?" ::= decodeOut @% "justFenceI?";
                       "bounds?" ::= decodeOut @% "bounds?" } : ExecOut @# ty)) ).
@@ -334,88 +330,93 @@ Section Run.
   Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
 
   Definition wb (spec : bool) (execOut: ExecOut @# ty) : ActionT ty Void :=
-    ( LET result <- execOut @% "result";
-      LET exception <- #result @% "exception?";
-      Read pcCap : Cap <- pcCapReg;
-      Read pcVal : Addr <- pcValReg;
-      Read prevPcCap: Cap <- prevPcCapReg;
-      Read prevPcVal: Addr <- prevPcValReg;
-      Read prevTaken: Bool <- prevTakenReg;
-      Read reqJustFenceI: Bool <- reqJustFenceIReg;
-      Read mtcc : FullCapWithTag <- @^"MTCC";
-      Read mstatus: Data <- @^"mstatus";
+    ( Read reqJustFenceI: Bool <- reqJustFenceIReg;
 
-      LET prevPcForMepcc <- !(execOut @% "bounds?") && #prevTaken;
-      LET mepccCap <- ITE #prevPcForMepcc #prevPcCap #pcCap;
-      LET mepccVal <- ITE #prevPcForMepcc #prevPcVal #pcVal;
+      If (!#reqJustFenceI || execOut @% "justFenceI?")
+      then (
+          LET result <- execOut @% "result";
+          LET exception <- #result @% "exception?";
+          Read pcCap : Cap <- pcCapReg;
+          Read pcVal : Addr <- pcValReg;
+          Read prevPcCap: Cap <- prevPcCapReg;
+          Read prevPcVal: Addr <- prevPcValReg;
+          Read prevTaken: Bool <- prevTakenReg;
+          Read mtcc : FullCapWithTag <- @^"MTCC";
+          Read mstatus: Data <- @^"mstatus";
 
-      LET nextPcVal <- (IF #exception
-                        then (if spec then #mepccVal else (#mtcc @% "val"))
-                        else (IF #result @% "taken?"
-                              then #result @% "addrOrScrOrCsrVal"
-                              else #pcVal + (ITE (execOut @% "notCompressed?") $4 $2)));
+          LET prevPcForMepcc <- !(execOut @% "bounds?") && #prevTaken;
+          LET mepccCap <- ITE #prevPcForMepcc #prevPcCap #pcCap;
+          LET mepccVal <- ITE #prevPcForMepcc #prevPcVal #pcVal;
+          LET inst <- execOut @% "inst";
+          LET notCompressed <- isInstNotCompressed #inst;
 
-      LET nextPcCap <- (IF #exception
-                        then (if spec then #mepccCap else (#mtcc @% "cap"))
-                        else (IF #result @% "changePcCap?"
-                              then #result @% "pcOrScrCapOrMemOp"
-                              else #prevPcCap));
+          LET nextPcVal <- (IF #exception
+                            then (if spec then #mepccVal else (#mtcc @% "val"))
+                            else (IF #result @% "taken?"
+                                  then #result @% "addrOrScrOrCsrVal"
+                                  else #pcVal + (ITE #notCompressed $4 $2)));
 
-      LET mstatusArr : Array Xlen Bool <-
-                         BuildArray (fun i => match i with
-                                              | Fin.FS _ (Fin.FS _ (Fin.FS _ (Fin.F1 _))) => #result @% "newIe"
-                                              | _ => Const ty false
-                                              end );
+          LET nextPcCap <- (IF #exception
+                            then (if spec then #mepccCap else (#mtcc @% "cap"))
+                            else (IF #result @% "changePcCap?"
+                                  then #result @% "pcOrScrCapOrMemOp"
+                                  else #prevPcCap));
 
-      LET inst <- execOut @% "inst";
-      LET csrIdx <- imm #inst;
-      LET cdIdx <- rd #inst;
-      LET cs1Idx <- rs1 #inst;
-      LET cs2Idx <- rs2Fixed #inst;
-      LET data <- #result @% "data";
+          LET mstatusArr : Array Xlen Bool <-
+                             BuildArray (fun i => match i with
+                                                  | Fin.FS _ (Fin.FS _ (Fin.FS _ (Fin.F1 _))) => #result @% "newIe"
+                                                  | _ => Const ty false
+                                                  end );
 
-      LET noDrop <- (!#reqJustFenceI || execOut @% "justFenceI?") && (execOut @% "pc" == #pcVal);
+          LET csrIdx <- imm #inst;
+          LET cdIdx <- rd #inst;
+          LET cs1Idx <- rs1 #inst;
+          LET cs2Idx <- rs2Fixed #inst;
+          LET data <- #result @% "data";
+          LET setFenceI <- !#exception && (#result @% "fenceI?");
 
-      WriteIf #noDrop Then pcCapReg : Cap <- #nextPcCap;
-      WriteIf #noDrop Then pcValReg : Addr <- #nextPcVal;
-      WriteIf #noDrop Then prevPcCapReg : Cap <- #pcCap;
-      WriteIf #noDrop Then prevPcValReg : Addr <- #pcVal;
-      WriteIf #noDrop Then prevTakenReg : Bool <- !#exception && (#result @% "taken?");
-      WriteIf #noDrop Then reqJustFenceIReg : Bool <- !#exception && (#result @% "fenceI?");
+          Write pcCapReg : Cap <- #nextPcCap;
+          Write pcValReg : Addr <- #nextPcVal;
+          Write prevPcCapReg : Cap <- #pcCap;
+          Write prevPcValReg : Addr <- #pcVal;
+          Write prevTakenReg : Bool <- !#exception && (#result @% "taken?");
+          Write reqJustFenceIReg : Bool <- #setFenceI;
+          WriteIf #setFenceI Then startFenceIReg : Bool <- $$true;
 
-      WriteIf (#noDrop && !#exception && (#result @% "changeIe?")) Then
-        @^"MStatus" : Data <- castBits (@Nat.mul_1_r Xlen) (pack #mstatusArr);
-      
-      LETA _ <- writeRegsPred procName scrRegInfos (#noDrop && !#exception && (#result @% "wbScr?"))
-                  #cs2Idx (STRUCT { "tag" ::= #result @% "scrTag";
-                                    "cap" ::= #result @% "pcOrScrCapOrMemOp";
-                                    "val" ::= #result @% "addrOrScrOrCsrVal" } : FullCapWithTag @# ty);
+          WriteIf (!#exception && (#result @% "changeIe?")) Then
+            @^"MStatus" : Data <- castBits (@Nat.mul_1_r Xlen) (pack #mstatusArr);
 
-      LETA _ <- writeRegsPred procName csrRegInfos (#noDrop && !#exception && (#result @% "wbCsr?"))
-                  #csrIdx (#result @% "addrOrScrOrCsrVal");
+          LETA _ <- writeRegsPred procName scrRegInfos (!#exception && (#result @% "wbScr?"))
+                      #cs2Idx (STRUCT { "tag" ::= #result @% "scrTag";
+                                        "cap" ::= #result @% "pcOrScrCapOrMemOp";
+                                        "val" ::= #result @% "addrOrScrOrCsrVal" } : FullCapWithTag @# ty);
 
-      WriteIf (#noDrop && #exception) Then
-        @^"MEPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
-                                               "cap" ::= #mepccCap;
-                                               "val" ::= #mepccVal };
+          LETA _ <- writeRegsPred procName csrRegInfos (!#exception && (#result @% "wbCsr?"))
+                      #csrIdx (#result @% "addrOrScrOrCsrVal");
 
-      WriteIf (#noDrop && #exception) Then
-        @^"MCause" : Data <- ITE (#result @% "baseException?") (#data @% "val") $CapException;
+          WriteIf (#exception) Then
+            @^"MEPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
+                                                   "cap" ::= #mepccCap;
+                                                   "val" ::= #mepccVal };
 
-      WriteIf (#noDrop && #exception) Then
-        @^"MTVal" : Data <- (IF (#result @% "baseException?")
-                             then #data @% "cap"
-                             else ZeroExtendTruncLsb Xlen
-                                    (pack (STRUCT { "S" ::= (#result @% "scrException?");
-                                                    "capIdx" ::= (IF (#result @% "pcCapException?")
-                                                                  then $0
-                                                                  else ZeroExtendTruncLsb 5 #cs1Idx);
-                                                    "cause" ::= ZeroExtendTruncLsb 5 (#data @% "val") } )));
-      
-      If !#exception && (#result @% "wb?") && isNotZero #cdIdx
-      then callWriteRegFile regsWrite #cdIdx #data
+          WriteIf (#exception) Then
+            @^"MCause" : Data <- ITE (#result @% "baseException?") (#data @% "val") $CapException;
+
+          WriteIf (#exception) Then
+            @^"MTVal" : Data <- (IF (#result @% "baseException?")
+                                 then #data @% "cap"
+                                 else ZeroExtendTruncLsb Xlen
+                                        (pack (STRUCT { "S" ::= (#result @% "scrException?");
+                                                        "capIdx" ::= (IF (#result @% "pcCapException?")
+                                                                      then $0
+                                                                      else ZeroExtendTruncLsb 5 #cs1Idx);
+                                                        "cause" ::= ZeroExtendTruncLsb 5 (#data @% "val") } )));
+
+          If !#exception && (#result @% "wb?") && isNotZero #cdIdx
+          then callWriteRegFile regsWrite #cdIdx #data
+          else Retv;
+          Retv )
       else Retv;
-                            
       Retv ).
 
   Definition runSpec : ActionT ty Void :=

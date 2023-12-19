@@ -155,6 +155,8 @@ Class ProcParams :=
     prevPcCapReg: string;
     prevPcValReg: string;
     prevTakenReg: string;
+    justFenceIReg: string;
+    startFenceIReg: string;
     reqJustFenceIReg: string;
     tagRead: string;
     tagWrite: string;
