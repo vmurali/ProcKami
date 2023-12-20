@@ -309,18 +309,31 @@ Section Run.
       RetE (funcOut @%[ "data" <- #newFuncOutData]
               @%[ "exception?" <- #exception ])).
 
-  Definition memSpec (execOut: ExecOut @# ty) : ActionT ty ExecOut :=
+  Definition MemOutData := STRUCT_TYPE { "inst" :: Inst;
+                                         "result" :: FuncOutput;
+                                         "bounds?" :: Bool }.
+
+  Definition memSpec (execOut: ExecOut @# ty) : ActionT ty (Maybe MemOutData) :=
     ( LET funcOut : FuncOutput <- execOut @% "result";
       LET memInfo <- unpack MemOpInfo (ZeroExtendTruncLsb (size MemOpInfo)
                                          (#funcOut @% "pcOrScrCapOrMemOp"));
-      If !(#funcOut @% "exception?") && (#funcOut @% "mem?")
+      Read reqJustFenceI: Bool <- reqJustFenceIReg;
+      LET exception <- #funcOut @% "exception?";
+      LET dontDrop <- !#reqJustFenceI || execOut @% "justFenceI?";
+
+      If #dontDrop && !#exception && (#funcOut @% "mem?")
       then (
-          LETA memRet : DataRet <- loadStoreReq (#memInfo @% "op" == $StOp) (#funcOut @% "addrOrScrOrCsrVal") (#memInfo @% "size")
-                                     (#memInfo @% "cap?") (#funcOut @% "data") (#memInfo @% "sign?");
+          LETA memRet : DataRet <- loadStoreReq (#memInfo @% "op" == $StOp) (#funcOut @% "addrOrScrOrCsrVal")
+                                     (#memInfo @% "size") (#memInfo @% "cap?") (#funcOut @% "data") (#memInfo @% "sign?");
           RetAE (memRetProcess #funcOut #memInfo #memRet) )
       else Ret #funcOut
-      as retFuncOut;
-      Ret (execOut @%[ "result" <- #retFuncOut ]) ).
+      as retFuncOut ;
+      LET setFenceI <- !#exception && (#funcOut @% "fenceI?");
+      WriteIf #dontDrop Then reqJustFenceIReg : Bool <- #setFenceI;
+      LET memOutData : MemOutData <- STRUCT { "inst" ::= execOut @% "inst";
+                                              "result" ::= #retFuncOut;
+                                              "bounds?" ::= execOut @% "bounds?"};
+      Ret (STRUCT {"valid" ::= #dontDrop ; "data" ::= #memOutData } : Maybe _ @# _) ).
 
   (* Exceptions must be handled before interrupts in case of a Store Access Error
      - it may have performed partial stores which should not be redone.
@@ -329,12 +342,11 @@ Section Run.
 
   Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
 
-  Definition wb (spec : bool) (execOut: ExecOut @# ty) : ActionT ty Void :=
-    ( Read reqJustFenceI: Bool <- reqJustFenceIReg;
-
-      If (!#reqJustFenceI || execOut @% "justFenceI?")
+  Definition wb (spec : bool) (memOut: Maybe MemOutData @# ty) : ActionT ty Void :=
+    ( If (memOut @% "valid")
       then (
-          LET result <- execOut @% "result";
+          LET memOutData <- memOut @% "data";
+          LET result <- #memOutData @% "result";
           LET exception <- #result @% "exception?";
           Read pcCap : Cap <- pcCapReg;
           Read pcVal : Addr <- pcValReg;
@@ -344,10 +356,10 @@ Section Run.
           Read mtcc : FullCapWithTag <- @^"MTCC";
           Read mstatus: Data <- @^"mstatus";
 
-          LET prevPcForMepcc <- !(execOut @% "bounds?") && #prevTaken;
+          LET prevPcForMepcc <- !(#memOutData @% "bounds?") && #prevTaken;
           LET mepccCap <- ITE #prevPcForMepcc #prevPcCap #pcCap;
           LET mepccVal <- ITE #prevPcForMepcc #prevPcVal #pcVal;
-          LET inst <- execOut @% "inst";
+          LET inst <- #memOutData @% "inst";
           LET notCompressed <- isInstNotCompressed #inst;
 
           LET nextPcVal <- (IF #exception
@@ -380,7 +392,6 @@ Section Run.
           Write prevPcCapReg : Cap <- #pcCap;
           Write prevPcValReg : Addr <- #pcVal;
           Write prevTakenReg : Bool <- !#exception && (#result @% "taken?");
-          Write reqJustFenceIReg : Bool <- #setFenceI;
           WriteIf #setFenceI Then startFenceIReg : Bool <- $$true;
 
           WriteIf (!#exception && (#result @% "changeIe?")) Then
