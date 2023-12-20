@@ -417,7 +417,8 @@ Section ParamDefinitions.
   Record CsrReg :=
     { csrRegInfo    : RegInfo (snd immField) Data;
       isSystemCsr   : bool;
-      isImplicitCsr : bool }.
+      isImplicitCsr : bool;
+      csrMask       : option (word Xlen) }.
 
   Definition implicitCsrAddr (csrs: list CsrReg) := match find (fun x => isImplicitCsr x) csrs with
                                                     | Some idx => regAddr (csrRegInfo idx)

@@ -1156,12 +1156,6 @@ Section InstBaseSpec.
                |}) scrList
     |}.
 
-  Definition IeInvMask n ty : Array n Bool @# ty :=
-    Const ty (ConstArray (fun i => match i with
-                                   | Fin.FS _ (Fin.FS _ (Fin.FS _ (Fin.F1 _))) => false
-                                   | _ => true
-                                   end)).
-
   Definition MStatusInit := if IeInit then Xlen 'h"8" else wzero Xlen.
   Definition MIEInit := @wconcat (Xlen - 8) 8 Xlen (if MeieInit then _ 'h"8" else wzero (Xlen - 8))
                           (wconcat (if MtieInit then _ 'h"8" else wzero 4)
@@ -1170,16 +1164,20 @@ Section InstBaseSpec.
   Definition csrList : list CsrReg := [
       {|csrRegInfo := Build_RegInfo (_ 'h"300") "MStatus" (Some (SyntaxConst MStatusInit));
         isSystemCsr := true;
-        isImplicitCsr := true |};
+        isImplicitCsr := true;
+        csrMask := Some (Xlen 'h"8") |};
       {|csrRegInfo := Build_RegInfo (_ 'h"304") "MIE" (Some (SyntaxConst MIEInit));
         isSystemCsr := true;
-        isImplicitCsr := false |};
+        isImplicitCsr := false;
+        csrMask := Some (Xlen 'h"888") |};
       {|csrRegInfo := Build_RegInfo (_ 'h"342") "MCause" None;
         isSystemCsr := true;
-        isImplicitCsr := false |};
+        isImplicitCsr := false;
+        csrMask := None |};
       {|csrRegInfo := Build_RegInfo (_ 'h"343") "MTVal" None;
         isSystemCsr := true;
-        isImplicitCsr := false |} ].
+        isImplicitCsr := false;
+        csrMask := None |} ].
   
   Definition isValidCsrs ty (inst : Inst @# ty) :=
     Kor (map (fun csr => (imm inst == Const ty (regAddr (csrRegInfo csr)))%kami_expr) csrList).
@@ -1190,10 +1188,12 @@ Section InstBaseSpec.
       uniqId := [fieldVal opcodeField (5'b"11100");
                  fieldVal funct3Field funct3Val];
       inputXform ty pc inst cs1 cs2 scr csr :=
-        ( LETC ieInvMask : Data <- castBits (Nat.mul_1_r _) (pack (IeInvMask Xlen ty));
-          LETC val : Data <- if isCs1 then cs1 @% "val" else ZeroExtendTruncLsb Xlen (rs1Fixed inst);
-          LETC ieNotValid <- isNotZero (#val .& #ieInvMask);
-          LETC illegal <- (!isValidCsrs inst || ((imm inst == $$(implicitCsrAddr csrList)) && #ieNotValid));
+        ( LETC val : Data <- if isCs1 then cs1 @% "val" else ZeroExtendTruncLsb Xlen (rs1Fixed inst);
+          LETC illegal <- (!isValidCsrs inst ||
+                             Kor (map (fun csrInfo => isNotZero (#val .& $$(match csrMask csrInfo with
+                                                                                  | Some v => wnot v
+                                                                                  | None => wzero _
+                                                                            end))) csrList));
           LETC sysRegPermReq <- Kor (map (fun csrInfo => $$(isSystemCsr csrInfo) &&
                                                            (imm inst == $$(regAddr (csrRegInfo csrInfo)))) csrList);
           LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
