@@ -887,6 +887,7 @@ Section InstBaseSpec.
           LETC topBound <- ZeroExtend 1 #newAddr + $size <= (#baseTop @% "top");
           LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
           LETE perms2 <- getCapPerms capAccessors (cs2 @% "cap");
+          LETC newTag <- (cs2 @% "tag") && ((#perms2 @% "GL") || (#perms @% "SL"));
           LETC fullException
             : Maybe Data <-
                 (IF !(cs1 @% "tag")
@@ -895,15 +896,13 @@ Section InstBaseSpec.
                        then Valid (Const ty (natToWord Xlen CapSealViolation))
                        else (IF !(#perms @% "SD")
                              then Valid (Const ty (natToWord Xlen CapStViolation))
-                             else (IF !(#perms @% "SL") && (cs2 @% "tag") && !(#perms2 @% "GL")
-                                   then Valid (Const ty (natToWord Xlen CapStLocalViolation))
-                                   else (IF !(#baseBound && #topBound)
-                                         then Valid (Const ty (natToWord Xlen CapBoundsViolation))
-                                         else StaticIf isCap
-                                                (isNotZero
-                                                   (ZeroExtendTruncLsb (Nat.log2_up ((Xlen + CapSz)/8))#newAddr))
-                                                (Valid (Const ty (natToWord Xlen CapStMisaligned)))
-                                                Invalid)))));
+                             else (IF !(#baseBound && #topBound)
+                                   then Valid (Const ty (natToWord Xlen CapBoundsViolation))
+                                   else StaticIf isCap
+                                          (isNotZero
+                                             (ZeroExtendTruncLsb (Nat.log2_up ((Xlen + CapSz)/8))#newAddr))
+                                          (Valid (Const ty (natToWord Xlen CapStMisaligned)))
+                                          Invalid))));
           RetE ((DefBaseOutput ty)
                   @%[ "exception?" <- #fullException @% "valid" ]
                   @%[ "exceptionCause" <- #fullException @% "data" ]
@@ -912,7 +911,7 @@ Section InstBaseSpec.
                   @%[ "memSize" <- Const ty (natToWord MemSizeSz size) ]
                   @%[ "mem?" <- $$true ]
                   @%[ "store?" <- $$true ]
-                  @%[ "cdTag" <- cs2 @% "tag"]
+                  @%[ "cdTag" <- #newTag]
                   @%[ "cdCap" <- cs2 @% "cap"]
                   @%[ "cdVal" <- cs2 @% "val"] ));
       instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>
@@ -1035,7 +1034,7 @@ Section InstBaseSpec.
                         @%[ "baseException?" <- $$true ]));
           instProperties := DefProperties
         |};
-        {|instName := "ERet";
+        {|instName := "MRet";
           uniqId := [fieldVal opcodeField (5'b"11100");
                      fieldVal rdFixedField (5'h"0");
                      fieldVal funct3Field (3'h"0");
@@ -1164,11 +1163,23 @@ Section InstBaseSpec.
                                    end)).
 
   Definition MStatusInit := if IeInit then Xlen 'h"8" else wzero Xlen.
+  Definition MIEInit := @wconcat (Xlen - 8) 8 Xlen (if MeieInit then _ 'h"8" else wzero (Xlen - 8))
+                          (wconcat (if MtieInit then _ 'h"8" else wzero 4)
+                             (if MsieInit then _ 'h"8" else wzero 4)).
 
   Definition csrList : list CsrReg := [
-      {| csrRegInfo := Build_RegInfo (_ 'h"300") "MStatus" (Some (SyntaxConst MStatusInit)); isImplicitCsr := true |};
-      {| csrRegInfo := Build_RegInfo (_ 'h"342") "MCause" None; isImplicitCsr := false |};
-      {| csrRegInfo := Build_RegInfo (_ 'h"343") "MTVal" None; isImplicitCsr := false |} ].
+      {|csrRegInfo := Build_RegInfo (_ 'h"300") "MStatus" (Some (SyntaxConst MStatusInit));
+        isSystemCsr := true;
+        isImplicitCsr := true |};
+      {|csrRegInfo := Build_RegInfo (_ 'h"304") "MIE" (Some (SyntaxConst MIEInit));
+        isSystemCsr := true;
+        isImplicitCsr := false |};
+      {|csrRegInfo := Build_RegInfo (_ 'h"342") "MCause" None;
+        isSystemCsr := true;
+        isImplicitCsr := false |};
+      {|csrRegInfo := Build_RegInfo (_ 'h"343") "MTVal" None;
+        isSystemCsr := true;
+        isImplicitCsr := false |} ].
   
   Definition isValidCsrs ty (inst : Inst @# ty) :=
     Kor (map (fun csr => (imm inst == Const ty (regAddr (csrRegInfo csr)))%kami_expr) csrList).
@@ -1182,11 +1193,19 @@ Section InstBaseSpec.
         ( LETC ieInvMask : Data <- castBits (Nat.mul_1_r _) (pack (IeInvMask Xlen ty));
           LETC val : Data <- if isCs1 then cs1 @% "val" else ZeroExtendTruncLsb Xlen (rs1Fixed inst);
           LETC ieNotValid <- isNotZero (#val .& #ieInvMask);
+          LETC illegal <- (!isValidCsrs inst || ((imm inst == $$(implicitCsrAddr csrList)) && #ieNotValid));
+          LETC sysRegPermReq <- Kor (map (fun csrInfo => $$(isSystemCsr csrInfo) &&
+                                                           (imm inst == $$(regAddr (csrRegInfo csrInfo)))) csrList);
+          LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
+          LETC sysRegPermViolation <- #sysRegPermReq && !(#pcPerms @% "SR");
+          LETC exception <- #illegal || #sysRegPermViolation;
+          LETC exceptionCause <- ITE #illegal $$(natToWord Xlen InstIllegal) $$(natToWord Xlen CapSysRegViolation);
+          LETC baseException <- #illegal;
           RetE ((DefWbBaseOutput ty)
                   @%[ "cdVal" <- csr ]
-                  @%[ "exception?" <- (!isValidCsrs inst || ((imm inst == $$(implicitCsrAddr csrList)) && #ieNotValid)) ]
-                  @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
-                  @%[ "baseException?" <- $$true ]
+                  @%[ "exception?" <- #exception ]
+                  @%[ "exceptionCause" <- #exceptionCause ]
+                  @%[ "baseException?" <- #baseException ]
                   @%[ "wbCsr?" <- match csrOp with
                                   | UpdCsr => $$true
                                   | _ => isNotZero (rs1Fixed inst)

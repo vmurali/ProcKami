@@ -138,6 +138,9 @@ Class ProcParams :=
     MScratchCap: word CapSz;
     MScratchVal: word Xlen;
     IeInit: bool;
+    MeieInit: bool;
+    MtieInit: bool;
+    MsieInit: bool;
     supportedExts: list Extension;
     extsHasBase: In Base supportedExts;
     RegIdSz: nat;
@@ -413,6 +416,7 @@ Section ParamDefinitions.
   
   Record CsrReg :=
     { csrRegInfo    : RegInfo (snd immField) Data;
+      isSystemCsr   : bool;
       isImplicitCsr : bool }.
 
   Definition implicitCsrAddr (csrs: list CsrReg) := match find (fun x => isImplicitCsr x) csrs with

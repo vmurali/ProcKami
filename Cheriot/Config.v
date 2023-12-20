@@ -264,6 +264,9 @@ Section Prefix.
       MScratchCap := MScratchCapInit;
       MScratchVal := MScratchValInit;
       IeInit := false;
+      MeieInit := false;
+      MtieInit := false;
+      MsieInit := false;
       supportedExts := [Base];
       extsHasBase := or_introl eq_refl;
       RegIdSz := 5;
