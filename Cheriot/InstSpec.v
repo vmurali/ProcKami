@@ -1099,9 +1099,9 @@ Section InstBaseSpec.
           Some (fun ty (scrVal: Data @# ty) =>
                   ( RetE (if compressed
                           then ZeroExtendTruncLsb Xlen
-                                 ({< ZeroExtendTruncMsb (Xlen - 1) scrVal, $$WO~0 >})
+                                 ({< ZeroExtendTruncMsb (Xlen - 1) scrVal, $$(wzero 1) >})
                           else ZeroExtendTruncLsb Xlen
-                                 ({< ZeroExtendTruncMsb (Xlen - 2) scrVal, $$(2'b"00") >}))) );
+                                 ({< ZeroExtendTruncMsb (Xlen - 2) scrVal, $$(wzero 2) >}))) );
         legalizeScrWrite := None;
         isImplicitScr := true |}
     ].
