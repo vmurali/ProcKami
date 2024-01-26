@@ -269,6 +269,7 @@ Section ParamDefinitions.
     Record InstProperties :=
       { hasCs1        : bool ;
         hasCs2        : bool ;
+        hasCd         : bool ;
         hasScr        : bool ;
         hasCsr        : bool ;
         implicit      : nat ;
@@ -278,11 +279,12 @@ Section ParamDefinitions.
     Global Instance InstPropertiesEtaX : Settable _ :=
       settable!
         Build_InstProperties
-      < hasCs1 ; hasCs2 ; hasScr ; hasCsr ; implicit ; implicitMepcc ; implicitIe >.
+      < hasCs1 ; hasCs2 ; hasCd; hasScr ; hasCsr ; implicit ; implicitMepcc ; implicitIe >.
     
     Definition DefProperties :=
       {|hasCs1        := false ;
         hasCs2        := false ;
+        hasCd         := true ;
         hasScr        := false ;
         hasCsr        := false ;
         implicit      := 0 ;
@@ -297,7 +299,6 @@ Section ParamDefinitions.
   Definition CapExecViolation    := 17. (* Reg *)
   Definition CapLdViolation      := 18. (* Reg *)
   Definition CapStViolation      := 19. (* Reg *)
-  Definition CapLdCapViolation   := 20. (* Reg *)
   Definition CapStCapViolation   := 21. (* Reg *)
   Definition CapStLocalViolation := 22. (* Reg *)
   Definition CapSysRegViolation  := 24. (* PC *)
@@ -361,11 +362,28 @@ Section ParamDefinitions.
         "scrException?"     :: Bool;
         "wbCsr?"            :: Bool}.
 
+  Section ImmEncoder.
+    Record ImmEncoder := {
+        instPos : (nat * nat);
+        immPos  : list (nat * nat)
+      }.
+
+    Definition imm12   := [(0, 12)].
+    Definition imm5    := [(0, 5)].
+    Definition imm20_U := [(12, 20)].
+    Definition imm20_J := [(12, 8); (11, 1); (1, 10); (20, 1)].
+    Definition imm6    := [(0, 6)].
+    Definition imm7    := [(5, 7)].
+    Definition imm5_B  := [(11, 1); (1, 4)].
+    Definition imm7_B  := [(5, 6); (12, 1)].
+  End ImmEncoder.
+
   Section InstEntry.
     Variable ik: Kind.
     Record InstEntry :=
       { instName       : string;
         uniqId         : UniqId;
+        immEncoder     : list ImmEncoder;
         inputXform     : forall ty, FullCap @# ty -> Inst @# ty ->
                                     FullCapWithTag @# ty -> FullCapWithTag @# ty ->
                                     FullCapWithTag @# ty -> Data @# ty -> ik ## ty;

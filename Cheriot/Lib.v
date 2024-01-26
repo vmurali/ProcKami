@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations.
+Require Import Kami.AllNotations Coq.Sorting.Mergesort Coq.Structures.Orders.
 
 Section FinTag.
   Variable A: Type.
@@ -198,3 +198,41 @@ Section RegAccess.
                           "data" ::= BuildArray (fun _ => v) } : WriteRq n (Array 1 k));
       Retv ).
 End RegAccess.
+
+Module IntervalOrder <: TotalLeBool.
+  Definition t := (nat * nat)%type.
+  Definition leb (x y: t) := Nat.leb (fst x) (fst y).
+  Theorem leb_total : forall a1 a2, leb a1 a2 = true \/ leb a2 a1 = true.
+  Proof.
+    unfold leb; destruct a1 as [n n0], a2 as [n1 n2]; simpl; clear n0 n2.
+    pose proof (Nat.leb_spec n n1) as [H1 | H2]; auto.
+    right.
+    apply Nat.leb_le.
+    apply Nat.lt_le_incl.
+    auto.
+  Qed.
+End IntervalOrder.
+
+Module IntervalSort := Sort IntervalOrder.
+
+Section IntervalList.
+  Variable intervals: list (nat * nat).
+  Let sorted := IntervalSort.sort intervals.
+
+  Fixpoint getLastDisjointContiguous (start: nat) ls : option nat:=
+    match ls with
+    | nil => Some start
+    | (s, l) :: xs => if (s =? start) && negb (l =? 0)
+                       then getLastDisjointContiguous (s + l) xs
+                       else None
+    end.
+
+  Definition getDisjointContiguous : option (nat * nat) :=
+    match sorted with
+    | nil => Some (0, 0)
+    | (s, l) :: xs => match getLastDisjointContiguous s sorted with
+                      | Some final => Some (s, final)
+                      | None => None
+                      end
+    end.
+End IntervalList.
