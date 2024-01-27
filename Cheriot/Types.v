@@ -267,29 +267,29 @@ Section ParamDefinitions.
     End Fields.
 
     Record InstProperties :=
-      { hasCs1        : bool ;
-        hasCs2        : bool ;
-        hasCd         : bool ;
-        hasScr        : bool ;
-        hasCsr        : bool ;
-        implicit      : nat ;
-        implicitMepcc : bool ;
-        implicitIe    : bool }.
+      { hasCs1      : bool ;
+        hasCs2      : bool ;
+        hasCd       : bool ;
+        hasScr      : bool ;
+        hasCsr      : bool ;
+        implicitReg : nat ;
+        implicitScr : nat ;
+        implicitCsr : word (snd immField) }.
     
     Global Instance InstPropertiesEtaX : Settable _ :=
       settable!
         Build_InstProperties
-      < hasCs1 ; hasCs2 ; hasCd; hasScr ; hasCsr ; implicit ; implicitMepcc ; implicitIe >.
+      < hasCs1 ; hasCs2 ; hasCd; hasScr ; hasCsr ; implicitReg ; implicitScr ; implicitCsr >.
     
     Definition DefProperties :=
-      {|hasCs1        := false ;
-        hasCs2        := false ;
-        hasCd         := true ;
-        hasScr        := false ;
-        hasCsr        := false ;
-        implicit      := 0 ;
-        implicitMepcc := false ;
-        implicitIe    := false |}.    
+      {|hasCs1      := false ;
+        hasCs2      := false ;
+        hasCd       := true ;
+        hasScr      := false ;
+        hasCsr      := false ;
+        implicitReg := 0 ;
+        implicitScr := 0 ;
+        implicitCsr := wzero _ |}.    
   End InstEncoding.
 
   Definition CapException        := N.to_nat (hex "1c").
@@ -422,26 +422,14 @@ Section ParamDefinitions.
     |}.
 
   Record ScrReg :=
-    { scrRegInfo       : RegInfo (snd rs2FixedField) FullCapWithTag;
-      legalizeScrRead  : option (forall ty, Data @# ty -> Data ## ty);
-      legalizeScrWrite : option (forall ty, Data @# ty -> Data @# ty -> Data ## ty);
-      isImplicitScr    : bool }.
+    { scrRegInfo    : RegInfo (snd rs2FixedField) FullCapWithTag;
+      isLegal       : forall ty, Data @# ty -> Bool @# ty;
+      legalize      : forall ty, Data @# ty -> Data @# ty }.
 
-  Definition implicitScrAddr (scrs: list ScrReg) := match find (fun x => isImplicitScr x) scrs with
-                                                    | Some idx => regAddr (scrRegInfo idx)
-                                                    | None => wzero _
-                                                    end.
-  
   Record CsrReg :=
     { csrRegInfo    : RegInfo (snd immField) Data;
       isSystemCsr   : bool;
-      isImplicitCsr : bool;
       csrMask       : option (word Xlen) }.
-
-  Definition implicitCsrAddr (csrs: list CsrReg) := match find (fun x => isImplicitCsr x) csrs with
-                                                    | Some idx => regAddr (csrRegInfo idx)
-                                                    | None => wzero _
-                                                    end.
 
   Theorem XlenSXlenMinus1: Xlen = ((S (Xlen - 1)) * 1)%nat.
   Proof.

@@ -436,6 +436,8 @@ Section InstBaseSpec.
                 "cap" ::= #newCap;
                 "val" ::= cs1 @% "val" } : FullCapWithTag @# ty) ).
 
+  Definition CgpIndex := 3.
+  
   Definition capInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -450,7 +452,7 @@ Section InstBaseSpec.
                       @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "cap") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
-          instProperties := DefProperties<| implicit := 3 |>
+          instProperties := DefProperties<| implicitReg := CgpIndex |>
         |};
         {|instName := "AUIPCC";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"17"))];
@@ -823,19 +825,25 @@ Section InstBaseSpec.
         inputXform ty pc inst cs1 cs2 scr csr :=
           ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen (branchOffset inst);
             LETE taken <- takenFn (cs1 @% "val") (cs2 @% "val");
-            LETE representable <- representableFn pc #newAddr;
+            LETC size <- $(if compressed then 2 else 4);
+            LETE baseTop <- getCapBaseTop capAccessors (pc @% "cap") (pc @% "val");
+            LETC baseBound <- #newAddr >= (#baseTop @% "base");
+            LETC topBound <- ZeroExtend 1 #newAddr + #size <= (#baseTop @% "top");
+            LETC inBounds <- #baseBound && #topBound;
             RetE ((DefBaseOutput ty)
                     @%[ "taken?" <- #taken ]
                     @%[ "pcMemAddr" <- #newAddr ]
                     @%[ "exception?" <- if compressed
-                                        then !#representable
-                                        else !#representable || isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
+                                        then !#inBounds
+                                        else !#inBounds || isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
                     @%[ "exceptionCause" <- if compressed
                                             then Const ty (natToWord Xlen CapBoundsViolation)
-                                            else IF #representable then Const ty (natToWord Xlen InstMisaligned) else Const ty (natToWord Xlen CapBoundsViolation)]
+                                            else (IF #inBounds
+                                                  then Const ty (natToWord Xlen InstMisaligned)
+                                                  else Const ty (natToWord Xlen CapBoundsViolation))]
                     @%[ "exceptionValue" <- #newAddr ]
-                    @%[ "baseException?" <- #representable ]
-                    @%[ "pcCapException?" <- !#representable ]));
+                    @%[ "baseException?" <- #inBounds ]
+                    @%[ "pcCapException?" <- !#inBounds ]));
         instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |><| hasCd := false |>
       |}.
 
@@ -1006,6 +1014,8 @@ Section InstBaseSpec.
       ]
     |}.
 
+  Definition MStatusIndex := (snd immField) 'h"300".
+
   Definition jumpInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -1018,7 +1028,11 @@ Section InstBaseSpec.
               LETC linkAddr <- (pc @% "val") + ITE (isInstNotCompressed inst) $4 $2;
               LETC mstatusArr <- unpack (Array (S (Xlen-1)) Bool) (castBits XlenSXlenMinus1 csr);
               LETC ie <- #mstatusArr ![ 3 ];
-              LETE representable <- representableFn pc #newAddr;
+              LETC size <- $(if compressed then 2 else 4);
+              LETE baseTop <- getCapBaseTop capAccessors (pc @% "cap") (pc @% "val");
+              LETC baseBound <- #newAddr >= (#baseTop @% "base");
+              LETC topBound <- ZeroExtend 1 #newAddr + #size <= (#baseTop @% "top");
+              LETC inBounds <- #baseBound && #topBound;
               RetE ((DefWbBaseOutput ty)
                       @%[ "cdTag" <- $$true ]
                       @%[ "cdCap" <- seal capAccessors (getOTypeFromIe capAccessors #ie) (pc @% "cap") ]
@@ -1026,15 +1040,17 @@ Section InstBaseSpec.
                       @%[ "taken?" <- $$true ]
                       @%[ "pcMemAddr" <- #newAddr ]
                       @%[ "exception?" <- if compressed
-                                          then !#representable
-                                          else !#representable || isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
+                                          then !#inBounds
+                                          else !#inBounds || isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
                       @%[ "exceptionCause" <- if compressed
                                               then Const ty (natToWord Xlen CapBoundsViolation)
-                                              else IF #representable then Const ty (natToWord Xlen InstMisaligned) else Const ty (natToWord Xlen InstMisaligned) ]
+                                              else (IF #inBounds
+                                                    then Const ty (natToWord Xlen InstMisaligned)
+                                                    else Const ty (natToWord Xlen CapBoundsViolation)) ]
                       @%[ "exceptionValue" <- #newAddr ]
-                      @%[ "baseException?" <- #representable ]
-                      @%[ "pcCapException?" <- !#representable] ));
-          instProperties := DefProperties <| implicitIe := true |>
+                      @%[ "baseException?" <- #inBounds ]
+                      @%[ "pcCapException?" <- !#inBounds] ));
+          instProperties := DefProperties <| implicitCsr := MStatusIndex |>
         |};
         {|instName := "CJALR";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"67"));
@@ -1045,6 +1061,11 @@ Section InstBaseSpec.
               LETC newAddr <- ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 1) #newAddrTemp, $$WO~0 >});
               LETC linkAddr <- (pc @% "val") + ITE (isInstNotCompressed inst) $4 $2;
               LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
+              LETC size <- $(if compressed then 2 else 4);
+              LETE baseTop <- getCapBaseTop capAccessors (pc @% "cap") (pc @% "val");
+              LETC baseBound <- #newAddr >= (#baseTop @% "base");
+              LETC topBound <- ZeroExtend 1 #newAddr + #size <= (#baseTop @% "top");
+              LETC inBounds <- #baseBound && #topBound;
               LETC fullException
                 : Pair (Maybe Data) Bool <-
                     (IF !(cs1 @% "tag")
@@ -1054,9 +1075,11 @@ Section InstBaseSpec.
                            then mkPair (Valid (Const ty (natToWord Xlen CapSealViolation))) ($$false)
                            else (IF !(#perms @% "EX")
                                  then mkPair (Valid (Const ty (natToWord Xlen CapExecViolation))) ($$false)
-                                 else StaticIf (negb compressed) (isNotZero (ZeroExtendTruncLsb 2 #newAddr))
-                                               (mkPair (Valid (Const ty (natToWord Xlen InstMisaligned))) ($$true))
-                                               (mkPair Invalid ($$false)))));
+                                 else (IF !#inBounds
+                                       then mkPair (Valid (Const ty (natToWord Xlen CapBoundsViolation))) ($$false)
+                                       else StaticIf (negb compressed) (isNotZero (ZeroExtendTruncLsb 2 #newAddr))
+                                              (mkPair (Valid (Const ty (natToWord Xlen InstMisaligned))) ($$true))
+                                              (mkPair Invalid ($$false))))));
               LETC mstatusArr <- unpack (Array (S (Xlen-1)) Bool) (castBits XlenSXlenMinus1 csr);
               LETC ie <- #mstatusArr ![ 3 ];
               LETC ieSentry <- isIeSentry capAccessors (cs1 @% "cap");
@@ -1075,7 +1098,7 @@ Section InstBaseSpec.
                       @%[ "baseException?" <- #fullException @% "snd" ]
                       @%[ "changeIe?" <- #ieSentry || #idSentry ]
                       @%[ "newIe" <- #ieSentry ] ));
-          instProperties := DefProperties<| hasCs1 := true |><| implicitIe := true |>
+          instProperties := DefProperties<| hasCs1 := true |><| implicitCsr := MStatusIndex |>
         |}
       ]
     |}.
@@ -1083,6 +1106,8 @@ Section InstBaseSpec.
   Definition isJumpInsts ty (inst: Inst @# ty) :=
     redLet (@Kor _ _) (fun x => RetE (matchUniqId inst (uniqId x))) (filterInsts [jumpInsts]).
 
+
+  Definition MepccIndex := 31.
 
   Definition exceptionInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
@@ -1132,99 +1157,91 @@ Section InstBaseSpec.
                       @%[ "exceptionCause" <- #exceptionCause ]
                       @%[ "scrException?" <- !(#pcPerms @% "SR") ]
                       @%[ "pcCapException?" <- #pcPerms @% "SR" ]));
-          instProperties := DefProperties<| implicitMepcc := true |><| hasCd := false |>
+          instProperties := DefProperties<| implicitScr := MepccIndex |><| hasCd := false |>
         |}
       ]
     |}.
 
-  Definition isERetInst ty (inst: Inst @# ty) :=
+  Definition isECallInst ty (inst: Inst @# ty) :=
     redLet (@Kor _ _) (fun x => RetE (matchUniqId inst (uniqId x)))
       (filter (fun x => String.eqb (instName x) "ECall") (filterInsts [exceptionInsts])).
 
-  Definition MTCCInit : ConstT (FullCapWithTag) := STRUCT_CONST { "tag" ::= true;
-                                                                  "cap" ::= MtccCap;
-                                                                  "val" ::= MtccVal }.
+  Definition MTCCInit : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
+                                                                "cap" ::= MtccCap;
+                                                                "val" ::= MtccVal }.
 
-  Definition MTDCInit : ConstT (FullCapWithTag) := STRUCT_CONST { "tag" ::= true;
-                                                                  "cap" ::= MtdcCap;
-                                                                  "val" ::= MtdcVal }.
+  Definition MTDCInit : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
+                                                                "cap" ::= MtdcCap;
+                                                                "val" ::= MtdcVal }.
 
-  Definition scrList : list ScrReg := [
+  Definition MScratchInit : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
+                                                                    "cap" ::= MScratchCap;
+                                                                    "val" ::= MScratchVal }.
+
+  Definition scrList : list ScrReg :=
+    let ZeroBits := if compressed then 1 else 2 in
+    [ {|scrRegInfo := Build_RegInfo ($27)%word "MEPrevPCC" (Some (SyntaxConst MTCCInit));
+        isLegal ty val := isZero (ZeroExtendTruncLsb ZeroBits val);
+        legalize ty val :=
+          ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - ZeroBits) val, $$(wzero ZeroBits) >}) |};
       {|scrRegInfo := Build_RegInfo ($28)%word "MTCC" (Some (SyntaxConst MTCCInit));
-        legalizeScrRead := None;
-        legalizeScrWrite :=
-          Some (fun ty (cs1Val scrVal: Data @# ty) =>
-                  ( RetE (ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) cs1Val, $$(wzero 2) >}))) );
-        isImplicitScr := false |};
+        isLegal ty val := isZero (ZeroExtendTruncLsb 2 val);
+        legalize ty val := ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) val, $$(wzero 2) >}) |};
       {|scrRegInfo := Build_RegInfo ($29)%word "MTDC" (Some (SyntaxConst MTDCInit));
-        legalizeScrRead := None;
-        legalizeScrWrite := None;
-        isImplicitScr := false |};
+        isLegal ty val := $$true;
+        legalize ty val := val |};
       {|scrRegInfo := Build_RegInfo ($30)%word "MScratchC" None;
-        legalizeScrRead := None;
-        legalizeScrWrite := None;
-        isImplicitScr := false |};
-      {|scrRegInfo := Build_RegInfo ($31)%word "MEPCC" None;
-        legalizeScrRead :=
-          Some (fun ty (scrVal: Data @# ty) =>
-                  ( RetE (if compressed
-                          then ZeroExtendTruncLsb Xlen
-                                 ({< ZeroExtendTruncMsb (Xlen - 1) scrVal, $$(wzero 1) >})
-                          else ZeroExtendTruncLsb Xlen
-                                 ({< ZeroExtendTruncMsb (Xlen - 2) scrVal, $$(wzero 2) >}))) );
-        legalizeScrWrite := None;
-        isImplicitScr := true |}
+        isLegal ty val := $$true;
+        legalize ty val := val |};
+      {|scrRegInfo := Build_RegInfo ($MepccIndex)%word "MEPCC" (Some (SyntaxConst MTCCInit));
+        isLegal ty val := isZero (ZeroExtendTruncLsb ZeroBits val);
+        legalize ty val :=
+          ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - ZeroBits) val, $$(wzero ZeroBits) >}) |}
     ].
+
+  Definition isValidScrs ty (inst : Inst @# ty) :=
+    Kor (map (fun scr => rs2Fixed inst == Const ty (regAddr (scrRegInfo scr))) scrList).
+
+  Definition legalizeScrs ty (inst : Inst @# ty) (cs1 : FullCapWithTag @# ty): FullCapWithTag @# ty :=
+    Kor (map (fun '(Build_ScrReg regInfo islegal legalizer) =>
+                let cs1Val := cs1 @% "val" in
+                ITE (rs2Fixed inst == Const ty (regAddr regInfo))
+                  ((STRUCT { "tag" ::= (cs1 @% "tag") && islegal _ (cs1 @% "val");
+                             "cap" ::= cs1 @% "cap";
+                             "val" ::= legalizer _ cs1Val }) : FullCapWithTag @# ty)
+                  (Const _ Default)) scrList).
 
   Definition scrInsts: InstEntryFull BaseOutput :=
     {|xlens := [32; 64];
       extension := Base;
       instEntries :=
-        map (fun '(Build_ScrReg (Build_RegInfo addr name _) readFn writeFn isImplicit) =>
-               {|instName := ("CSpecialRW_" ++ name)%string;
-                 uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
-                            fieldVal funct3Field (3'h"0");
-                            fieldVal rs2FixedField addr;
-                            fieldVal funct7Field (7'h"1")];
-                 immEncoder := [];
-                 inputXform ty pc inst cs1 cs2 scr csr :=
-                   ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
-                     LETE fixScrVal : Data <- match readFn with
-                                              | Some f => f ty (scr @% "val")
-                                              | None => RetE (scr @% "val")
-                                              end;
-                     LETE fixScrTag <- 
-                       match writeFn with
-                       | Some _ =>
-                           ( LETE representable <- representableFn (justFullCap scr) #fixScrVal;
-                             RetE (scr @% "tag" && !isSealed capAccessors (scr @% "cap") && #representable) )
-                       | None => RetE (scr @% "tag")
-                       end;
-                     LETE fixCs1Val <- match writeFn with
-                                       | Some f => f ty (cs1 @% "val") (scr @% "val")
-                                       | None => RetE (cs1 @% "val")
-                                       end;
-                     LETE fixCs1Tag <-
-                       match writeFn with
-                       | Some _ =>
-                           ( LETE representable <- representableFn (justFullCap cs1) #fixCs1Val;
-                             RetE (cs1 @% "tag" && !isSealed capAccessors (cs1 @% "cap") && #representable) )
-                       | None => RetE (cs1 @% "tag")
-                       end;
-                     RetE ((DefWbBaseOutput ty)
-                             @%[ "cdTag" <- #fixScrTag ]
-                             @%[ "cdCap" <- scr @% "cap" ]
-                             @%[ "cdVal" <- #fixScrVal ]
-                             @%[ "exception?" <- !(#pcPerms @% "SR") ]
-                             @%[ "exceptionCause" <- Const ty (natToWord Xlen CapSysRegViolation) ]
-                             @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
-                             @%[ "scrTag" <- #fixCs1Tag ]
-                             @%[ "scrCap" <- cs1 @% "cap" ]
-                             @%[ "scrVal" <- #fixCs1Val ]
-                             @%[ "scrException?" <- $$true ]));
-                 instProperties :=
-                   DefProperties<| hasCs1 := true |><| hasScr := true |><| implicitMepcc := isImplicit |>
-               |}) scrList
+        [ {|instName := ("CSpecialRW")%string;
+            uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
+                       fieldVal funct3Field (3'h"0");
+                       fieldVal funct7Field (7'h"1")];
+            immEncoder := [];
+            inputXform ty pc inst cs1 cs2 scr csr :=
+              ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
+                LETC legal <- isValidScrs inst;
+                LETC fixCs1 <- legalizeScrs inst cs1;
+                LETC tag <- (#fixCs1 @% "tag") && !isSealed capAccessors (#fixCs1 @% "cap");
+                RetE ((DefWbBaseOutput ty)
+                        @%[ "cdTag" <- scr @% "tag" ]
+                        @%[ "cdCap" <- scr @% "cap" ]
+                        @%[ "cdVal" <- scr @% "val" ]
+                        @%[ "exception?" <- !(#pcPerms @% "SR") || !#legal ]
+                        @%[ "exceptionCause" <- (IF #legal
+                                                 then Const ty (natToWord Xlen CapSysRegViolation)
+                                                 else Const ty (natToWord Xlen InstIllegal))]
+                        @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
+                        @%[ "scrTag" <- #tag ]
+                        @%[ "scrCap" <- #fixCs1 @% "cap" ]
+                        @%[ "scrVal" <- #fixCs1 @% "val" ]
+                        @%[ "baseException?" <- !#legal ]
+                        @%[ "scrException?" <- #legal ]));
+            instProperties :=
+              DefProperties<| hasCs1 := true |><| hasScr := true |>
+          |} ] 
     |}.
 
   Definition MStatusInit := if IeInit then Xlen 'h"8" else wzero Xlen.
@@ -1233,21 +1250,17 @@ Section InstBaseSpec.
                              (if MsieInit then _ 'h"8" else wzero 4)).
 
   Definition csrList : list CsrReg := [
-      {|csrRegInfo := Build_RegInfo (_ 'h"300") "MStatus" (Some (SyntaxConst MStatusInit));
+      {|csrRegInfo := Build_RegInfo MStatusIndex "MStatus" (Some (SyntaxConst MStatusInit));
         isSystemCsr := true;
-        isImplicitCsr := true;
         csrMask := Some (Xlen 'h"8") |};
       {|csrRegInfo := Build_RegInfo (_ 'h"304") "MIE" (Some (SyntaxConst MIEInit));
         isSystemCsr := true;
-        isImplicitCsr := false;
         csrMask := Some (Xlen 'h"888") |};
       {|csrRegInfo := Build_RegInfo (_ 'h"342") "MCause" None;
         isSystemCsr := true;
-        isImplicitCsr := false;
         csrMask := None |};
       {|csrRegInfo := Build_RegInfo (_ 'h"343") "MTVal" None;
         isSystemCsr := true;
-        isImplicitCsr := false;
         csrMask := None |} ].
   
   Definition isValidCsrs ty (inst : Inst @# ty) :=
@@ -1336,7 +1349,6 @@ Section InstBaseSpec.
      (Corrollary: every time a new instruction is added, it must be run)
    *)
 
-  (*
   Ltac simplify_field field :=
     repeat match goal with
            | |- context [field ?P] =>
@@ -1364,6 +1376,7 @@ Section InstBaseSpec.
       | H: ?p \/ ?q |- _ => destruct H; try discriminate
       end; auto.
 
+  (*
   Theorem uniqAluNames: NoDup (concat (map (fun x => map (@instName _ _) (insts x)) specFuncUnits)).
   Proof.
     checkUniq.
@@ -1385,7 +1398,9 @@ Section InstBaseSpec.
       Let cs2Bits := if hasCs2 props then [rs2FixedField] else [].
       Let cdBits := if hasCd props then [rdFixedField] else [].
       Let csrBits := if hasCsr props then [immField] else [].
-      Let encodedBits := cs1Bits ++ cs2Bits ++ cdBits ++ csrBits ++ map (@projT1 _ _) uniqs ++ map instPos imms.
+      Let scrBits := if hasScr props then [rs2FixedField] else [].
+      Let encodedBits := cs1Bits ++ cs2Bits ++ cdBits ++ csrBits ++ scrBits ++
+                           map (@projT1 _ _) uniqs ++ map instPos imms.
       Definition isInstEncContiguous := getDisjointContiguous encodedBits = Some (2, 32).
       Definition isImmEncContiguous := getDisjointContiguous (concat (map immPos imms)) <> None.
       Definition instImmWidthsMatch :=
@@ -1432,5 +1447,5 @@ Section InstBaseSpec.
                 end).
     Qed.
   End EncodingChecks.
-   *)
+  *)
 End InstBaseSpec.

@@ -107,10 +107,11 @@ Section DecExec.
       Definition hasCs2PropFn := propertiesFuncEntry (fun _ x => Const ty (hasCs2 (instProperties x))).
       Definition hasScrPropFn := propertiesFuncEntry (fun _ x => Const ty (hasScr (instProperties x))).
       Definition hasCsrPropFn := propertiesFuncEntry (fun _ x => Const ty (hasCsr (instProperties x))).
-      Definition implicitReadPropFn := propertiesFuncEntry
-                                         (fun _ x => Const ty (natToWord RegIdSz (implicit (instProperties x)))).
-      Definition implicitMepccPropFn := propertiesFuncEntry (fun _ x => Const ty (implicitMepcc (instProperties x))).
-      Definition implicitIePropFn := propertiesFuncEntry (fun _ x => Const ty (implicitIe (instProperties x))).
+      Definition implicitRegPropFn :=
+        propertiesFuncEntry (fun _ x => Const ty (natToWord RegIdSz (implicitReg (instProperties x)))).
+      Definition implicitScrPropFn :=
+        propertiesFuncEntry (fun _ x => Const ty (natToWord (snd rs2FixedField) (implicitScr (instProperties x)))).
+      Definition implicitCsrPropFn := propertiesFuncEntry (fun _ x => Const ty (implicitCsr (instProperties x))).
     End allMatches.
 
     Definition execFuncEntry (allDecodes: DecodeFuncEntryStruct @# ty): Maybe FuncOutput ## ty.

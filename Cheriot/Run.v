@@ -102,22 +102,24 @@ Section Run.
       LETC hasCs2Prop <- hasCs2PropFn #allMatches;
       LETC hasScrProp <- hasScrPropFn #allMatches;
       LETC hasCsrProp <- hasCsrPropFn #allMatches;
-      LETC implicitReadVal <- implicitReadPropFn #allMatches;
-      LETC implicitReadProp <- isNotZero #implicitReadVal;
-      LETC implicitMepccProp <- implicitMepccPropFn #allMatches;
-      LETC implicitIeProp <- implicitIePropFn #allMatches;
+      LETC implicitRegVal  <- implicitRegPropFn #allMatches;
+      LETC implicitRegProp <- isNotZero #implicitRegVal;
+      LETC implicitScrVal  <- implicitScrPropFn #allMatches;
+      LETC implicitScrProp <- isNotZero #implicitScrVal;
+      LETC implicitCsrVal  <- implicitCsrPropFn #allMatches;
+      LETC implicitCsrProp <- isNotZero #implicitCsrVal;
 
       RetE (STRUCT { "uncompressOut" ::= uncompressOut;
                      "allMatches" ::= #allMatches;
                      "regReadId" ::=
-                       (STRUCT { "cs1?" ::= (#hasCs1Prop || #implicitReadProp);
-                                 "cs1Idx" ::= ITE #implicitReadProp #implicitReadVal (rs1 #inst);
+                       (STRUCT { "cs1?" ::= (#hasCs1Prop || #implicitRegProp);
+                                 "cs1Idx" ::= ITE #implicitRegProp #implicitRegVal (rs1 #inst);
                                  "cs2?" ::= #hasCs2Prop;
                                  "cs2Idx" ::= rs2 #inst;
-                                 "scr?" ::= (#hasScrProp || #implicitMepccProp);
-                                 "scrIdx" ::= ITE #implicitMepccProp $$(implicitScrAddr scrs) (rs2Fixed #inst);
-                                 "csr?" ::= (#hasCsrProp || #implicitIeProp);
-                                 "csrIdx" ::= ITE #implicitIeProp $$(implicitCsrAddr csrs) (imm #inst) }
+                                 "scr?" ::= (#hasScrProp || #implicitScrProp);
+                                 "scrIdx" ::= ITE #implicitScrProp #implicitScrVal (rs2Fixed #inst);
+                                 "csr?" ::= (#hasCsrProp || #implicitCsrProp);
+                                 "csrIdx" ::= ITE #implicitCsrProp #implicitCsrVal (imm #inst) }
                          : RegReadId @# ty) } : RegReadIdOut @# ty ) ).
 
   Definition RegRead := STRUCT_TYPE {
