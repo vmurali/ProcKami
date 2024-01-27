@@ -278,7 +278,6 @@ Section Prefix.
       pcValReg := @^"pcVal";
       prevPcCapReg := @^"prevPcCap";
       prevPcValReg := @^"prevPcVal";
-      prevTakenReg := @^"prevTakenReg";
       justFenceIReg := @^"justFenceIReg";
       startFenceIReg := @^"startFenceIReg";
       reqJustFenceIReg := @^"reqJustFenceIReg";

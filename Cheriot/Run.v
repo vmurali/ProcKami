@@ -216,9 +216,7 @@ Section Run.
   Definition ExecOut := STRUCT_TYPE {
                             "inst" :: Inst;
                             "result" :: FuncOutput;
-                            "justFenceI?" :: Bool;
-                            "bounds?" :: Bool
-                          }.
+                            "justFenceI?" :: Bool }.
 
   Definition getScrIdx (csrIdx: Bit (snd immField) @# ty) := UniBit (TruncLsb 5 _) csrIdx.
   
@@ -268,8 +266,7 @@ Section Run.
                                                         "val" ::= #exceptionCause }) : FullCapWithTag @# ty) ];
       RetE ((STRUCT { "inst" ::= #inst;
                       "result" ::= #result;
-                      "justFenceI?" ::= decodeOut @% "justFenceI?";
-                      "bounds?" ::= decodeOut @% "bounds?" } : ExecOut @# ty)) ).
+                      "justFenceI?" ::= decodeOut @% "justFenceI?" } : ExecOut @# ty)) ).
 
   Definition memRetProcess (funcOut: FuncOutput @# ty) (memInfo: MemOpInfo @# ty) (memRet: DataRet @# ty) : FuncOutput ## ty :=
     ( LETC isStore <- memInfo @% "op" == $StOp;
@@ -312,8 +309,7 @@ Section Run.
               @%[ "exception?" <- #exception ])).
 
   Definition MemOutData := STRUCT_TYPE { "inst" :: Inst;
-                                         "result" :: FuncOutput;
-                                         "bounds?" :: Bool }.
+                                         "result" :: FuncOutput }.
 
   Definition memSpec (execOut: ExecOut @# ty) : ActionT ty (Maybe MemOutData) :=
     ( LET funcOut : FuncOutput <- execOut @% "result";
@@ -333,8 +329,7 @@ Section Run.
       LET setFenceI <- !#exception && (#funcOut @% "fenceI?");
       WriteIf #dontDrop Then reqJustFenceIReg : Bool <- #setFenceI;
       LET memOutData : MemOutData <- STRUCT { "inst" ::= execOut @% "inst";
-                                              "result" ::= #retFuncOut;
-                                              "bounds?" ::= execOut @% "bounds?"};
+                                              "result" ::= #retFuncOut };
       Ret (STRUCT {"valid" ::= #dontDrop ; "data" ::= #memOutData } : Maybe _ @# _) ).
 
   (* Exceptions must be handled before interrupts in case of a Store Access Error
@@ -354,13 +349,13 @@ Section Run.
           Read pcVal : Addr <- pcValReg;
           Read prevPcCap: Cap <- prevPcCapReg;
           Read prevPcVal: Addr <- prevPcValReg;
-          Read prevTaken: Bool <- prevTakenReg;
           Read mtcc : FullCapWithTag <- @^"MTCC";
           Read mstatus: Data <- @^"mstatus";
 
-          LET prevPcForMepcc <- !(#memOutData @% "bounds?") && #prevTaken;
-          LET mepccCap <- ITE #prevPcForMepcc #prevPcCap #pcCap;
-          LET mepccVal <- ITE #prevPcForMepcc #prevPcVal #pcVal;
+          LET mepccCap <- #pcCap;
+          LET mepccVal <- #pcVal;
+          LET mePrevPccCap <- #prevPcCap;
+          LET mePrevPccVal <- #prevPcVal;
           LET inst <- #memOutData @% "inst";
           LET notCompressed <- isInstNotCompressed #inst;
 
@@ -393,7 +388,6 @@ Section Run.
           Write pcValReg : Addr <- #nextPcVal;
           Write prevPcCapReg : Cap <- #pcCap;
           Write prevPcValReg : Addr <- #pcVal;
-          Write prevTakenReg : Bool <- !#exception && (#result @% "taken?");
           WriteIf #setFenceI Then startFenceIReg : Bool <- $$true;
 
           WriteIf (!#exception && (#result @% "changeIe?")) Then
@@ -411,6 +405,11 @@ Section Run.
             @^"MEPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
                                                    "cap" ::= #mepccCap;
                                                    "val" ::= #mepccVal };
+
+          WriteIf (#exception) Then
+            @^"MEPrevPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
+                                                       "cap" ::= #mePrevPccCap;
+                                                       "val" ::= #mePrevPccVal };
 
           WriteIf (#exception) Then
             @^"MCause" : Data <- ITE (#result @% "baseException?") (#data @% "val") $CapException;

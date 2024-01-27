@@ -157,7 +157,6 @@ Class ProcParams :=
     pcValReg: string;
     prevPcCapReg: string;
     prevPcValReg: string;
-    prevTakenReg: string;
     justFenceIReg: string;
     startFenceIReg: string;
     reqJustFenceIReg: string;
