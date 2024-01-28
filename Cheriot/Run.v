@@ -352,21 +352,17 @@ Section Run.
           Read mtcc : FullCapWithTag <- @^"MTCC";
           Read mstatus: Data <- @^"mstatus";
 
-          LET mepccCap <- #pcCap;
-          LET mepccVal <- #pcVal;
-          LET mePrevPccCap <- #prevPcCap;
-          LET mePrevPccVal <- #prevPcVal;
           LET inst <- #memOutData @% "inst";
           LET notCompressed <- isInstNotCompressed #inst;
 
           LET nextPcVal <- (IF #exception
-                            then (if spec then #mepccVal else (#mtcc @% "val"))
+                            then (if spec then #pcVal else (#mtcc @% "val"))
                             else (IF #result @% "taken?"
                                   then #result @% "addrOrScrOrCsrVal"
                                   else #pcVal + (ITE #notCompressed $4 $2)));
 
           LET nextPcCap <- (IF #exception
-                            then (if spec then #mepccCap else (#mtcc @% "cap"))
+                            then (if spec then #pcCap else (#mtcc @% "cap"))
                             else (IF #result @% "changePcCap?"
                                   then #result @% "pcOrScrCapOrMemOp"
                                   else #prevPcCap));
@@ -403,13 +399,13 @@ Section Run.
 
           WriteIf (#exception) Then
             @^"MEPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
-                                                   "cap" ::= #mepccCap;
-                                                   "val" ::= #mepccVal };
+                                                   "cap" ::= #pcCap;
+                                                   "val" ::= #pcVal };
 
           WriteIf (#exception) Then
-            @^"MEPrevPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
-                                                       "cap" ::= #mePrevPccCap;
-                                                       "val" ::= #mePrevPccVal };
+            @^"MEPrevPCC" : FullCapWithTag <- STRUCT { "tag" ::= #result @% "taken?";
+                                                       "cap" ::= #prevPcCap;
+                                                       "val" ::= #prevPcVal };
 
           WriteIf (#exception) Then
             @^"MCause" : Data <- ITE (#result @% "baseException?") (#data @% "val") $CapException;
