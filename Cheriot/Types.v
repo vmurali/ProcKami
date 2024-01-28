@@ -129,14 +129,10 @@ Class ProcParams :=
     PcAddr: word Xlen;
     compressed: bool;
     pccValid: PccValid capAccessors PcCap PcAddr compressed;
-    MtccCap: word CapSz;
+    ExecRootCap: word CapSz;
+    DataRootCap: word CapSz;
+    SealRootCap: word CapSz;
     MtccVal: word Xlen;
-    (* mtccValid: MtccValid capAccessors MtccCap MtccVal; *)
-    MtdcCap: word CapSz;
-    MtdcVal: word Xlen;
-    (* mtdcValid: MtdcValid capAccessors MtdcCap MtdcVal; *)
-    MScratchCap: word CapSz;
-    MScratchVal: word Xlen;
     IeInit: bool;
     MeieInit: bool;
     MtieInit: bool;

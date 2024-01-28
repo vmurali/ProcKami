@@ -1166,34 +1166,31 @@ Section InstBaseSpec.
     redLet (@Kor _ _) (fun x => RetE (matchUniqId inst (uniqId x)))
       (filter (fun x => String.eqb (instName x) "ECall") (filterInsts [exceptionInsts])).
 
-  Definition MTCCInit : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
-                                                                "cap" ::= MtccCap;
+  Definition ExecRoot : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
+                                                                "cap" ::= ExecRootCap;
                                                                 "val" ::= MtccVal }.
 
-  Definition MTDCInit : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
-                                                                "cap" ::= MtdcCap;
-                                                                "val" ::= MtdcVal }.
+  Definition DataRoot : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
+                                                                "cap" ::= DataRootCap;
+                                                                "val" ::= $0 }.
 
-  Definition MScratchInit : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
-                                                                    "cap" ::= MScratchCap;
-                                                                    "val" ::= MScratchVal }.
+  Definition SealRoot : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
+                                                                "cap" ::= SealRootCap;
+                                                                "val" ::= $0 }.
 
   Definition scrList : list ScrReg :=
     let ZeroBits := if compressed then 1 else 2 in
-    [ {|scrRegInfo := Build_RegInfo ($27)%word "MEPrevPCC" (Some (SyntaxConst MTCCInit));
+    [ {|scrRegInfo := Build_RegInfo ($27)%word "MEPrevPCC" (Some (SyntaxConst DataRoot));
         isLegal ty val := isZero (ZeroExtendTruncLsb ZeroBits val);
         legalize ty val :=
           ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - ZeroBits) val, $$(wzero ZeroBits) >}) |};
-      {|scrRegInfo := Build_RegInfo ($28)%word "MTCC" (Some (SyntaxConst MTCCInit));
+      {|scrRegInfo := Build_RegInfo ($28)%word "MTCC" (Some (SyntaxConst ExecRoot));
         isLegal ty val := isZero (ZeroExtendTruncLsb 2 val);
         legalize ty val := ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) val, $$(wzero 2) >}) |};
-      {|scrRegInfo := Build_RegInfo ($29)%word "MTDC" (Some (SyntaxConst MTDCInit));
+      {|scrRegInfo := Build_RegInfo ($30)%word "MScratchC" (Some (SyntaxConst SealRoot));
         isLegal ty val := $$true;
         legalize ty val := val |};
-      {|scrRegInfo := Build_RegInfo ($30)%word "MScratchC" None;
-        isLegal ty val := $$true;
-        legalize ty val := val |};
-      {|scrRegInfo := Build_RegInfo ($MepccIndex)%word "MEPCC" (Some (SyntaxConst MTCCInit));
+      {|scrRegInfo := Build_RegInfo ($MepccIndex)%word "MEPCC" (Some (SyntaxConst DataRoot));
         isLegal ty val := isZero (ZeroExtendTruncLsb ZeroBits val);
         legalize ty val :=
           ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - ZeroBits) val, $$(wzero ZeroBits) >}) |}
