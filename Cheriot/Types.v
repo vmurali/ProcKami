@@ -388,6 +388,17 @@ Section ParamDefinitions.
       end.
   End ImmVal.
 
+  Definition isGoodInstEncode (uniqId: UniqId) (immEncoder: list ImmEncoder)
+    (instProperties: InstProperties) :=
+    getDisjointContiguous
+      ((if hasCs1 instProperties then [rs1FixedField] else []) ++
+         (if hasCs2 instProperties then [rs2FixedField] else []) ++
+         (if hasCd instProperties then [rdFixedField] else []) ++
+         (if hasScr instProperties then [rs2FixedField] else []) ++
+         (if hasCsr instProperties then [immField] else []) ++
+         map (@projT1 _ _) uniqId ++
+         map immFieldWidth immEncoder) = Some (snd instSizeField, InstSz).
+
   Section InstEntry.
     Variable ik: Kind.
     Record InstEntry :=
@@ -398,14 +409,7 @@ Section ParamDefinitions.
                                     FullCapWithTag @# ty -> FullCapWithTag @# ty ->
                                     FullCapWithTag @# ty -> Data @# ty -> ik ## ty;
         instProperties : InstProperties;
-        goodInstEncode : getDisjointContiguous
-                           ((if hasCs1 instProperties then [rs1FixedField] else []) ++
-                              (if hasCs2 instProperties then [rs2FixedField] else []) ++
-                              (if hasCd instProperties then [rdFixedField] else []) ++
-                              (if hasScr instProperties then [rs2FixedField] else []) ++
-                              (if hasCsr instProperties then [immField] else []) ++
-                              map (@projT1 _ _) uniqId ++
-                              map immFieldWidth immEncoder) = Some (snd instSizeField, InstSz);
+        goodInstEncode : isGoodInstEncode uniqId immEncoder instProperties;
         goodImmEncode : exists x, getDisjointContiguous (concat (map immPos immEncoder)) = Some x
       }.
 
