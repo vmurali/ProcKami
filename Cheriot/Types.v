@@ -359,8 +359,9 @@ Section ParamDefinitions.
 
   Section ImmEncoder.
     Record ImmEncoder := {
-        instPos : (nat * nat);
-        immPos  : list (nat * nat)
+        instPos    : (nat * nat);
+        immPos     : list (nat * nat);
+        widthEq    : snd instPos = fold_right (fun '(_, val) sum => val + sum) 0 immPos
       }.
 
     Definition imm12   := [(0, 12)].
@@ -373,6 +374,18 @@ Section ParamDefinitions.
     Definition imm7_B  := [(5, 6); (12, 1)].
   End ImmEncoder.
 
+  Section ImmVal.
+    Variable immVal: word InstSz.
+    Definition extractWord (start width: nat) : word width :=
+      @truncMsb width (start + width) (@truncLsb (start + width) InstSz immVal).
+
+    Fixpoint encodeImmField (imms: list (nat * nat)) :=
+      match imms return word (fold_right (fun '(_, val) sum => val + sum) 0 imms) with
+      | nil => WO
+      | (start, width) :: xs => wcombine (extractWord start width) (encodeImmField xs)
+      end.
+  End ImmVal.
+
   Section InstEntry.
     Variable ik: Kind.
     Record InstEntry :=
@@ -382,7 +395,17 @@ Section ParamDefinitions.
         inputXform     : forall ty, FullCap @# ty -> Inst @# ty ->
                                     FullCapWithTag @# ty -> FullCapWithTag @# ty ->
                                     FullCapWithTag @# ty -> Data @# ty -> ik ## ty;
-        instProperties : InstProperties }.
+        instProperties : InstProperties;
+        goodInstEncode : getDisjointContiguous
+                           ((if hasCs1 instProperties then [rs1FixedField] else []) ++
+                              (if hasCs2 instProperties then [rs2FixedField] else []) ++
+                              (if hasCd instProperties then [rdFixedField] else []) ++
+                              (if hasScr instProperties then [rs2FixedField] else []) ++
+                              (if hasCsr instProperties then [immField] else []) ++
+                              map (@projT1 _ _) uniqId ++
+                              map instPos immEncoder) = Some (snd instSizeField, InstSz);
+        goodImmEncode : exists x, getDisjointContiguous (concat (map immPos immEncoder)) = Some x
+      }.
 
     Record InstEntryFull := {
         xlens : list nat;

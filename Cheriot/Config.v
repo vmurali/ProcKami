@@ -226,7 +226,6 @@ Section CapHelpers.
 
   Definition PcAddrInit := (AddrSz 'h"1000").
   Definition MtccValInit := (AddrSz 'h"800").
-  Definition MtdcValInit := (AddrSz 'h"400").
 
   Theorem pccValidThm: PccValid capAccessorsInit ExecRootCapInit PcAddrInit false.
   Proof.
