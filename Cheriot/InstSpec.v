@@ -89,9 +89,6 @@ Section InstBaseSpec.
                   "wbCsr?" ::= inp @% "wbCsr?" } : FuncOutput @# ty) ).
   End ty.
 
-  Local Notation ImmEncoderPfs immField immVals :=
-    (@Build_ImmEncoder immField immVals eq_refl).
-
   Definition aluInsts: InstEntryFull BaseOutput.
     refine
       {|xlens := [32; 64];
@@ -100,7 +97,7 @@ Section InstBaseSpec.
           {|instName := "AddI";
             uniqId := [fieldVal opcodeField (5'b"00100");
                        fieldVal funct3Field (3'b"000")];
-            immEncoder := [ ImmEncoderPfs immField imm12 ];
+            immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             inputXform ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbBaseOutput ty)
                         @%[ "cdVal" <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst)]));
@@ -111,7 +108,7 @@ Section InstBaseSpec.
           {|instName := "SLTI";
             uniqId := [fieldVal opcodeField (5'b"00100");
                        fieldVal funct3Field (3'b"010")];
-            immEncoder := [ ImmEncoderPfs immField imm12 ];
+            immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             inputXform ty pc inst cs1 cs2 scr csr :=
               ( LETC in1 <- SignExtend 1 (cs1 @% "val");
                 LETC in2 <- SignExtendTruncLsb (Xlen + 1) (imm inst);
@@ -126,7 +123,7 @@ Section InstBaseSpec.
           {|instName := "SLTIU";
             uniqId := [fieldVal opcodeField (5'b"00100");
                        fieldVal funct3Field (3'b"011")];
-            immEncoder := [ ImmEncoderPfs immField imm12 ];
+            immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             inputXform ty pc inst cs1 cs2 scr csr :=
               ( LETC in1 <- ZeroExtend 1 (cs1 @% "val");
                 LETC in2 <- ZeroExtendTruncLsb (Xlen + 1) (imm inst);
@@ -141,7 +138,7 @@ Section InstBaseSpec.
           {|instName := "XorI";
             uniqId := [fieldVal opcodeField (5'b"00100");
                        fieldVal funct3Field (3'b"100")];
-            immEncoder := [ ImmEncoderPfs immField imm12 ];
+            immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             inputXform ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbBaseOutput ty)
                         @%[ "cdVal" <- ((cs1 @% "val") .^ (SignExtendTruncLsb Xlen (imm inst))) ]));
@@ -152,7 +149,7 @@ Section InstBaseSpec.
           {|instName := "OrI";
             uniqId := [fieldVal opcodeField (5'b"00100");
                        fieldVal funct3Field (3'b"110")];
-            immEncoder := [ ImmEncoderPfs immField imm12 ];
+            immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             inputXform ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbBaseOutput ty)
                         @%[ "cdVal" <- ((cs1 @% "val") .| (SignExtendTruncLsb Xlen (imm inst))) ]));
@@ -163,7 +160,7 @@ Section InstBaseSpec.
           {|instName := "AndI";
             uniqId := [fieldVal opcodeField (5'b"00100");
                        fieldVal funct3Field (3'b"111")];
-            immEncoder := [ ImmEncoderPfs immField imm12 ];
+            immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             inputXform ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbBaseOutput ty)
                         @%[ "cdVal" <- ((cs1 @% "val") .& (SignExtendTruncLsb Xlen (imm inst))) ]));
@@ -178,8 +175,8 @@ Section InstBaseSpec.
                        then fieldVal funct7Field (7'b"0000000")
                        else fieldVal funct6Field (6'b"000000")];
             immEncoder := [ if Xlen =? 32
-                            then ImmEncoderPfs rs2FixedField imm5
-                            else ImmEncoderPfs (20, 6) imm6 ];
+                            then Build_ImmEncoder (fst rs2FixedField) imm5
+                            else Build_ImmEncoder (fst rs2FixedField) imm6 ];
             inputXform ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbBaseOutput ty)
                         @%[ "cdVal" <- ((cs1 @% "val") <<
@@ -195,8 +192,8 @@ Section InstBaseSpec.
                        then fieldVal funct7Field (7'b"0000000")
                        else fieldVal funct6Field (6'b"000000")];
             immEncoder := [ if Xlen =? 32
-                            then ImmEncoderPfs rs2FixedField imm5
-                            else ImmEncoderPfs (20, 6) imm6 ];
+                            then Build_ImmEncoder (fst rs2FixedField) imm5
+                            else Build_ImmEncoder (fst rs2FixedField) imm6 ];
             inputXform ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbBaseOutput ty)
                         @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
@@ -213,8 +210,8 @@ Section InstBaseSpec.
                        then fieldVal funct7Field (7'b"0100000")
                        else fieldVal funct6Field (6'b"010000")];
             immEncoder := [ if Xlen =? 32
-                            then ImmEncoderPfs rs2FixedField imm5
-                            else ImmEncoderPfs (20, 6) imm6 ];
+                            then Build_ImmEncoder (fst rs2FixedField) imm5
+                            else Build_ImmEncoder (fst rs2FixedField) imm6 ];
             inputXform ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbBaseOutput ty)
                         @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
@@ -366,7 +363,7 @@ Section InstBaseSpec.
         {|instName := "AddIW";
           uniqId := [fieldVal opcodeField (5'b"00110");
                      fieldVal funct3Field (3'b"000")];
-          immEncoder := [ImmEncoderPfs immField imm12 ];
+          immEncoder := [Build_ImmEncoder (fst immField) imm12 ];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbBaseOutput ty)
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst))]));
@@ -378,7 +375,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"00110");
                      fieldVal funct3Field (3'b"001");
                      fieldVal funct7Field (7'b"0000000")];
-          immEncoder := [ImmEncoderPfs rs2FixedField imm5 ];
+          immEncoder := [Build_ImmEncoder (fst rs2FixedField) imm5 ];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbBaseOutput ty)
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") <<
@@ -391,7 +388,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"00110");
                      fieldVal funct3Field (3'b"101");
                      fieldVal funct7Field (7'b"0000000")];
-          immEncoder := [ImmEncoderPfs rs2FixedField imm5 ];
+          immEncoder := [Build_ImmEncoder (fst rs2FixedField) imm5 ];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbBaseOutput ty)
                       @%[ "cdVal" <- (Trunc32Unsigned Xlen (cs1 @% "val")) >>>
@@ -404,7 +401,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (5'b"00110");
                      fieldVal funct3Field (3'b"101");
                      fieldVal funct7Field (7'b"0100000")];
-          immEncoder := [ImmEncoderPfs rs2FixedField imm5 ];
+          immEncoder := [Build_ImmEncoder (fst rs2FixedField) imm5 ];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbBaseOutput ty)
                       @%[ "cdVal" <- (Trunc32Signed Xlen (cs1 @% "val")) >>>
@@ -511,7 +508,7 @@ Section InstBaseSpec.
       instEntries := [
         {|instName := "AUICGP";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"7b"))];
-          immEncoder := [ImmEncoderPfs auiLuiField imm20_U];
+          immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_U];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
               LETE representable <- representableFn (justFullCap cs1) #newAddr;
@@ -525,7 +522,7 @@ Section InstBaseSpec.
         |};
         {|instName := "AUIPCC";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"17"))];
-          immEncoder := [ImmEncoderPfs auiLuiField imm20_U];
+          immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_U];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
               LETE representable <- representableFn pc #newAddr;
@@ -703,7 +700,7 @@ Section InstBaseSpec.
         {|instName := "CIncAddrImm";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"1")];
-          immEncoder := [ImmEncoderPfs immField imm12];
+          immEncoder := [Build_ImmEncoder (fst immField) imm12];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
               LETE representable <- representableFn (justFullCap cs1) #newAddr;
@@ -810,7 +807,7 @@ Section InstBaseSpec.
         {|instName := "CSetBoundsImm";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"2")];
-          immEncoder := [ImmEncoderPfs immField imm12];
+          immEncoder := [Build_ImmEncoder (fst immField) imm12];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETE newCd <- setBounds cs1 (ZeroExtendTruncLsb Xlen (imm inst)) $$false;
               RetE ((DefWbBaseOutput ty)
@@ -941,8 +938,8 @@ Section InstBaseSpec.
       {|instName := name;
         uniqId := [fieldVal opcodeField (5'b"11000");
                    fieldVal funct3Field funct3Val];
-        immEncoder := [ImmEncoderPfs rdFixedField imm5_B;
-                       ImmEncoderPfs funct7Field imm7_B];
+        immEncoder := [Build_ImmEncoder (fst rdFixedField) imm5_B;
+                       Build_ImmEncoder (fst funct7Field) imm7_B];
         inputXform ty pc inst cs1 cs2 scr csr :=
           ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen (branchOffset inst);
             LETE taken <- takenFn (cs1 @% "val") (cs2 @% "val");
@@ -1006,7 +1003,7 @@ Section InstBaseSpec.
     {|instName := name;
       uniqId := [fieldVal opcodeField (5'b"00000");
                  fieldVal funct3Field funct3Val];
-      immEncoder := [ImmEncoderPfs immField imm12];
+      immEncoder := [Build_ImmEncoder (fst immField) imm12];
       inputXform ty pc inst cs1 cs2 scr csr :=
         ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
           LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
@@ -1073,8 +1070,8 @@ Section InstBaseSpec.
     {|instName := name;
       uniqId := [fieldVal opcodeField (5'b"01000");
                  fieldVal funct3Field funct3Val];
-      immEncoder := [ImmEncoderPfs rdFixedField imm5;
-                     ImmEncoderPfs funct7Field imm7];
+      immEncoder := [Build_ImmEncoder (fst rdFixedField) imm5;
+                     Build_ImmEncoder (fst funct7Field) imm7];
       inputXform ty pc inst cs1 cs2 scr csr :=
         ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen ({< funct7 inst, rdFixed inst >});
           LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
@@ -1149,7 +1146,7 @@ Section InstBaseSpec.
       instEntries := [
         {|instName := "CJAL";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"6f"))];
-          immEncoder := [ImmEncoderPfs auiLuiField imm20_J];
+          immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_J];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen (jalOffset inst);
               LETC linkAddr <- (pc @% "val") + ITE (isInstNotCompressed inst) $4 $2;
@@ -1184,7 +1181,7 @@ Section InstBaseSpec.
         {|instName := "CJALR";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"67"));
                      fieldVal funct3Field (3'h"0")];
-          immEncoder := [ImmEncoderPfs immField imm12];
+          immEncoder := [Build_ImmEncoder (fst immField) imm12];
           inputXform ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddrTemp <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
               LETC newAddr <- ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 1) #newAddrTemp, $$WO~0 >});
@@ -1408,7 +1405,7 @@ Section InstBaseSpec.
       {|instName := name;
         uniqId := [fieldVal opcodeField (5'b"11100");
                    fieldVal funct3Field funct3Val];
-        immEncoder := if isCs1 then [] else [ImmEncoderPfs rs1FixedField imm5];
+        immEncoder := if isCs1 then [] else [Build_ImmEncoder (fst rs1FixedField) imm5];
         inputXform ty pc inst cs1 cs2 scr csr :=
           ( LETC val : Data <- if isCs1 then cs1 @% "val" else ZeroExtendTruncLsb Xlen (rs1Fixed inst);
             LETC illegal <- (!isValidCsrs inst ||

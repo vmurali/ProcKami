@@ -359,10 +359,12 @@ Section ParamDefinitions.
 
   Section ImmEncoder.
     Record ImmEncoder := {
-        instPos    : (nat * nat);
-        immPos     : list (nat * nat);
-        widthEq    : snd instPos = fold_right (fun '(_, val) sum => val + sum) 0 immPos
+        instPos : nat;
+        immPos  : list (nat * nat)
       }.
+
+    Definition immFieldWidth (enc: ImmEncoder) :=
+      (instPos enc, fold_right (fun '(_, val) accum => val + accum) 0 (immPos enc)).
 
     Definition imm12   := [(0, 12)].
     Definition imm5    := [(0, 5)].
@@ -403,7 +405,7 @@ Section ParamDefinitions.
                               (if hasScr instProperties then [rs2FixedField] else []) ++
                               (if hasCsr instProperties then [immField] else []) ++
                               map (@projT1 _ _) uniqId ++
-                              map instPos immEncoder) = Some (snd instSizeField, InstSz);
+                              map immFieldWidth immEncoder) = Some (snd instSizeField, InstSz);
         goodImmEncode : exists x, getDisjointContiguous (concat (map immPos immEncoder)) = Some x
       }.
 
