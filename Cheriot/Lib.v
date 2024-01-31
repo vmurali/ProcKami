@@ -199,21 +199,37 @@ Section RegAccess.
       Retv ).
 End RegAccess.
 
-Module IntervalOrder <: TotalLeBool.
-  Definition t := (nat * nat)%type.
-  Definition leb (x y: t) := Nat.leb (fst x) (fst y).
+Module Type ToNat.
+  Variable t: Type.
+  Variable toNat: t -> nat.
+End ToNat.
+
+Module NatOrder (toNat: ToNat) <: TotalLeBool.
+  Definition t := toNat.t.
+  Definition leb (x y: t) := Nat.leb (toNat.toNat x) (toNat.toNat y).
   Theorem leb_total : forall a1 a2, leb a1 a2 = true \/ leb a2 a1 = true.
   Proof.
-    unfold leb; destruct a1 as [n n0], a2 as [n1 n2]; simpl; clear n0 n2.
-    pose proof (Nat.leb_spec n n1) as [H1 | H2]; auto.
-    right.
-    apply Nat.leb_le.
-    apply Nat.lt_le_incl.
-    auto.
+    unfold leb; intros.
+    rewrite ?Nat.leb_le.
+    lia.
   Qed.
-End IntervalOrder.
+End NatOrder.
 
+Module Interval <: ToNat.
+  Definition t := (nat * nat)%type.
+  Definition toNat (x: t) := fst x.
+End Interval.
+
+Module SigWord <: ToNat.
+  Definition t := {x : (nat * nat) & word (snd x) }.
+  Definition toNat (x: t) := fst (projT1 x).
+End SigWord.
+
+Module IntervalOrder := NatOrder Interval.
 Module IntervalSort := Sort IntervalOrder.
+
+Module SigWordOrder := NatOrder SigWord.
+Module SigWordSort := Sort SigWordOrder.
 
 Section IntervalList.
   Variable intervals: list (nat * nat).

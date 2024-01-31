@@ -228,6 +228,51 @@ Section ParamDefinitions.
     Definition rdFixedField := (7, 5).
     Definition auiLuiField := (12, 20).
 
+    Section ImmEncoder.
+      Record ImmEncoder := {
+          instPos : nat;
+          immPos  : list (nat * nat)
+        }.
+
+      Definition immFieldWidth (enc: ImmEncoder) :=
+        (instPos enc, fold_right (fun '(_, val) accum => val + accum) 0 (immPos enc)).
+
+      Definition imm12   := [(0, 12)].
+      Definition imm5    := [(0, 5)].
+      Definition imm20_U := [(12, 20)].
+      Definition imm20_J := [(12, 8); (11, 1); (1, 10); (20, 1)].
+      Definition imm6    := [(0, 6)].
+      Definition imm7    := [(5, 7)].
+      Definition imm5_B  := [(11, 1); (1, 4)].
+      Definition imm7_B  := [(5, 6); (12, 1)].
+
+      (*
+      Fixpoint immDecoderHelp (instStart: nat) (ls: list (nat * nat)) :=
+        match ls with
+        | nil => nil
+        | (immStart, width) :: xs => (immStart, (instStart, width)) ::
+                                       immDecoderHelp (instStart + width) xs
+        end.
+
+      Definition immDecoder (immEncoder: ImmEncoder) :=
+        immDecoderHelp (instPos immEncoder) (immPos immEncoder).
+      
+      Eval compute in immDecoder (Build_ImmEncoder 12 imm20_J).
+      *)
+    End ImmEncoder.
+
+    Section ImmVal.
+      Variable immVal: word InstSz.
+      Definition extractWord (start width: nat) : word width :=
+        @truncMsb width (start + width) (@truncLsb (start + width) InstSz immVal).
+
+      Fixpoint encodeImmField (imms: list (nat * nat)) :=
+        match imms return word (fold_right (fun '(_, val) sum => sum + val) 0 imms) with
+        | nil => WO
+        | (start, width) :: xs => wcombine (encodeImmField xs) (extractWord start width)
+        end.
+    End ImmVal.
+
     Section Fields.
       Variable ty: Kind -> Type.
       Variable inst: Inst @# ty.
@@ -284,7 +329,18 @@ Section ParamDefinitions.
         hasCsr      := false ;
         implicitReg := 0 ;
         implicitScr := 0 ;
-        implicitCsr := wzero _ |}.    
+        implicitCsr := wzero _ |}.
+
+    Definition isGoodInstEncode (uniqId: UniqId) (immEncoder: list ImmEncoder)
+      (instProperties: InstProperties) :=
+      getDisjointContiguous
+        ((if hasCs1 instProperties then [rs1FixedField] else []) ++
+           (if hasCs2 instProperties then [rs2FixedField] else []) ++
+           (if hasCd instProperties then [rdFixedField] else []) ++
+           (if hasScr instProperties then [rs2FixedField] else []) ++
+           (if hasCsr instProperties then [immField] else []) ++
+           map (@projT1 _ _) uniqId ++
+           map immFieldWidth immEncoder) = Some (snd instSizeField, InstSz).
   End InstEncoding.
 
   Definition CapException        := N.to_nat (hex "1c").
@@ -357,48 +413,6 @@ Section ParamDefinitions.
         "scrException?"     :: Bool;
         "wbCsr?"            :: Bool}.
 
-  Section ImmEncoder.
-    Record ImmEncoder := {
-        instPos : nat;
-        immPos  : list (nat * nat)
-      }.
-
-    Definition immFieldWidth (enc: ImmEncoder) :=
-      (instPos enc, fold_right (fun '(_, val) accum => val + accum) 0 (immPos enc)).
-
-    Definition imm12   := [(0, 12)].
-    Definition imm5    := [(0, 5)].
-    Definition imm20_U := [(12, 20)].
-    Definition imm20_J := [(12, 8); (11, 1); (1, 10); (20, 1)].
-    Definition imm6    := [(0, 6)].
-    Definition imm7    := [(5, 7)].
-    Definition imm5_B  := [(11, 1); (1, 4)].
-    Definition imm7_B  := [(5, 6); (12, 1)].
-  End ImmEncoder.
-
-  Section ImmVal.
-    Variable immVal: word InstSz.
-    Definition extractWord (start width: nat) : word width :=
-      @truncMsb width (start + width) (@truncLsb (start + width) InstSz immVal).
-
-    Fixpoint encodeImmField (imms: list (nat * nat)) :=
-      match imms return word (fold_right (fun '(_, val) sum => val + sum) 0 imms) with
-      | nil => WO
-      | (start, width) :: xs => wcombine (extractWord start width) (encodeImmField xs)
-      end.
-  End ImmVal.
-
-  Definition isGoodInstEncode (uniqId: UniqId) (immEncoder: list ImmEncoder)
-    (instProperties: InstProperties) :=
-    getDisjointContiguous
-      ((if hasCs1 instProperties then [rs1FixedField] else []) ++
-         (if hasCs2 instProperties then [rs2FixedField] else []) ++
-         (if hasCd instProperties then [rdFixedField] else []) ++
-         (if hasScr instProperties then [rs2FixedField] else []) ++
-         (if hasCsr instProperties then [immField] else []) ++
-         map (@projT1 _ _) uniqId ++
-         map immFieldWidth immEncoder) = Some (snd instSizeField, InstSz).
-
   Section InstEntry.
     Variable ik: Kind.
     Record InstEntry :=
@@ -417,6 +431,16 @@ Section ParamDefinitions.
         xlens : list nat;
         extension: Extension;
         instEntries: list InstEntry }.
+
+    Definition encodeFullInstList (i: InstEntry)
+      (cs1 cs2 cd scr: word (snd rs1FixedField)) (csr: word (snd immField)) (immV: word InstSz) :=
+      uniqId i ++
+        map (fun ie => existT _ (instPos ie, _) (encodeImmField immV (immPos ie))) (immEncoder i) ++
+        (if hasCs1 (instProperties i) then [existT _ rs1FixedField cs1] else []) ++
+        (if hasCs2 (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
+        (if hasCd (instProperties i) then [existT _ rdFixedField cd] else []) ++
+        (if hasScr (instProperties i) then [existT _ rs2FixedField scr] else []) ++
+        (if hasCsr (instProperties i) then [existT _ immField csr] else []).
   End InstEntry.
 
   Record FuncEntryFull :=
