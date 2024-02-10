@@ -220,16 +220,8 @@ Module Interval <: ToNat.
   Definition toNat (x: t) := fst x.
 End Interval.
 
-Module SigWord <: ToNat.
-  Definition t := {x : (nat * nat) & word (snd x) }.
-  Definition toNat (x: t) := fst (projT1 x).
-End SigWord.
-
 Module IntervalOrder := NatOrder Interval.
 Module IntervalSort := Sort IntervalOrder.
-
-Module SigWordOrder := NatOrder SigWord.
-Module SigWordSort := Sort SigWordOrder.
 
 Section IntervalList.
   Variable intervals: list (nat * nat).
@@ -239,8 +231,8 @@ Section IntervalList.
     match ls with
     | nil => Some start
     | (s, l) :: xs => if (s =? start) && negb (l =? 0)
-                       then getLastDisjointContiguous (s + l) xs
-                       else None
+                      then getLastDisjointContiguous (s + l) xs
+                      else None
     end.
 
   Definition getDisjointContiguous : option (nat * nat) :=
@@ -252,3 +244,21 @@ Section IntervalList.
                       end
     end.
 End IntervalList.
+
+Module SigWord <: ToNat.
+  Definition t := {x : (nat * nat) & word (snd x) }.
+  Definition toNat (x: t) := fst (projT1 x).
+End SigWord.
+
+Module SigWordOrder := NatOrder SigWord.
+Module SigWordSort := Sort SigWordOrder.
+
+Section WordCombiner.
+  Variable initPos initSz: nat.
+  Variable init: word initSz.
+  Fixpoint wordCombiner (ls: list {x: nat * nat & word (snd x)}) :=
+    match ls return word (fold_right (fun new sum => snd (projT1 new) + sum) initSz ls) with
+    | nil => init
+    | x :: xs => wcombine (projT2 x) (wordCombiner xs)
+    end.
+End WordCombiner.

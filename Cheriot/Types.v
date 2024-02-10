@@ -432,15 +432,22 @@ Section ParamDefinitions.
         extension: Extension;
         instEntries: list InstEntry }.
 
-    Definition encodeFullInstList (i: InstEntry)
-      (cs1 cs2 cd scr: word (snd rs1FixedField)) (csr: word (snd immField)) (immV: word InstSz) :=
-      uniqId i ++
-        map (fun ie => existT _ (instPos ie, _) (encodeImmField immV (immPos ie))) (immEncoder i) ++
-        (if hasCs1 (instProperties i) then [existT _ rs1FixedField cs1] else []) ++
-        (if hasCs2 (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
-        (if hasCd (instProperties i) then [existT _ rdFixedField cd] else []) ++
-        (if hasScr (instProperties i) then [existT _ rs2FixedField scr] else []) ++
-        (if hasCsr (instProperties i) then [existT _ immField csr] else []).
+    Section Encoder.
+      Variable i: InstEntry.
+      Variable cs1 cs2 cd scr: word (snd rs1FixedField).
+      Variable csr: word (snd immField).
+      Variable immV: word InstSz.
+      Definition encodeFullInstList :=
+        uniqId i ++
+          map (fun ie => existT _ (instPos ie, _) (encodeImmField immV (immPos ie))) (immEncoder i) ++
+          (if hasCs1 (instProperties i) then [existT _ rs1FixedField cs1] else []) ++
+          (if hasCs2 (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
+          (if hasCd (instProperties i) then [existT _ rdFixedField cd] else []) ++
+          (if hasScr (instProperties i) then [existT _ rs2FixedField scr] else []) ++
+          (if hasCsr (instProperties i) then [existT _ immField csr] else []).
+
+      Definition encodeFullInst := wordCombiner (2'b"11") (SigWordSort.sort encodeFullInstList).
+    End Encoder.
   End InstEntry.
 
   Record FuncEntryFull :=
