@@ -37,7 +37,7 @@ Section DecExec.
       Variable matches: MatchInstEntryStruct @# ty.
       Definition decodeInstEntry : Maybe ik ## ty :=
         redLet (@Kor _ (Maybe ik))
-          (fun x => ( LETE out <- inputXform (snd x) pc inst cs1 cs2 scr csr;
+          (fun x => ( LETE out <- spec (snd x) pc inst cs1 cs2 scr csr;
                       RetE ((ITE (castReadStructExpr _ (ReadStruct matches (fst x)))
                                (Valid #out)
                                Invalid) : Maybe ik @# ty)))
@@ -55,11 +55,11 @@ Section DecExec.
     End matches.
 
     Section Exec.
-      Variable func: ik @# ty -> FuncOutput ## ty.
-      Definition execInstEntry (decodes: Maybe ik @# ty) : Maybe FuncOutput ## ty :=
+      Variable func: ik @# ty -> FullOutput ## ty.
+      Definition execInstEntry (decodes: Maybe ik @# ty) : Maybe FullOutput ## ty :=
         ( LETE ret <- func (decodes @% "data");
           RetE (STRUCT { "valid" ::= decodes @% "valid";
-                         "data" ::= #ret } : Maybe FuncOutput @# ty)).
+                         "data" ::= #ret } : Maybe FullOutput @# ty)).
     End Exec.
   End ListInstEntry.
 
@@ -114,9 +114,9 @@ Section DecExec.
       Definition implicitCsrPropFn := propertiesFuncEntry (fun _ x => Const ty (implicitCsr (instProperties x))).
     End allMatches.
 
-    Definition execFuncEntry (allDecodes: DecodeFuncEntryStruct @# ty): Maybe FuncOutput ## ty.
+    Definition execFuncEntry (allDecodes: DecodeFuncEntryStruct @# ty): Maybe FullOutput ## ty.
       refine
-        (redLet (@Kor _ (Maybe FuncOutput))
+        (redLet (@Kor _ (Maybe FullOutput))
            (fun x => ( LETC decodes <- ReadStruct allDecodes (finTagMapFin x);
                        execInstEntry (@localFunc _ (finTagMapVal (finTagMapVal x)) ty) (_ #decodes) ))
            (finTagMapPf

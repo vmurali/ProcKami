@@ -133,6 +133,7 @@ Class ProcParams :=
     DataRootCap: word CapSz;
     SealRootCap: word CapSz;
     MtccVal: word Xlen;
+    MtdcVal: word Xlen;
     IeInit: bool;
     MeieInit: bool;
     MtieInit: bool;
@@ -159,6 +160,7 @@ Class ProcParams :=
     tagRead: string;
     tagWrite: string;
     tagArray: string;
+    memArray: string;
     regsRead1: string;
     regsRead2: string;
     regsWrite: string;
@@ -393,25 +395,37 @@ Section ParamDefinitions.
     destruct xlen_vars; subst; simpl; lia.
   Qed.
 
-  Definition FuncOutput :=
+  Definition FullOutput :=
     STRUCT_TYPE {
-        "data"              :: FullCapWithTag;
-        "pcOrScrCapOrMemOp" :: Cap;
-        "addrOrScrOrCsrVal" :: Addr;
-        "wb?"               :: Bool;
-        "taken?"            :: Bool;
-        "changePcCap?"      :: Bool;
-        "mem?"              :: Bool;
-        "exception?"        :: Bool;
-        "baseException?"    :: Bool; (* non-cap exception *)
-        "pcCapException?"   :: Bool; (* cap exception caused by PC *)
-        "fenceI?"           :: Bool;
-        "changeIe?"         :: Bool;
-        "newIe"             :: Bool;
-        "wbScr?"            :: Bool;
-        "scrTag"            :: Bool;
-        "scrException?"     :: Bool;
-        "wbCsr?"            :: Bool}.
+        "wb?" :: Bool;
+        "cdTag" :: Bool;
+        "cdCap" :: Cap;
+        "cdVal" :: Data;
+        "taken?" :: Bool;
+        "pcMemAddr" :: Addr;
+        "changePcCap?" :: Bool;
+        "pcCap" :: Cap;
+        "changeIe?" :: Bool;
+        "newIe" :: Bool;
+        "exception?" :: Bool;
+        "exceptionCause" :: Data;
+        "exceptionValue" :: Addr;
+        "baseException?" :: Bool;
+        "pcCapException?" :: Bool;
+        "mem?" :: Bool;
+        "memCap?" :: Bool;
+        "memSize" :: MemSize;
+        "store?" :: Bool;
+        "ldSigned?" :: Bool;
+        "ldPerms" :: CapPerms;
+        "fenceI?" :: Bool;
+        "wbScr?" :: Bool;
+        "scrTag" :: Bool;
+        "scrCap" :: Cap;
+        "scrVal" :: Data;
+        "scrException?" :: Bool;
+        "wbCsr?" :: Bool;
+        "csrVal" :: Data }.
 
   Section InstEntry.
     Variable ik: Kind.
@@ -419,7 +433,7 @@ Section ParamDefinitions.
       { instName       : string;
         uniqId         : UniqId;
         immEncoder     : list ImmEncoder;
-        inputXform     : forall ty, FullCap @# ty -> Inst @# ty ->
+        spec           : forall ty, FullCap @# ty -> Inst @# ty ->
                                     FullCapWithTag @# ty -> FullCapWithTag @# ty ->
                                     FullCapWithTag @# ty -> Data @# ty -> ik ## ty;
         instProperties : InstProperties;
@@ -453,13 +467,13 @@ Section ParamDefinitions.
   Record FuncEntryFull :=
     { funcNameFull        : string;
       localFuncInputFull  : Kind;
-      localFuncFull       : forall ty, localFuncInputFull @# ty -> FuncOutput ## ty;
+      localFuncFull       : forall ty, localFuncInputFull @# ty -> FullOutput ## ty;
       instsFull           : list (InstEntryFull localFuncInputFull) }.
 
   Record FuncEntry :=
     { funcName        : string;
       localFuncInput  : Kind;
-      localFunc       : forall ty, localFuncInput @# ty -> FuncOutput ## ty;
+      localFunc       : forall ty, localFuncInput @# ty -> FullOutput ## ty;
       insts           : list (InstEntry localFuncInput) }.
 
   Definition filterInsts k (ls: list (InstEntryFull k)) :=

@@ -5,8 +5,73 @@ Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.BankedMem.
 Section Run.
   Context `{procParams: ProcParams}.
   Variable ty: Kind -> Type.
+
+  Definition CompressedOutput :=
+    STRUCT_TYPE {
+        "data"              :: FullCapWithTag;
+        "pcOrScrCapOrMemOp" :: Cap;
+        "addrOrScrOrCsrVal" :: Addr;
+        "wb?"               :: Bool;
+        "taken?"            :: Bool;
+        "changePcCap?"      :: Bool;
+        "mem?"              :: Bool;
+        "exception?"        :: Bool;
+        "baseException?"    :: Bool; (* non-cap exception *)
+        "pcCapException?"   :: Bool; (* cap exception caused by PC *)
+        "fenceI?"           :: Bool;
+        "changeIe?"         :: Bool;
+        "newIe"             :: Bool;
+        "wbScr?"            :: Bool;
+        "scrTag"            :: Bool;
+        "scrException?"     :: Bool;
+        "wbCsr?"            :: Bool}.
+
   Local Open Scope kami_expr.
   Local Open Scope kami_action.
+
+  Definition compressOutput (inp: FullOutput @# ty): CompressedOutput ## ty :=
+    ( LETC memOp : MemOpInfo <-
+                     STRUCT {
+                         "op" ::= ITE (inp @% "store?") $StOp $LdOp;
+                         "size" ::= inp @% "memSize";
+                         "MC" ::= inp @% "ldPerms" @% "MC";
+                         "LM" ::= inp @% "ldPerms" @% "LM";
+                         "LG" ::= inp @% "ldPerms" @% "LG";
+                         "sign?" ::= inp @% "ldSigned?";
+                         "cap?" ::= inp @% "memCap?" };
+      LETC cd : FullCapWithTag <-
+                  STRUCT {
+                      "tag" ::= inp @% "cdTag";
+                      "cap" ::= ITE (inp @% "exception?") (inp @% "exceptionValue") (inp @% "cdCap");
+                      "val" ::= (IF (inp @% "exception?")
+                                 then inp @% "exceptionCause"
+                                 else inp @% "cdVal") };
+      RetE (STRUCT {
+                "data" ::= #cd;
+                "pcOrScrCapOrMemOp" ::= (IF (inp @% "mem?")
+                                         then ZeroExtendTruncLsb CapSz (pack #memOp)
+                                         else (IF (inp @% "wbScr?")
+                                               then inp @% "scrCap"
+                                               else inp @% "pcCap"));
+                "addrOrScrOrCsrVal" ::= (IF (inp @% "wbScr?")
+                                         then inp @% "scrVal"
+                                         else (IF (inp @% "wbCsr?")
+                                               then inp @% "csrVal"
+                                               else inp @% "pcMemAddr"));
+                "wb?" ::= inp @% "wb?";
+                "taken?" ::= inp @% "taken?";
+                "changePcCap?" ::= inp @% "changePcCap?";
+                "mem?" ::= inp @% "mem?";
+                "exception?" ::= inp @% "exception?";
+                "baseException?" ::= inp @% "baseException?";
+                "pcCapException?" ::= inp @% "pcCapException?";
+                "fenceI?" ::= inp @% "fenceI?";
+                "changeIe?" ::= inp @% "changeIe?";
+                "newIe" ::= inp @% "newIe";
+                "wbScr?" ::= inp @% "wbScr?";
+                "scrTag" ::= inp @% "scrTag";
+                "scrException?" ::= inp @% "scrException?";
+                "wbCsr?" ::= inp @% "wbCsr?" } : CompressedOutput @# ty) ).
 
   Variable uncompressFn: CompInst @# ty -> Maybe Inst ## ty.
   Variable funcEntries: list FuncEntry.
@@ -215,14 +280,14 @@ Section Run.
 
   Definition ExecOut := STRUCT_TYPE {
                             "inst" :: Inst;
-                            "result" :: FuncOutput;
+                            "result" :: CompressedOutput;
                             "justFenceI?" :: Bool }.
 
   Definition getScrIdx (csrIdx: Bit (snd immField) @# ty) := UniBit (TruncLsb 5 _) csrIdx.
   
   Definition exec (decodeOut: DecodeOut @# ty) : ExecOut ## ty :=
-    ( LETE funcOut : Maybe FuncOutput <- execFuncEntry (decodeOut @% "decodes");
-      LETC funcOutData <- #funcOut @% "data";
+    ( LETE funcOut : Maybe FullOutput <- execFuncEntry (decodeOut @% "decodes");
+      LETE funcOutData <- compressOutput (#funcOut @% "data");
       LETC pc <- decodeOut @% "pc" @% "val";
       LETC inst <- decodeOut @% "inst";
       LETC funcOutDataData <- #funcOutData @% "data";
@@ -256,7 +321,7 @@ Section Run.
                                else ( IF !(decodeOut @% "legal?") || !(#funcOut @% "valid")
                                       then ZeroExtendTruncLsb CapSz #inst
                                       else #funcOutDataData @% "cap" ) );
-      LETC result : FuncOutput <- #funcOutData
+      LETC result : CompressedOutput <- #funcOutData
                                     @%[ "exception?" <- #exception ]
                                     @%[ "baseException?" <- #baseException ]
                                     @%[ "pcCapException?" <- #pcCapException ]
@@ -268,7 +333,7 @@ Section Run.
                       "result" ::= #result;
                       "justFenceI?" ::= decodeOut @% "justFenceI?" } : ExecOut @# ty)) ).
 
-  Definition memRetProcess (funcOut: FuncOutput @# ty) (memInfo: MemOpInfo @# ty) (memRet: DataRet @# ty) : FuncOutput ## ty :=
+  Definition memRetProcess (funcOut: CompressedOutput @# ty) (memInfo: MemOpInfo @# ty) (memRet: DataRet @# ty) : CompressedOutput ## ty :=
     ( LETC isStore <- memInfo @% "op" == $StOp;
       LETC memRetData <- memRet @% "data";
       LETC loadCap <- #memRetData @% "cap";
@@ -309,10 +374,10 @@ Section Run.
               @%[ "exception?" <- #exception ])).
 
   Definition MemOutData := STRUCT_TYPE { "inst" :: Inst;
-                                         "result" :: FuncOutput }.
+                                         "result" :: CompressedOutput }.
 
   Definition memSpec (execOut: ExecOut @# ty) : ActionT ty (Maybe MemOutData) :=
-    ( LET funcOut : FuncOutput <- execOut @% "result";
+    ( LET funcOut : CompressedOutput <- execOut @% "result";
       LET memInfo <- unpack MemOpInfo (ZeroExtendTruncLsb (size MemOpInfo)
                                          (#funcOut @% "pcOrScrCapOrMemOp"));
       Read reqJustFenceI: Bool <- reqJustFenceIReg;

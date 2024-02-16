@@ -224,8 +224,9 @@ Section CapHelpers.
                                                  "B" ::= Const _ (wzero _);
                                                  "T" ::= Const _ (_ 'h"100") })%kami_expr).
 
-  Definition PcAddrInit := (AddrSz 'h"1000").
-  Definition MtccValInit := (AddrSz 'h"800").
+  Definition PcAddrInit := (AddrSz 'h"10000").
+  Definition MtccValInit := (AddrSz 'h"6000").
+  Definition MtdcValInit := (AddrSz 'h"2000").
 
   Theorem pccValidThm: PccValid capAccessorsInit ExecRootCapInit PcAddrInit false.
   Proof.
@@ -254,6 +255,7 @@ Section Prefix.
       DataRootCap := DataRootCapInit;
       SealRootCap := SealRootCapInit;
       MtccVal := MtccValInit;
+      MtdcVal := MtdcValInit;
       IeInit := false;
       MeieInit := false;
       MtieInit := false;
@@ -275,10 +277,11 @@ Section Prefix.
       tagRead := @^"tagRead";
       tagWrite := @^"tagWrite";
       tagArray := @^"tagArray";
+      memArray := @^"memArray";
       regsRead1 := @^"regsRead1";
       regsRead2 := @^"regsRead2";
       regsWrite := @^"regsWrite";
       regsArray := @^"regsArray";
-      regsInit := RFNonFile 32 None;
+      regsInit := RFNonFile 32 (Some Default);
     |}.
 End Prefix.
