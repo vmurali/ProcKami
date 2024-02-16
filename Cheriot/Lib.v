@@ -200,8 +200,8 @@ Section RegAccess.
 End RegAccess.
 
 Module Type ToNat.
-  Variable t: Type.
-  Variable toNat: t -> nat.
+  Parameter t: Type.
+  Parameter toNat: t -> nat.
 End ToNat.
 
 Module NatOrder (toNat: ToNat) <: TotalLeBool.

@@ -88,16 +88,28 @@ Goal Nat.log2_up (length (@memOps model64Params)) <= (@TlFullSz model64Params).
 Proof. cbv; lia. Qed.
 
 (** vm_compute should take ~40s *)
-Lemma model64_wf : WfMod_unit model64 = [].
+Lemma model64_wf_unit : WfMod_unit model64 = [].
 Proof.
   vm_compute.
   reflexivity.
 Qed.
 
-Lemma model32_wf : WfMod_unit model32 = [].
+Lemma model32_wf_unit : WfMod_unit model32 = [].
 Proof.
   vm_compute.
   reflexivity.
+Qed.
+
+Lemma model64_wf: forall ty, WfMod_new ty model64.
+Proof.
+  apply WfMod_unit_new.
+  apply model64_wf_unit.
+Qed.
+
+Lemma model32_wf: forall ty, WfMod_new ty model32.
+Proof.
+  apply WfMod_unit_new.
+  apply model32_wf_unit.
 Qed.
 
 Lemma model64_sf : SigMatch_Mod model64 = [].
@@ -114,11 +126,66 @@ Qed.
 
 Axiom cheat : forall {X},X.
 
-Definition basemod32 := let '(_,(_,basemod)) := separateModRemove model32 in basemod.
-Definition basemod64 := let '(_,(_,basemod)) := separateModRemove model64 in basemod.
+Definition baseOnly m := let '(_,(_,basemod)) := separateModRemove m in basemod.
 
-Definition rules_32 : list (evaluated_Rule (getRegisters basemod32)) := map (fun r => eval_Rule r cheat) (getRules basemod32).
-Definition rules_64 : list (evaluated_Rule (getRegisters basemod64)) := map (fun r => eval_Rule r cheat) (getRules basemod64).
+Definition basemod32 := baseOnly model32.
+Definition basemod64 := baseOnly model64.
+
+Lemma WfCreateHideMod: forall ty ls m, WfMod_new ty (createHideMod m ls) -> WfMod_new ty m.
+Proof.
+  intros ty.
+  induction ls; auto; simpl; intros.
+  destruct H; apply IHls; auto.
+Qed.
+
+Lemma baseMod_wf: forall ty m, WfMod_new ty m ->
+                               WfBaseModule_new ty (baseOnly m).
+Proof.
+  intros ty m H.
+  pose proof (mergeSeparatedRemoved_Wf_new (Build_ModWf_new _ _ H)) as sth.
+  simpl in sth.
+  apply WfCreateHideMod in sth.
+  simpl in sth.
+  assert (sth2: WfBaseModule_new ty (snd (snd (separateModRemove m)))) by tauto.
+  unfold baseOnly.
+  destruct (separateModRemove m) as [x1 x2].
+  destruct x2.
+  auto.
+Qed.
+
+Lemma WfRules_baseMod: forall ty m, WfMod_new ty m -> WfRules ty (getRegisters (baseOnly m)) (getRules (baseOnly m)).
+Proof.
+  intros ty m H.
+  pose proof (baseMod_wf ty m H) as sth.
+  destruct sth; auto.
+Qed.
+
+Section ListProp.
+  Variable A: Type.
+  Context [P: A -> Prop].
+  Fixpoint conjProp (ls: list A) : Prop :=
+    match ls with
+    | nil => True
+    | x :: xs => P x /\ conjProp xs
+    end.
+
+  Fixpoint conjProp_listProp [ls]: conjProp ls -> list { x : A & P x } :=
+    match ls return conjProp ls -> list { x : A & P x } with
+    | nil => fun _ => nil
+    | x :: xs => fun pf => existT P x (proj1 pf) :: conjProp_listProp (proj2 pf)
+    end.
+End ListProp.
+
+Definition sigTBaseRulesWf ty m (wf: WfMod_new ty m) :=
+  conjProp_listProp (WfRules_baseMod ty m wf).
+
+Definition rulesOnly {m} (H: forall ty, WfMod_new ty m): list (evaluated_Rule (getRegisters (baseOnly m))) :=
+  map (fun '(existT x pf) => eval_Rule x pf) (sigTBaseRulesWf eval_Kind m (H eval_Kind)).
+
+Definition rules_32 : list (evaluated_Rule (getRegisters basemod32)) := rulesOnly model32_wf.
+Definition rules_64 : list (evaluated_Rule (getRegisters basemod64)) := rulesOnly model64_wf.
+
+Set Extraction Output Directory ".".
 
 Separate Extraction
          predPack

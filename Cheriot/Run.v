@@ -1,9 +1,11 @@
 Require Import Kami.AllNotations.
 Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
-Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.BankedMem.
+Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.MemSpecIfc.
 
 Section Run.
   Context `{procParams: ProcParams}.
+  Context `{memSpecIfc: MemSpecIfc}.
+  
   Variable ty: Kind -> Type.
 
   Definition CompressedOutput :=
@@ -386,8 +388,9 @@ Section Run.
 
       If #dontDrop && !#exception && (#funcOut @% "mem?")
       then (
-          LETA memRet : DataRet <- loadStoreReq (#memInfo @% "op" == $StOp) (#funcOut @% "addrOrScrOrCsrVal")
-                                     (#memInfo @% "size") (#memInfo @% "cap?") (#funcOut @% "data") (#memInfo @% "sign?");
+          LETA memRet : DataRet <- loadStoreReq (#memInfo @% "op" == $StOp)
+                                     (#funcOut @% "addrOrScrOrCsrVal") (#memInfo @% "size") (#memInfo @% "cap?")
+                                     (#funcOut @% "data") (#memInfo @% "sign?");
           RetAE (memRetProcess #funcOut #memInfo #memRet) )
       else Ret #funcOut
       as retFuncOut ;
@@ -501,4 +504,10 @@ Section Run.
       LETAE execOut <- exec #decodeOut;
       LETA memOut <- memSpec #execOut;
       wb true #memOut ).
+
+  Definition startFenceIRule: ActionT ty Void :=
+    ( Read startFenceI : Bool <- startFenceIReg;
+      WriteIf #startFenceI Then justFenceIReg : Bool <- $$true;
+      Write startFenceIReg : Bool <- $$false;
+      Retv ).
 End Run.

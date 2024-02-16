@@ -147,7 +147,7 @@ Class ProcParams :=
     NumMemBytes := Nat.pow 2 LgNumMemBytes;
     MemBankParams := MemBankInit NumMemBytes;
     memBankInits: list MemBankParams;
-    NumBanks := (CapSz + Xlen) / 8;
+    NumBanks := (Xlen + CapSz) / 8;
     lengthMemBankInits: length memBankInits = NumBanks;
     procName: string;
     pcCapReg: string;
@@ -177,6 +177,9 @@ Section ParamDefinitions.
 
   Definition Addr := Bit Xlen.
 
+  Definition NumTags := NumMemBytes/NumBanks.
+  Definition LgNumTags := Nat.log2_up NumTags.
+  
   Definition FullCap :=
     STRUCT_TYPE { "cap" :: Cap;
                   "val" :: Data }.

@@ -282,6 +282,6 @@ Section Prefix.
       regsRead2 := @^"regsRead2";
       regsWrite := @^"regsWrite";
       regsArray := @^"regsArray";
-      regsInit := RFNonFile 32 (Some Default);
+      regsInit := RFNonFile 32 (Some Default)
     |}.
 End Prefix.
