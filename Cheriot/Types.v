@@ -78,12 +78,16 @@ Section VarType.
   Local Notation "## x" := (Var type (SyntaxKind _) x) (no associativity, at level 0).
 
   Local Open Scope kami_expr.
+  Definition PcCapValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen) (pcCap: word CapSz) :=
+    evalLetExpr (LETE perms <- getCapPerms capAccessors (Const type pcCap);
+                 RetE (##perms @% "EX")) = true /\
+      evalExpr ((isSealed capAccessors (Const _ pcCap))) = false.
+
+  Definition PcValValid Xlen (pcAddr: word Xlen) (compressed: bool) :=
+    compressed = false -> truncLsb pcAddr = ZToWord 2 0.
   Definition PccValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen) (pcCap: word CapSz) (pcAddr: word Xlen)
     (compressed: bool) :=
-    evalLetExpr ( LETE perms <- getCapPerms capAccessors (Const type pcCap);
-                  RetE (##perms @% "EX")) = true /\
-      evalExpr ((isSealed capAccessors (Const _ pcCap))) = false /\
-      (compressed = false -> truncLsb pcAddr = ZToWord 2 0).
+    PcCapValid capAccessors pcCap /\ PcValValid pcAddr compressed.
 
   Definition MtccValid Xlen CapSz (capAccessors: CapAccessors CapSz Xlen)
     (mtccCap: word CapSz) (mtccVal: word Xlen) :=
@@ -168,7 +172,8 @@ Class ProcParams :=
     isRegsAscii: bool;
     isRegsRfArg: bool;
     regsRfString: string;
-    regsInit: Fin.t (Nat.pow 2 RegIdSz) -> ConstT FullCapWithTag }.
+    regsInit: Fin.t (Nat.pow 2 RegIdSz) -> ConstT FullCapWithTag;
+    hasTrap: bool }.
 
 Section ParamDefinitions.
   Context {procParams: ProcParams}.

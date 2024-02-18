@@ -41,7 +41,6 @@ Section Run.
       Retv ).
 
   Section HasTrap.
-    Variable hasTrap: bool.
     Definition setException (pred isCap isScr: Bool @# ty) (idx: Bit RegFixedIdSz @# ty) (cause value: Data @# ty) :=
       if hasTrap
       then setTrapException pred isCap isScr idx cause value
