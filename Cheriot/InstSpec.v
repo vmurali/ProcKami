@@ -958,7 +958,7 @@ Section InstBaseSpec.
                   @%[ "mem?" <- $$true ]
                   @%[ "ldSigned?" <- $$sign ]
                   @%[ "ldPerms" <- #perms ]));
-      instProperties := DefProperties<| hasCs1 := true |>;
+      instProperties := DefProperties<| hasCs1 := true |><| isLoad := true |>;
       goodInstEncode := eq_refl;
       goodImmEncode := ltac:(eexists; cbv; eauto)
     |}.
@@ -1033,7 +1033,8 @@ Section InstBaseSpec.
                   @%[ "cdTag" <- #newTag]
                   @%[ "cdCap" <- cs2 @% "cap"]
                   @%[ "cdVal" <- cs2 @% "val"] ));
-      instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |><| hasCd := false |>;
+      instProperties :=
+        DefProperties<| hasCs1 := true |><| hasCs2 := true |><| hasCd := false |><| isStore := true |>;
       goodInstEncode := eq_refl;
       goodImmEncode := ltac:(eexists; cbv; eauto)
     |}.
@@ -1193,9 +1194,12 @@ Section InstBaseSpec.
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
-              LETC exceptionCause <- ITE (#pcPerms @% "SR")
-                                       (Const ty (natToWord Xlen CapTagViolation))
-                                       (Const ty (natToWord Xlen CapSysRegViolation));
+              LETE mepcPerms <- getCapPerms capAccessors (scr @% "cap");
+              LETC exceptionCause <- ITE (!(#pcPerms @% "SR"))
+                                       (Const ty (natToWord Xlen CapSysRegViolation))
+                                       (ITE (!(#mepcPerms @% "EX"))
+                                          (Const ty (natToWord Xlen CapExecViolation))
+                                          (Const ty (natToWord Xlen CapTagViolation)));
               LETC newMepc <- if compressed
                               then ZeroExtendTruncLsb Xlen
                                      ({< ZeroExtendTruncMsb (Xlen - 1) (scr @% "val"), $$WO~0 >})
@@ -1203,13 +1207,15 @@ Section InstBaseSpec.
                                      ({< ZeroExtendTruncMsb (Xlen - 2) (scr @% "val"), $$(2'b"00") >});
               LETE representable <- representableFn (justFullCap scr) #newMepc;
               LETC exception <- !((scr @% "tag") && !isSealed capAccessors (scr @% "cap") && #representable
-                                  && (#pcPerms @% "SR"));
+                                  && (#mepcPerms @% "EX") && (#pcPerms @% "SR"));
               RetE ((DefFullOutput ty)
                       @%[ "taken?" <- $$true ]
+                      @%[ "changePcCap?" <- $$true ]
                       @%[ "pcMemAddr" <- #newMepc ]
                       @%[ "pcCap" <- scr @% "cap" ]
                       @%[ "exception?" <- #exception ]
                       @%[ "exceptionCause" <- #exceptionCause ]
+                      @%[ "exceptionValue" <- #newMepc ]
                       @%[ "scrException?" <- !(#pcPerms @% "SR") ]
                       @%[ "pcCapException?" <- #pcPerms @% "SR" ]));
           instProperties := DefProperties<| implicitScr := MepccIndex |><| hasCd := false |>;

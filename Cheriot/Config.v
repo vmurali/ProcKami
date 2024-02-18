@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Types.
+Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
 
 Definition CapStruct : Kind :=
   (STRUCT_TYPE {
@@ -235,16 +235,26 @@ Section CapHelpers.
 End CapHelpers.
 
 Section Prefix.
-  Local Notation prefix := ("cheriot_0").
+  Variable prefix : string.
+  Variable LgNumMemBytesVal: nat.
+  Variable memInitVal: Fin.t (Nat.pow 2 LgNumMemBytesVal * 8) -> word 8.
+
+  Definition FullCapWithTagKind := (STRUCT_TYPE { "tag" :: Bool;
+                                                  "cap" :: Bit 32;
+                                                  "val" :: Bit 32 }).
+
+  Variable regsInitVal: Fin.t 32 -> type FullCapWithTagKind.
   Local Notation "@^ x" := (prefix ++ "_" ++ x)%string (at level 0).
   Local Notation stringify x n := (prefix ++ "_" ++ (x ++ "_" ++ natToHexStr n)%string)%string.
 
-  Definition createMemRFParam (n: nat) : MemBankInit (Nat.pow 2 12) :=
+  Definition regsInitConstVal := convConstArrayToFunConst regsInitVal.
+
+  Definition createMemRFParam (n: nat) : MemBankInit :=
     {|instRqName := stringify "instRq" n;
       loadRqName := stringify "loadRq" n;
       storeRqName := stringify "storeRq" n;
       memArrayName := stringify "memArray" n;
-      regFileInit := RFNonFile _ (Some (ConstBit (wzero _)) ) |}.
+      memRfString := stringify "memArrayFile" n |}.
 
   Definition procParams : ProcParams :=
     {|Xlen := 32;
@@ -266,6 +276,9 @@ Section Prefix.
       regIdSzIs4_or5 := or_intror eq_refl;
       memBankInits := map createMemRFParam (zeroToN 8);
       lengthMemBankInits := eq_refl;
+      isMemAscii := false;
+      isMemRfArg := true;
+      memInit := memInitVal;
       procName := prefix;
       pcCapReg := @^"pcCap";
       pcValReg := @^"pcVal";
@@ -282,6 +295,8 @@ Section Prefix.
       regsRead2 := @^"regsRead2";
       regsWrite := @^"regsWrite";
       regsArray := @^"regsArray";
-      regsInit := RFNonFile 32 (Some Default)
-    |}.
+      isRegsAscii := false;
+      isRegsRfArg := true;
+      regsRfString := @^"regsArrayFile";
+      regsInit := regsInitConstVal |}.
 End Prefix.

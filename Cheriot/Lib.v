@@ -1,5 +1,16 @@
 Require Import Kami.AllNotations Coq.Sorting.Mergesort Coq.Structures.Orders.
 
+Fixpoint convTypeToConst [k: Kind] : forall (t: type k), ConstT k :=
+  match k return type k -> ConstT k with
+  | Bool => fun b => ConstBool b
+  | Bit k => fun w => ConstBit w
+  | Struct n fk => fun fv => ConstStruct fk (fun i => convTypeToConst (fv i))
+  | Array n k => fun fv => ConstArray (fun i => convTypeToConst (fv i))
+  end.
+
+Definition convConstArrayToFunConst [n: nat] [k: Kind] (v: Fin.t n -> type k): Fin.t n -> (ConstT k) :=
+  fun i => convTypeToConst (v i).
+
 Section FinTag.
   Variable A: Type.
   Fixpoint finTag (ls: list A): list (Fin.t (length ls) * A) :=

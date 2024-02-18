@@ -1,24 +1,37 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.MemSpecIfc.
-
+Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
+  
 Section BankedMem.
   Context `{procParams: ProcParams}.
-  
-  Local Ltac dischargeDiv8 :=
-    unfold NumBanks, FullCap, Cap, CapSz, Data;
-    let H := fresh in
-    destruct (xlenIs32_or_64) as [H | H]; rewrite H; auto.
-  
-  Definition createRegFile (mb: MemBankParams) :=
+  Definition InstRet := STRUCT_TYPE {
+                            "inst" :: Inst;
+                            "badLower16?" :: Bool;
+                            "error?" :: Bool;
+                            "fault?" :: Bool;
+                            "justFenceI?" :: Bool }.
+
+  Definition DataRet := STRUCT_TYPE {
+                            "data" :: FullCapWithTag;
+                            "lowestByte" :: Bit (Nat.log2_up NumBanks);
+                            "dataError?" :: Bool;
+                            "dataFault?" :: Bool;
+                            "tagError?" :: Bool;
+                            "tagFault?" :: Bool }.
+
+  Definition createRegFile (mb: Fin.t NumBanks * MemBankInit) :=
     {|rfIsWrMask := false;
       rfNum := 1;
-      rfDataArray := memArrayName mb;
-      rfRead := Async [instRqName mb; loadRqName mb];
-      rfWrite := storeRqName mb;
+      rfDataArray := memArrayName (snd mb);
+      rfRead := Async [instRqName (snd mb); loadRqName (snd mb)];
+      rfWrite := storeRqName (snd mb);
       rfIdxNum := NumMemBytes;
       rfData := Bit 8;
-      rfInit := regFileInit mb |}.
+      rfInit := RFFile isMemAscii isMemRfArg (memRfString (snd mb)) 0 NumMemBytes
+                  (fun i => memInit (Fin.depair i (fst mb))) |}.
 
-  Definition memFiles := map createRegFile memBankInits.
+  Definition memFiles := map createRegFile
+                           (match lengthMemBankInits in _ = Y return list (Fin.t Y * MemBankInit) with
+                            | eq_refl => finTag memBankInits
+                            end).
 
   (* On normal stores (i.e. stores of data, not stores of caps),
      we may do two writes of false into consecutive tags;
@@ -45,7 +58,7 @@ Section BankedMem.
         Variable idx idxPlus1: Bit (Nat.log2_up NumMemBytes) @# ty.
         Variable idxLsb: Bit (Nat.log2_up NumBanks) @# ty.
 
-        Local Fixpoint instReqCallHelp (mbs: list MemBankParams)
+        Local Fixpoint instReqCallHelp (mbs: list MemBankInit)
           (exprs: list (Bit 8 @# ty)) (pos: nat) : ActionT ty (Array (length exprs + length mbs) (Bit 8)). refine
           match mbs return ActionT ty (Array (length exprs + length mbs) (Bit 8)) with
           | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
@@ -58,8 +71,9 @@ Section BankedMem.
         Defined.
       End CommonIdx.
 
-      Definition instReqImpl: ActionT ty InstRet :=
-        ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes) addr;
+      Definition instReq: ActionT ty InstRet :=
+        ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
+                       (ZeroExtendTruncMsb (Xlen - Nat.log2_up NumBanks) addr);
           LET idxPlus1 <- #idx + $1;
           LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
           LETA bytes <- instReqCallHelp #idx #idxPlus1 #idxLsb memBankInits [] 0;
@@ -76,19 +90,19 @@ Section BankedMem.
     End LoadInst.
 
     Section LoadStore.
-      Variable isStore: Bool @# ty.
       Variable addr: Addr @# ty.
       Variable size: MemSize @# ty.
       Variable isCap: Bool @# ty.
-      Variable data: FullCapWithTag @# ty.
       Variable signed: Bool @# ty.
+      Variable isStore: Bool @# ty.
+      Variable data: FullCapWithTag @# ty.
 
       Section CommonIdx.
         Variable idx idxPlus1: Bit (Nat.log2_up NumMemBytes) @# ty.
         Variable idxLsb: Bit (Nat.log2_up NumBanks) @# ty.
         Variable bytes: Array NumBanks (Bit 8) @# ty.
 
-        Local Fixpoint memReqCallHelp (mbs: list MemBankParams) (pos: nat)
+        Local Fixpoint memReqCallHelp (mbs: list MemBankInit) (pos: nat)
           (exprs: list (Bit 8 @# ty)) : ActionT ty (Array (length exprs + length mbs) (Bit 8)). refine
           match mbs with
           | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
@@ -108,9 +122,15 @@ Section BankedMem.
         Defined.
       End CommonIdx.
 
-      Definition loadStoreReqImpl: ActionT ty DataRet.
+      Local Ltac dischargeDiv8 :=
+        unfold NumBanks, FullCap, Cap, CapSz, Data;
+        let H := fresh in
+        destruct (xlenIs32_or_64) as [H | H]; rewrite H; auto.
+
+      Definition loadStoreReq: ActionT ty DataRet.
         refine
-          ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes) addr;
+          ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
+                         (ZeroExtendTruncMsb (Xlen - Nat.log2_up NumBanks) addr);
             LET idxPlus1 <- #idx + $1;
             LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
             LET capVal <- {< (data @% "cap"), (data @% "val") >};
@@ -122,12 +142,11 @@ Section BankedMem.
                               else TruncToDynamicSizeArrayUnsigned #shuffledLdBytes size);
             LET ldVal <- unpack FullCap (castBits _ (pack #ldSignVal));
             LET straddle <- ZeroExtend 1 #idxLsb + size <= $NumBanks;
-            LET tagIdxBase <- ZeroExtendTruncMsb LgNumTags #idx;
-            LET tagIdxBaseMsb <- ZeroExtendTruncMsb (LgNumTags-1) #tagIdxBase;
+            LET tagIdxBaseMsb <- ZeroExtendTruncMsb (LgNumMemBytes-1) #idx;
             LET tagIdx : Maybe _ <- Valid #tagIdxBaseMsb;
             LET tagIdxPlus1 : Maybe _ <- (STRUCT { "valid" ::= #straddle;
                                                    "data" ::= (#tagIdxBaseMsb + $1)}: Maybe _ @# ty);
-            LET tagIdxLsbIs0 <- unpack Bool (ZeroExtendTruncLsb 1 #tagIdxBase);
+            LET tagIdxLsbIs0 <- unpack Bool (ZeroExtendTruncLsb 1 #idx);
             LET tag0Idx <- ITE #tagIdxLsbIs0 #tagIdx #tagIdxPlus1;
             LET tag1Idx <- ITE #tagIdxLsbIs0 #tagIdxPlus1 #tagIdx;
             (* For stores, if isCap, then tagIdx is valid and tagIdxPlus1 is invalid,
@@ -163,8 +182,4 @@ Section BankedMem.
       Defined.
     End LoadStore.
   End ty.
-    
-  Instance bankedMem: MemSpecIfc :=
-    {|instReq := instReqImpl;
-      loadStoreReq := loadStoreReqImpl |}.
 End BankedMem.

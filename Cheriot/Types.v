@@ -106,19 +106,12 @@ Section VarType.
                   RetE (##baseBound && ##topBound)) = true.  
 End VarType.
 
-(* Changes from CherIoT:
-   - All PC out-of-bounds exceptions are caught only when executing
-     the instruction, not during the previous instruction (like JALR,
-     JAL, Branch, PC+2, PC+4).  Instead, we store the taken-ness and
-     previous PC, which we use to set EPC on a taken branch/Jump.
- *)
-
-Record MemBankInit numMemBytes :=
+Record MemBankInit :=
   { instRqName: string;
     loadRqName: string;
     storeRqName: string;
     memArrayName: string;
-    regFileInit: RegFileInitT numMemBytes (Bit 8) }.
+    memRfString: string }.
 
 Class ProcParams :=
   { Xlen: nat;
@@ -143,12 +136,14 @@ Class ProcParams :=
     RegIdSz: nat;
     regIdSzIs4_or5: RegIdSz = 4 \/ RegIdSz = 5;
     LgNumMemBytes: nat;
-    (* NumMemBytes denotes the number of bytes in each bank. So total physical memory = NumBanks * NumMemBytes *)
+    (* NumMemBytes denotes the number of bytes in each bank. So total physical memory = NumMemBytes * NumBanks *)
     NumMemBytes := Nat.pow 2 LgNumMemBytes;
-    MemBankParams := MemBankInit NumMemBytes;
-    memBankInits: list MemBankParams;
+    memBankInits: list MemBankInit;
     NumBanks := (Xlen + CapSz) / 8;
     lengthMemBankInits: length memBankInits = NumBanks;
+    isMemAscii: bool;
+    isMemRfArg: bool;
+    memInit: Fin.t (NumMemBytes * NumBanks) -> word 8;
     procName: string;
     pcCapReg: string;
     pcValReg: string;
@@ -170,16 +165,16 @@ Class ProcParams :=
     FullCapWithTag := STRUCT_TYPE { "tag" :: Bool;
                                     "cap" :: Cap;
                                     "val" :: Data };
-    regsInit: RegFileInitT (Nat.pow 2 RegIdSz) FullCapWithTag }.
+    isRegsAscii: bool;
+    isRegsRfArg: bool;
+    regsRfString: string;
+    regsInit: Fin.t (Nat.pow 2 RegIdSz) -> ConstT FullCapWithTag }.
 
 Section ParamDefinitions.
   Context {procParams: ProcParams}.
 
   Definition Addr := Bit Xlen.
 
-  Definition NumTags := NumMemBytes/NumBanks.
-  Definition LgNumTags := Nat.log2_up NumTags.
-  
   Definition FullCap :=
     STRUCT_TYPE { "cap" :: Cap;
                   "val" :: Data }.
@@ -200,6 +195,7 @@ Section ParamDefinitions.
 
   Section InstEncoding.
     Definition RegId := Bit RegIdSz.
+    Definition RegFixedIdSz := 5.
     Definition NumRegs := 2^RegIdSz.
     Definition InstSz := 32.
     Definition Inst := (Bit InstSz).
@@ -228,9 +224,9 @@ Section ParamDefinitions.
     Definition rs1Field := (15, RegIdSz).
     Definition rs2Field := (20, RegIdSz).
     Definition rdField := (7, RegIdSz).
-    Definition rs1FixedField := (15, 5).
-    Definition rs2FixedField := (20, 5).
-    Definition rdFixedField := (7, 5).
+    Definition rs1FixedField := (15, RegFixedIdSz).
+    Definition rs2FixedField := (20, RegFixedIdSz).
+    Definition rdFixedField := (7, RegFixedIdSz).
     Definition auiLuiField := (12, 20).
 
     Section ImmEncoder.
@@ -319,12 +315,14 @@ Section ParamDefinitions.
         hasCsr      : bool ;
         implicitReg : nat ;
         implicitScr : nat ;
-        implicitCsr : word (snd immField) }.
+        implicitCsr : word (snd immField);
+        isLoad      : bool ;
+        isStore     : bool }.
     
     Global Instance InstPropertiesEtaX : Settable _ :=
       settable!
         Build_InstProperties
-      < hasCs1 ; hasCs2 ; hasCd; hasScr ; hasCsr ; implicitReg ; implicitScr ; implicitCsr >.
+      < hasCs1 ; hasCs2 ; hasCd; hasScr ; hasCsr ; implicitReg ; implicitScr ; implicitCsr ; isLoad ; isStore  >.
     
     Definition DefProperties :=
       {|hasCs1      := false ;
@@ -334,7 +332,9 @@ Section ParamDefinitions.
         hasCsr      := false ;
         implicitReg := 0 ;
         implicitScr := 0 ;
-        implicitCsr := wzero _ |}.
+        implicitCsr := wzero _ ;
+        isLoad := false ;
+        isStore := false |}.
 
     Definition isGoodInstEncode (uniqId: UniqId) (immEncoder: list ImmEncoder)
       (instProperties: InstProperties) :=
@@ -508,4 +508,14 @@ Section ParamDefinitions.
     destruct procParams as [xlen xlen_vars].
     destruct xlen_vars; subst; simpl; lia.
   Qed.
+
+  Section ReadArray.
+    Variable ty: Kind -> Type.
+    Variable addr: Addr @# ty.
+    Variable n: nat.
+    Variable arr: Array n (Bit 8) @# ty.
+    Local Open Scope kami_expr.
+    Definition readArrayConstSize (size: nat) :=
+      BuildArray (fun (i: Fin.t size) => arr@[addr + $(FinFun.Fin2Restrict.f2n i)]).
+  End ReadArray.
 End ParamDefinitions.

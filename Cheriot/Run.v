@@ -1,10 +1,9 @@
 Require Import Kami.AllNotations.
 Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
-Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.MemSpecIfc.
+Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.BankedMem.
 
 Section Run.
   Context `{procParams: ProcParams}.
-  Context `{memSpecIfc: MemSpecIfc}.
   
   Variable ty: Kind -> Type.
 
@@ -153,7 +152,7 @@ Section Run.
                               "cs2?" :: Bool;
                               "cs2Idx" :: RegId;
                               "scr?" :: Bool;
-                              "scrIdx" :: Bit 5;
+                              "scrIdx" :: Bit RegFixedIdSz;
                               "csr?" :: Bool;
                               "csrIdx" :: Bit (snd immField) }.
 
@@ -245,7 +244,7 @@ Section Run.
       rfWrite := regsWrite;
       rfIdxNum := Nat.pow 2 RegIdSz;
       rfData := FullCapWithTag;
-      rfInit := regsInit |}.
+      rfInit := RFFile isRegsAscii isRegsRfArg regsRfString 0 (Nat.pow 2 RegIdSz) regsInit |}.
 
   Definition DecodeOut := STRUCT_TYPE {
                               "pc" :: FullCap;
@@ -388,9 +387,9 @@ Section Run.
 
       If #dontDrop && !#exception && (#funcOut @% "mem?")
       then (
-          LETA memRet : DataRet <- loadStoreReq (#memInfo @% "op" == $StOp)
-                                     (#funcOut @% "addrOrScrOrCsrVal") (#memInfo @% "size") (#memInfo @% "cap?")
-                                     (#funcOut @% "data") (#memInfo @% "sign?");
+          LETA memRet : DataRet <- loadStoreReq (#funcOut @% "addrOrScrOrCsrVal") (#memInfo @% "size")
+                                     (#memInfo @% "cap?") (#memInfo @% "sign?")
+                                     (#memInfo @% "op" == $StOp) (#funcOut @% "data");
           RetAE (memRetProcess #funcOut #memInfo #memRet) )
       else Ret #funcOut
       as retFuncOut ;
@@ -471,7 +470,7 @@ Section Run.
                                                    "val" ::= #pcVal };
 
           WriteIf (#exception) Then
-            @^"MEPrevPCC" : FullCapWithTag <- STRUCT { "tag" ::= #result @% "taken?";
+            @^"MEPrevPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
                                                        "cap" ::= #prevPcCap;
                                                        "val" ::= #prevPcVal };
 
