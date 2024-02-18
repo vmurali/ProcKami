@@ -238,16 +238,11 @@ Section Prefix.
   Variable prefix : string.
   Variable LgNumMemBytesVal: nat.
   Variable memInitVal: Fin.t (Nat.pow 2 LgNumMemBytesVal * 8) -> word 8.
-
-  Definition FullCapWithTagKind := (STRUCT_TYPE { "tag" :: Bool;
-                                                  "cap" :: Bit 32;
-                                                  "val" :: Bit 32 }).
-
-  Variable regsInitVal: Fin.t 32 -> type FullCapWithTagKind.
+  Variable regsInitVal: Fin.t 32 -> type (STRUCT_TYPE { "tag" :: Bool;
+                                                        "cap" :: Bit 32;
+                                                        "val" :: Bit 32 }).
   Local Notation "@^ x" := (prefix ++ "_" ++ x)%string (at level 0).
   Local Notation stringify x n := (prefix ++ "_" ++ (x ++ "_" ++ natToHexStr n)%string)%string.
-
-  Definition regsInitConstVal := convConstArrayToFunConst regsInitVal.
 
   Definition createMemRFParam (n: nat) : MemBankInit :=
     {|instRqName := stringify "instRq" n;
@@ -298,5 +293,5 @@ Section Prefix.
       isRegsAscii := false;
       isRegsRfArg := true;
       regsRfString := @^"regsArrayFile";
-      regsInit := regsInitConstVal |}.
+      regsInit := convConstArrayToFunConst regsInitVal |}.
 End Prefix.
