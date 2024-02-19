@@ -11,10 +11,10 @@ Section SpecInstance.
   Variable pcCapValidThm: PcCapValid capAccessorsInit pcCapInitVal.
   Variable pcValInitVal: word 32.
   Variable pcValValidThm: truncLsb pcValInitVal = ZToWord 2 0.
-  Local Notation "@^ x" := (name ++ "_" ++ x)%string (at level 0).
+  Variable hasTrap: bool.
 
   Instance procParams: ProcParams :=
-    CoreConfig.procParams name LgNumMemBytesVal memInitVal regsInitVal pcCapValidThm pcValValidThm false.
+    CoreConfig.procParams name LgNumMemBytesVal memInitVal regsInitVal pcCapValidThm pcValValidThm hasTrap.
 
   Definition getInstEntrySpec (fe: FuncEntry) : list (InstEntry FullOutput) :=
     map (fun ie => {|instName := instName ie;
