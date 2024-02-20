@@ -163,6 +163,9 @@ Section CapHelpers.
                                                                          "T" :: Bit 9;
                                                                          "exp" :: Bit (Nat.log2_up AddrSz);
                                                                          "exact?" :: Bool } @# ty)).
+
+    Definition capPerms cap :=
+      (RetE decodePerms (unpack (Array 6 Bool) ((unpack (ty := ty) CapStruct cap) @% "p"))).
   End ty.
   
   Definition capAccessorsInit : CapAccessors _ _ :=
@@ -190,7 +193,7 @@ Section CapHelpers.
       isSealAddr ty addr isExec := ITE isExec
                                      (((addr >= $1) && (addr <= $3)) || addr == $6 || addr == $7)
                                      ((addr >= $9) && (addr <= $15));
-      getCapPerms ty cap := (RetE decodePerms (unpack (Array 6 Bool) ((unpack CapStruct cap) @% "p")));
+      getCapPerms ty cap := capPerms cap;
       setCapPerms ty perms cap :=
         ( LETC arr : Bit 6 <- encodePerms perms;
           RetE (pack ((unpack CapStruct cap) @%[ "p" <- pack #arr ])) );
@@ -229,13 +232,14 @@ Section CapHelpers.
   Definition MtdcValInit := (AddrSz 'h"2000").
 End CapHelpers.
 
+Definition FullCapWithTagKind := STRUCT_TYPE { "tag" :: Bool;
+                                               "cap" :: Bit 32;
+                                               "val" :: Bit 32 }.
+
 Class CoreConfigParams := {
     prefix : string;
     LgNumMemBytesVal: nat;
     memInitVal: Fin.t (Nat.pow 2 LgNumMemBytesVal * 8) -> word 8;
-    FullCapWithTagKind := STRUCT_TYPE { "tag" :: Bool;
-                                        "cap" :: Bit 32;
-                                        "val" :: Bit 32 };
     regsInitVal: Fin.t 32 -> type FullCapWithTagKind;
     pcCapInitVal: word 32;
     pcCapValidThm: PcCapValid capAccessorsInit pcCapInitVal;
@@ -332,6 +336,7 @@ Section Prefix.
       (regsArray, existT _ _ (Some (SyntaxConst (@convTypeToConst (Array 32 FullCapWithTagKind) regsInitVal)))) ::
       (memArray, existT _ _ (Some (SyntaxConst (@convTypeToConst (Array (NumMemBytes * NumBanks) (Bit 8))
                                                   memInitVal)))) ::
+      (tagArray, existT _ _ (Some (SyntaxConst (ConstArray (fun (i: Fin.t NumMemBytes) => false))))) ::
       (map (fun x => (regName (scrRegInfo x), existT _ _ (regInit (scrRegInfo x)))) scrList) ++
       (map (fun x => (regName (csrRegInfo x), existT _ _ (regInit (csrRegInfo x)))) csrList).
 End Prefix.

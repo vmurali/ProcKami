@@ -276,6 +276,16 @@ Section InstBaseSpec.
             instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
+          |};
+          {|instName := "LUI";
+            uniqId := [fieldVal opcodeField (5'b"01101")];
+            immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_U];
+            spec ty pc inst cs1 cs2 scr csr :=
+              ( RetE ((DefWbFullOutput ty)
+                        @%[ "cdVal" <- SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 12) >})]));
+            instProperties := DefProperties;
+            goodInstEncode := eq_refl;
+            goodImmEncode := ltac:(eexists; cbv; eauto)
           |}
         ]
       |}; destruct (Xlen =? 32); (reflexivity || eexists; cbv; eauto).
@@ -1449,7 +1459,6 @@ Section InstBaseSpec.
       | H: ?p \/ ?q |- _ => destruct H; try discriminate
       end; auto.
 
-  (*
   Theorem uniqAluNames: NoDup (concat (map (fun x => map (@instName _ _) (insts x)) specFuncUnits)).
   Proof.
     checkUniq.
@@ -1459,5 +1468,4 @@ Section InstBaseSpec.
   Proof.
     checkUniq.
   Qed.
-  *)
 End InstBaseSpec.
