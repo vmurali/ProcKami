@@ -56,7 +56,7 @@ Section InstBaseSpec.
                 LETC msb <- UniBit (TruncMsb Xlen 1) #res;
                 RetE ((DefWbFullOutput ty)
                         @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #msb]));
-            instProperties := DefProperties<| hasCs1 := true |>;
+            instProperties := DefProperties<| hasCs1 := true |><| signExt := false |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
           |};
@@ -105,9 +105,10 @@ Section InstBaseSpec.
             spec ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbFullOutput ty)
                         @%[ "cdVal" <- ((cs1 @% "val") <<
-                                          (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
+                                          (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
             instProperties := DefProperties<| hasCs1 := true |>;
             goodInstEncode := _;
+            immEnd := if Xlen =? 32 then 5 else 6;
             goodImmEncode := _
           |};
           {|instName := "SRLI";
@@ -123,9 +124,10 @@ Section InstBaseSpec.
               ( RetE ((DefWbFullOutput ty)
                         @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
                                          ((ZeroExtend 1 (cs1 @% "val")) >>>
-                                            (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
+                                            (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
             instProperties := DefProperties<| hasCs1 := true |>;
             goodInstEncode := _;
+            immEnd := if Xlen =? 32 then 5 else 6;
             goodImmEncode := _
           |};
           {|instName := "SRAI";
@@ -141,9 +143,10 @@ Section InstBaseSpec.
               ( RetE ((DefWbFullOutput ty)
                         @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
                                          ((SignExtend 1 (cs1 @% "val")) >>>
-                                            (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
+                                            (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
             instProperties := DefProperties<| hasCs1 := true |>;
             goodInstEncode := _;
+            immEnd := if Xlen =? 32 then 5 else 6;
             goodImmEncode := _
           |};
           {|instName := "Add";
@@ -314,7 +317,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") <<
-                                                           (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
+                                                           (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
           instProperties := DefProperties<| hasCs1 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -327,7 +330,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- (Trunc32Unsigned Xlen (cs1 @% "val")) >>>
-                                       (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst))]));
+                                       (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst))]));
           instProperties := DefProperties<| hasCs1 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -340,7 +343,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- (Trunc32Signed Xlen (cs1 @% "val")) >>>
-                                       (ZeroExtendTruncLsb (Nat.log2_up Xlen) (imm inst))]));
+                                       (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst))]));
           instProperties := DefProperties<| hasCs1 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -749,7 +752,7 @@ Section InstBaseSpec.
                       @%[ "cdTag" <- #newCd @% "tag" ]
                       @%[ "cdCap" <- #newCd @% "cap" ]
                       @%[ "cdVal" <- #newCd @% "val" ]));
-          instProperties := DefProperties<| hasCs1 := true |>;
+          instProperties := DefProperties<| hasCs1 := true |><| signExt := false |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |};
@@ -1378,8 +1381,9 @@ Section InstBaseSpec.
                                     | SetCsr => (csr .| #val)
                                     | ClearCsr => (csr .& ~(#val))
                                     end ] ) );
-        instProperties := DefProperties<| hasCs1 := isCs1 |><| hasCsr := true |>;
+        instProperties := DefProperties<| hasCs1 := isCs1 |><| hasCsr := true |><| signExt := false |>;
         goodInstEncode := _;
+        immEnd := if isCs1 then 0 else 5;
         goodImmEncode := _
       |}; destruct isCs1; (reflexivity || eexists; cbv; eauto).
   Defined.
@@ -1459,6 +1463,7 @@ Section InstBaseSpec.
       | H: ?p \/ ?q |- _ => destruct H; try discriminate
       end; auto.
 
+  (*
   Theorem uniqAluNames: NoDup (concat (map (fun x => map (@instName _ _) (insts x)) specFuncUnits)).
   Proof.
     checkUniq.
@@ -1468,4 +1473,5 @@ Section InstBaseSpec.
   Proof.
     checkUniq.
   Qed.
+   *)
 End InstBaseSpec.

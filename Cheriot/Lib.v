@@ -264,12 +264,41 @@ End SigWord.
 Module SigWordOrder := NatOrder SigWord.
 Module SigWordSort := Sort SigWordOrder.
 
+Module SigTriple <: ToNat.
+  Definition t := (nat * (nat * nat))%type.
+  Definition toNat (x: t) := fst x.
+End SigTriple.
+
+Module SigTripleOrder := NatOrder SigTriple.
+Module SigTripleSort := Sort SigTripleOrder.
+
 Section WordCombiner.
   Variable initPos initSz: nat.
   Variable init: word initSz.
   Fixpoint wordCombiner (ls: list {x: nat * nat & word (snd x)}) :=
-    match ls return word (fold_right (fun new sum => snd (projT1 new) + sum) initSz ls) with
+    match ls return word (fold_right (fun new sum => sum + snd (projT1 new)) initSz ls) with
     | nil => init
-    | x :: xs => wcombine (projT2 x) (wordCombiner xs)
+    | x :: xs => wcombine (wordCombiner xs) (projT2 x)
     end.
 End WordCombiner.
+
+Section BitsCombiner.
+  Variable ty: Kind -> Type.
+  Variable initPos initSz: nat.
+  Variable init: Bit initSz @# ty.
+
+  Fixpoint bitsCombiner (ls: list {x: nat * nat & Bit (snd x) @# ty}) :=
+    match ls return Bit (fold_right (fun new sum => snd (projT1 new) + sum) initSz ls) @# ty with
+    | nil => init
+    | x :: xs => BinBit (Concat _ _) (bitsCombiner xs) (projT2 x)
+    end.
+End BitsCombiner.
+
+Definition extractWord n (w: word n) (start width: nat): word width :=
+  @truncMsb width (start + width) (@truncLsb (start + width) _ w).
+
+Section ExtractBits.
+  Variable ty: Kind -> Type.
+  Definition extractBits n (w: Bit n @# ty) (start width: nat): Bit width @# ty :=
+    (UniBit (TruncMsb _ width) (ZeroExtendTruncLsb (start + width) w)).
+End ExtractBits.

@@ -251,33 +251,7 @@ Section ParamDefinitions.
       Definition imm7    := [(5, 7)].
       Definition imm5_B  := [(11, 1); (1, 4)].
       Definition imm7_B  := [(5, 6); (12, 1)].
-
-      (*
-      Fixpoint immDecoderHelp (instStart: nat) (ls: list (nat * nat)) :=
-        match ls with
-        | nil => nil
-        | (immStart, width) :: xs => (immStart, (instStart, width)) ::
-                                       immDecoderHelp (instStart + width) xs
-        end.
-
-      Definition immDecoder (immEncoder: ImmEncoder) :=
-        immDecoderHelp (instPos immEncoder) (immPos immEncoder).
-      
-      Eval compute in immDecoder (Build_ImmEncoder 12 imm20_J).
-      *)
     End ImmEncoder.
-
-    Section ImmVal.
-      Variable immVal: word InstSz.
-      Definition extractWord (start width: nat) : word width :=
-        @truncMsb width (start + width) (@truncLsb (start + width) InstSz immVal).
-
-      Fixpoint encodeImmField (imms: list (nat * nat)) :=
-        match imms return word (fold_right (fun '(_, val) sum => sum + val) 0 imms) with
-        | nil => WO
-        | (start, width) :: xs => wcombine (encodeImmField xs) (extractWord start width)
-        end.
-    End ImmVal.
 
     Section Fields.
       Variable ty: Kind -> Type.
@@ -321,13 +295,15 @@ Section ParamDefinitions.
         implicitReg : nat ;
         implicitScr : nat ;
         implicitCsr : word (snd immField);
+        signExt     : bool;
         isLoad      : bool ;
         isStore     : bool }.
     
     Global Instance InstPropertiesEtaX : Settable _ :=
       settable!
         Build_InstProperties
-      < hasCs1 ; hasCs2 ; hasCd; hasScr ; hasCsr ; implicitReg ; implicitScr ; implicitCsr ; isLoad ; isStore  >.
+      < hasCs1 ; hasCs2 ; hasCd; hasScr ; hasCsr ; implicitReg ; implicitScr ; implicitCsr ;
+        signExt ; isLoad ; isStore  >.
     
     Definition DefProperties :=
       {|hasCs1      := false ;
@@ -338,8 +314,9 @@ Section ParamDefinitions.
         implicitReg := 0 ;
         implicitScr := 0 ;
         implicitCsr := wzero _ ;
-        isLoad := false ;
-        isStore := false |}.
+        signExt     := true ;
+        isLoad      := false ;
+        isStore     := false |}.
 
     Definition isGoodInstEncode (uniqId: UniqId) (immEncoder: list ImmEncoder)
       (instProperties: InstProperties) :=
@@ -446,7 +423,9 @@ Section ParamDefinitions.
                                     FullCapWithTag @# ty -> Data @# ty -> ik ## ty;
         instProperties : InstProperties;
         goodInstEncode : isGoodInstEncode uniqId immEncoder instProperties;
-        goodImmEncode : exists x, getDisjointContiguous (concat (map immPos immEncoder)) = Some x
+        immStart       : nat;
+        immEnd         : nat;
+        goodImmEncode  : getDisjointContiguous (concat (map immPos immEncoder)) = Some (immStart, immEnd)
       }.
 
     Record InstEntryFull := {
@@ -458,18 +437,83 @@ Section ParamDefinitions.
       Variable i: InstEntry.
       Variable cs1 cs2 cd scr: word (snd rs1FixedField).
       Variable csr: word (snd immField).
-      Variable immV: word InstSz.
+      Variable immV: word Xlen.
+      Fixpoint encodeImmField (imms: list (nat * nat)) :=
+        match imms return word (fold_right (fun '(_, val) sum => sum + val) 0 imms) with
+        | nil => WO
+        | (start, width) :: xs => wcombine (encodeImmField xs) (extractWord immV start width)
+        end.
+
       Definition encodeFullInstList :=
         uniqId i ++
-          map (fun ie => existT _ (instPos ie, _) (encodeImmField immV (immPos ie))) (immEncoder i) ++
+          map (fun ie => existT _ (instPos ie, _) (encodeImmField (immPos ie))) (immEncoder i) ++
           (if hasCs1 (instProperties i) then [existT _ rs1FixedField cs1] else []) ++
           (if hasCs2 (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
           (if hasCd (instProperties i) then [existT _ rdFixedField cd] else []) ++
           (if hasScr (instProperties i) then [existT _ rs2FixedField scr] else []) ++
           (if hasCsr (instProperties i) then [existT _ immField csr] else []).
 
-      Definition encodeFullInst := wordCombiner (2'b"11") (SigWordSort.sort encodeFullInstList).
+      Definition encodeInst := wordCombiner (2'b"11") (SigWordSort.sort encodeFullInstList).
     End Encoder.
+
+    Section Decoder.
+      Variable inst: word InstSz.
+      Fixpoint immDecoderHelp (instStart: nat) (ls: list (nat * nat)) : list FieldRange :=
+        match ls with
+        | nil => nil
+        | (immStart, width) :: xs => existT _ (immStart, width) (extractWord inst instStart width) ::
+                                       immDecoderHelp (instStart + width) xs
+        end.
+
+      Definition immDecoder (immEnc: ImmEncoder) :=
+        immDecoderHelp (instPos immEnc) (immPos immEnc).
+
+      Variable i: InstEntry.
+
+      Definition decodePartialImmList :=
+        SigWordSort.sort (concat (map immDecoder (immEncoder i))).
+
+      Definition decodeImm: word Xlen :=
+        match decodePartialImmList with
+        | nil => wzero Xlen
+        | existT (start, _) _ :: _ =>
+            let res := wordCombiner (wzero start) decodePartialImmList in
+            wconcat
+              (if (andb (signExt (instProperties i)) (weqb (get_msb res) WO~1))
+               then wones _
+               else wzero (Xlen - (fold_right (fun new sum => sum + snd (projT1 new)) start decodePartialImmList)))
+              (wordCombiner (wzero start) decodePartialImmList)
+        end.
+    End Decoder.
+
+    Section DecoderExpr.
+      Variable ty: Kind -> Type.
+      Variable inst: Inst @# ty.
+      Fixpoint immDecIntervalHelp (instStart: nat) (ls: list (nat * nat)) : list (nat * (nat * nat)) :=
+        match ls with
+        | nil => nil
+        | (immStart, width) :: xs => (immStart, (instStart, width)) :: immDecIntervalHelp (instStart + width) xs
+        end.
+
+      Definition immDecInterval (immEnc: ImmEncoder) :=
+        immDecIntervalHelp (instPos immEnc) (immPos immEnc).
+
+      Variable i: InstEntry.
+
+      Definition decIntervals :=
+        SigTripleSort.sort (concat (map immDecInterval (immEncoder i))).
+
+      Definition decExprs := map (fun x =>
+                                    existT (fun x => Bit (snd x) @# ty)
+                                      (fst x, snd (snd x)) (extractBits inst (fst (snd x)) (snd (snd x))))
+                               decIntervals.
+
+      Definition decodeImmExpr :=
+        match decExprs with
+        | nil => Const ty (wzero Xlen)
+        | (existT (start, _) _) :: _ => ZeroExtendTruncLsb Xlen (bitsCombiner (Const ty (wzero start)) decExprs)
+        end.
+    End DecoderExpr.
   End InstEntry.
 
   Record FuncEntryFull :=
