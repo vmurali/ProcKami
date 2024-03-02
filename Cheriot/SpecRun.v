@@ -136,7 +136,7 @@ Section Run.
 
       LET matchException <- #instBounds && #instMatch && (#out @% "exception?");
 
-      setTrapException #matchException (!(#out @% "baseException?")) (#out @% "scrException?")
+      setException #matchException (!(#out @% "baseException?")) (#out @% "scrException?")
         (ITE (#out @% "pcCapException?") $0 (ZeroExtendTruncLsb RegFixedIdSz #cs1Idx))
         (#out @% "exceptionCause") (#out @% "exceptionValue")).
 End Run.
