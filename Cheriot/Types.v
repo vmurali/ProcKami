@@ -215,11 +215,6 @@ Section ParamDefinitions.
     Definition isInstCompressed ty sz (bitString : Bit sz @# ty) :=
       (!(isInstNotCompressed (bitString)))%kami_expr.
 
-    Definition FieldRange := {x: (nat * nat) & word (snd x)}.
-    Definition UniqId := (list FieldRange)%type.
-    Definition fieldVal range value : FieldRange :=
-      existT (fun x => word (snd x)) range value.
-
     Definition instSizeField := (0, 2).
     Definition opcodeField := (2, 5).
     Definition funct3Field := (12, 3).
@@ -234,24 +229,14 @@ Section ParamDefinitions.
     Definition rdFixedField := (7, RegFixedIdSz).
     Definition auiLuiField := (12, 20).
 
-    Section ImmEncoder.
-      Record ImmEncoder := {
-          instPos : nat;
-          immPos  : list (nat * nat)
-        }.
-
-      Definition immFieldWidth (enc: ImmEncoder) :=
-        (instPos enc, fold_right (fun '(_, val) accum => val + accum) 0 (immPos enc)).
-
-      Definition imm12   := [(0, 12)].
-      Definition imm5    := [(0, 5)].
-      Definition imm20_U := [(12, 20)].
-      Definition imm20_J := [(12, 8); (11, 1); (1, 10); (20, 1)].
-      Definition imm6    := [(0, 6)].
-      Definition imm7    := [(5, 7)].
-      Definition imm5_B  := [(11, 1); (1, 4)].
-      Definition imm7_B  := [(5, 6); (12, 1)].
-    End ImmEncoder.
+    Definition imm12   := [(0, 12)].
+    Definition imm5    := [(0, 5)].
+    Definition imm20_U := [(12, 20)].
+    Definition imm20_J := [(12, 8); (11, 1); (1, 10); (20, 1)].
+    Definition imm6    := [(0, 6)].
+    Definition imm7    := [(5, 7)].
+    Definition imm5_B  := [(11, 1); (1, 4)].
+    Definition imm7_B  := [(5, 6); (12, 1)].
 
     Section Fields.
       Variable ty: Kind -> Type.
@@ -298,7 +283,7 @@ Section ParamDefinitions.
         signExt     : bool;
         isLoad      : bool ;
         isStore     : bool }.
-    
+
     Global Instance InstPropertiesEtaX : Settable _ :=
       settable!
         Build_InstProperties
@@ -317,6 +302,19 @@ Section ParamDefinitions.
         signExt     := true ;
         isLoad      := false ;
         isStore     := false |}.
+
+    Definition FieldRange := {x: (nat * nat) & word (snd x)}.
+    Definition UniqId := (list FieldRange)%type.
+
+    Definition fieldVal range value : FieldRange :=
+      existT (fun x => word (snd x)) range value.
+
+    Record ImmEncoder := {
+        instPos : nat;
+        immPos  : list (nat * nat) }.
+
+    Definition immFieldWidth (enc: ImmEncoder) :=
+      (instPos enc, fold_right (fun '(_, val) accum => val + accum) 0 (immPos enc)).
 
     Definition isGoodInstEncode (uniqId: UniqId) (immEncoder: list ImmEncoder)
       (instProperties: InstProperties) :=
@@ -435,7 +433,7 @@ Section ParamDefinitions.
 
     Section Encoder.
       Variable i: InstEntry.
-      Variable cs1 cs2 cd scr: word (snd rs1FixedField).
+      Variable cs1 cs2 cd: word (snd rs1FixedField).
       Variable csr: word (snd immField).
       Variable immV: word Xlen.
       Fixpoint encodeImmField (imms: list (nat * nat)) :=
@@ -450,10 +448,10 @@ Section ParamDefinitions.
           (if hasCs1 (instProperties i) then [existT _ rs1FixedField cs1] else []) ++
           (if hasCs2 (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
           (if hasCd (instProperties i) then [existT _ rdFixedField cd] else []) ++
-          (if hasScr (instProperties i) then [existT _ rs2FixedField scr] else []) ++
+          (if hasScr (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
           (if hasCsr (instProperties i) then [existT _ immField csr] else []).
 
-      Definition encodeInst := wordCombiner (2'b"11") (SigWordSort.sort encodeFullInstList).
+      Definition encodeInst := @truncLsb InstSz _ ((wordCombiner (2'b"11") (SigWordSort.sort encodeFullInstList))).
     End Encoder.
 
     Section Decoder.
@@ -482,7 +480,7 @@ Section ParamDefinitions.
               (if (andb (signExt (instProperties i)) (weqb (get_msb res) WO~1))
                then wones _
                else wzero (Xlen - (fold_right (fun new sum => sum + snd (projT1 new)) start decodePartialImmList)))
-              (wordCombiner (wzero start) decodePartialImmList)
+              res
         end.
     End Decoder.
 
@@ -511,7 +509,11 @@ Section ParamDefinitions.
       Definition decodeImmExpr :=
         match decExprs with
         | nil => Const ty (wzero Xlen)
-        | (existT (start, _) _) :: _ => ZeroExtendTruncLsb Xlen (bitsCombiner (Const ty (wzero start)) decExprs)
+        | (existT (start, _) _) :: _ =>
+            let res := bitsCombiner (Const ty (wzero start)) decExprs in
+            if signExt (instProperties i)
+            then SignExtendTruncLsb Xlen res
+            else ZeroExtendTruncLsb Xlen res
         end.
     End DecoderExpr.
   End InstEntry.

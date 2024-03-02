@@ -302,3 +302,17 @@ Section ExtractBits.
   Definition extractBits n (w: Bit n @# ty) (start width: nat): Bit width @# ty :=
     (UniBit (TruncMsb _ width) (ZeroExtendTruncLsb (start + width) w)).
 End ExtractBits.
+
+Section InsertListIntoFinMap.
+  Variable A: Type.
+  Variable sz: nat.
+  Variable arr: Fin.t sz -> A.
+  Variable ls: list A.
+  Variable start: nat.
+  
+  Definition insertListIntoFinMap (iFin: Fin.t sz) :=
+    let i := FinFun.Fin2Restrict.f2n iFin in
+    if (start <=? i) && (i <? start + (length ls))
+    then nth (i - start) ls (arr iFin)
+    else arr iFin.
+End InsertListIntoFinMap.

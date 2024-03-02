@@ -1292,7 +1292,7 @@ Section InstBaseSpec.
       extension := Base;
       instEntries :=
         [ {|instName := ("CSpecialRW")%string;
-            uniqId := [fieldVal opcodeField (truncMsb (5'h"5b"));
+            uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                        fieldVal funct3Field (3'h"0");
                        fieldVal funct7Field (7'h"1")];
             immEncoder := [];
@@ -1300,6 +1300,7 @@ Section InstBaseSpec.
               ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
                 LETC legal <- isValidScrs inst;
                 LETC fixCs1 <- legalizeScrs inst cs1;
+                LETC isWriteScr <- isNotZero (rs1 inst);
                 LETC tag <- (#fixCs1 @% "tag") && !isSealed capAccessors (#fixCs1 @% "cap");
                 RetE ((DefWbFullOutput ty)
                         @%[ "cdTag" <- scr @% "tag" ]
@@ -1310,9 +1311,9 @@ Section InstBaseSpec.
                                                  then Const ty (natToWord Xlen CapSysRegViolation)
                                                  else Const ty (natToWord Xlen InstIllegal))]
                         @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
-                        @%[ "scrTag" <- #tag ]
-                        @%[ "scrCap" <- #fixCs1 @% "cap" ]
-                        @%[ "scrVal" <- #fixCs1 @% "val" ]
+                        @%[ "scrTag" <- ITE #isWriteScr #tag (scr @% "tag") ]
+                        @%[ "scrCap" <- ITE #isWriteScr (#fixCs1 @% "cap") (scr @% "cap") ]
+                        @%[ "scrVal" <- ITE #isWriteScr (#fixCs1 @% "val") (scr @% "cap") ]
                         @%[ "baseException?" <- !#legal ]
                         @%[ "scrException?" <- #legal ]));
             instProperties :=
@@ -1432,6 +1433,32 @@ Section InstBaseSpec.
       |}
     ].
 
+  Fixpoint isDifferingBoolList (a b: list (option bool)) :=
+    match a, b with
+    | x :: xs, y :: ys => match x, y with
+                          | Some p, Some q => if Bool.eqb p q then isDifferingBoolList xs ys else True
+                          | _, _ => isDifferingBoolList xs ys
+                          end
+    | _, _ => False
+    end.
+
+  Fixpoint wordToOptBoolList n (w: word n) :=
+    match n with
+    | 0 => nil
+    | S m => Some (Z.eqb (wordVal 1 (@truncLsb 1 _ w)) 1) :: wordToOptBoolList (@truncMsb m _ w)
+    end.
+
+  Local Fixpoint sortedUIdToOptBoolList (curr: nat) (sortedUId: UniqId) :=
+    match sortedUId with
+    | existT (pos, width) w :: xs =>
+        repeat None (pos - curr) ++ wordToOptBoolList w ++ sortedUIdToOptBoolList (pos + width) xs
+    | nil => nil
+    end.
+
+  Definition uniqIdToOptBoolList (u: UniqId) :=
+    sortedUIdToOptBoolList 0 (SigWordSort.sort u).
+
+
   (* Run the following only if the uniqId, instName, immEncoder or instProperties field changes for any instruction.
      (Corrollary: every time a new instruction is added, it must be run)
    *)
@@ -1446,7 +1473,7 @@ Section InstBaseSpec.
 
   Ltac simplify_insts :=
     cbn [filterInsts specFuncUnits concat map mkFuncEntry insts instsFull localFuncInputFull fold_left fold_right
-           localFuncInput];
+           localFuncInput uniqIdToOptBoolList sortedUIdToOptBoolList wordToOptBoolList isDifferingBoolList];
     pose proof extsHasBase;
     simplify_field (@extension procParams FullOutput);
     destruct (in_dec Extension_eq_dec Base supportedExts);
@@ -1462,14 +1489,16 @@ Section InstBaseSpec.
     repeat match goal with
       | H: ?p \/ ?q |- _ => destruct H; try discriminate
       end; auto.
-
+  
   (*
-  Theorem uniqAluNames: NoDup (concat (map (fun x => map (@instName _ _) (insts x)) specFuncUnits)).
+  Theorem uniqAluIds:
+    ForallOrdPairs isDifferingBoolList
+      (concat (map (fun x => map (fun y => uniqIdToOptBoolList (uniqId y)) (insts x)) specFuncUnits)).
   Proof.
     checkUniq.
   Qed.
 
-  Theorem uniqAluIds: NoDup (concat (map (fun x => map (@uniqId _ _) (insts x)) specFuncUnits)).
+  Theorem uniqAluNames: NoDup (concat (map (fun x => map (@instName _ _) (insts x)) specFuncUnits)).
   Proof.
     checkUniq.
   Qed.

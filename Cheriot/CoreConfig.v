@@ -227,9 +227,6 @@ Section CapHelpers.
                                                  "E" ::= Const _ (wones _);
                                                  "B" ::= Const _ (wzero _);
                                                  "T" ::= Const _ (_ 'h"100") })%kami_expr).
-
-  Definition MtccValInit := (AddrSz 'h"6000").
-  Definition MtdcValInit := (AddrSz 'h"2000").
 End CapHelpers.
 
 Definition FullCapWithTagKind := STRUCT_TYPE { "tag" :: Bool;
@@ -245,6 +242,8 @@ Class CoreConfigParams := {
     pcCapValidThm: PcCapValid capAccessorsInit pcCapInitVal;
     pcValInitVal: word 32;
     pcValValidThm: truncLsb pcValInitVal = ZToWord 2 0;
+    mtccValInit: word 30;
+    mtdcValInit: word 30;
     hasTrapVal: bool }.
 
 Section Prefix.
@@ -273,8 +272,8 @@ Section Prefix.
       ExecRootCap := ExecRootCapInit;
       DataRootCap := DataRootCapInit;
       SealRootCap := SealRootCapInit;
-      MtccVal := MtccValInit;
-      MtdcVal := MtdcValInit;
+      MtccVal := wcombine mtccValInit (wzero 2);
+      MtdcVal := wcombine mtdcValInit (wzero 2);
       IeInit := false;
       MeieInit := false;
       MtieInit := false;
