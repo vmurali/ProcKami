@@ -63,7 +63,30 @@ Section CapAccessors.
                        "exact?" :: Bool };
       getCapBounds: forall ty, Bit AddrSz @# ty (* Base *) -> Bit AddrSz @# ty (* Length *) -> CapBounds ## ty;
       setCapBounds ty (cap: Bit CapSz @# ty) B T exp :=
-        setCapE (getCapEFromExp exp) (setCapT T (setCapB B cap))
+        setCapE (getCapEFromExp exp) (setCapT T (setCapB B cap));
+      ExpandedCap := STRUCT_TYPE {
+                         "R"     :: Bit CapRSz ;
+                         "p"     :: CapPerms;
+                         "oType" :: Bit CapOTypeSz;
+                         "base"  :: Bit AddrSz ;
+                         "top"   :: Bit (AddrSz + 1) };
+      getCapFromExpanded ty (ec: ExpandedCap @# ty) :=
+        ( LETC lenFull <- (ec @% "top") - ZeroExtend 1 (ec @% "base");
+          LETC lenFullMsb <- unpack Bool (UniBit (TruncMsb AddrSz 1) #lenFull);
+          LETC lenLsb <- UniBit (TruncLsb AddrSz 1) #lenFull;
+          LETC len <- ITE #lenFullMsb $$(wones AddrSz) #lenLsb;
+          LETE capBounds <- @getCapBounds ty (ec @% "base") #len;
+          LETC initCap <- setCapOType (ec @% "oType") (setCapR (ec @% "R") ($$(getDefaultConst (Bit CapSz))));
+          LETE permCap <- setCapPerms (ec @% "p") #initCap;
+          RetE (setCapBounds #permCap (#capBounds @% "B") (#capBounds @% "T") (#capBounds @% "exp")))%kami_expr;
+      getExpandedFromCap ty (c: Bit CapSz @# ty) (addr: Bit AddrSz @# ty) :=
+        ( LETE perms <- getCapPerms c;
+          LETE baseTop <- getCapBaseTop c addr;
+          RetE (STRUCT { "R"     ::= getCapR c;
+                         "p"     ::= #perms;
+                         "oType" ::= getCapOType c;
+                         "base"  ::= #baseTop @% "base";
+                         "top"   ::= #baseTop @% "top" } : ExpandedCap @# ty) )%kami_expr
     }.
 End CapAccessors.
 
@@ -377,13 +400,6 @@ Section ParamDefinitions.
     destruct procParams as [xlen xlen_vars].
     destruct xlen_vars; subst; simpl; lia.
   Qed.
-
-  Definition ExpandedCap : Kind :=
-    STRUCT_TYPE { "R"     :: Bit 1 ;
-                  "p"     :: CapPerms;
-                  "oType" :: Bit 3;
-                  "base"  :: Addr;
-                  "top"   :: Addr }.
 
   Definition FullOutput :=
     STRUCT_TYPE {
