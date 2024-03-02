@@ -378,6 +378,13 @@ Section ParamDefinitions.
     destruct xlen_vars; subst; simpl; lia.
   Qed.
 
+  Definition ExpandedCap : Kind :=
+    STRUCT_TYPE { "R"     :: Bit 1 ;
+                  "p"     :: CapPerms;
+                  "oType" :: Bit 3;
+                  "base"  :: Addr;
+                  "top"   :: Addr }.
+
   Definition FullOutput :=
     STRUCT_TYPE {
         "wb?" :: Bool;
