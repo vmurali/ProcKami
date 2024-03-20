@@ -8,7 +8,7 @@ Section Prefix.
   Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
   Local Open Scope kami_expr.
 
-  Definition getInstEntrySpec (fe: FuncEntry) : list (InstEntry FullOutput) :=
+  Definition getInstEntrySpec (fe: FuncEntry) : list InstEntrySpec :=
     map (fun ie => {|instName := instName ie;
                      uniqId := uniqId ie;
                      immEncoder := immEncoder ie;

@@ -5,106 +5,6 @@ Require Import ProcKami.Cheriot.InstSpec ProcKami.Cheriot.CoreConfig.
 Declare Scope cheriot_assembly_scope.
 Delimit Scope cheriot_assembly_scope with cheriot_assembly.
 
-Notation x0 := 0%Z.
-Notation x1 := 1%Z.
-Notation x2 := 2%Z.
-Notation x3 := 3%Z.
-Notation x4 := 4%Z.
-Notation x5 := 5%Z.
-Notation x6 := 6%Z.
-Notation x7 := 7%Z.
-Notation x8 := 8%Z.
-Notation x9 := 9%Z.
-Notation x10 := 10%Z.
-Notation x11 := 11%Z.
-Notation x12 := 12%Z.
-Notation x13 := 13%Z.
-Notation x14 := 14%Z.
-Notation x15 := 15%Z.
-Notation x16 := 16%Z.
-Notation x17 := 17%Z.
-Notation x18 := 18%Z.
-Notation x19 := 19%Z.
-Notation x20 := 20%Z.
-Notation x21 := 21%Z.
-Notation x22 := 22%Z.
-Notation x23 := 23%Z.
-Notation x24 := 24%Z.
-Notation x25 := 25%Z.
-Notation x26 := 26%Z.
-Notation x27 := 27%Z.
-Notation x28 := 28%Z.
-Notation x29 := 29%Z.
-Notation x30 := 30%Z.
-Notation x31 := 31%Z.
-
-Notation c0 := 0%Z.
-Notation c1 := 1%Z.
-Notation c2 := 2%Z.
-Notation c3 := 3%Z.
-Notation c4 := 4%Z.
-Notation c5 := 5%Z.
-Notation c6 := 6%Z.
-Notation c7 := 7%Z.
-Notation c8 := 8%Z.
-Notation c9 := 9%Z.
-Notation c10 := 10%Z.
-Notation c11 := 11%Z.
-Notation c12 := 12%Z.
-Notation c13 := 13%Z.
-Notation c14 := 14%Z.
-Notation c15 := 15%Z.
-Notation c16 := 16%Z.
-Notation c17 := 17%Z.
-Notation c18 := 18%Z.
-Notation c19 := 19%Z.
-Notation c20 := 20%Z.
-Notation c21 := 21%Z.
-Notation c22 := 22%Z.
-Notation c23 := 23%Z.
-Notation c24 := 24%Z.
-Notation c25 := 25%Z.
-Notation c26 := 26%Z.
-Notation c27 := 27%Z.
-Notation c28 := 28%Z.
-Notation c29 := 29%Z.
-Notation c30 := 30%Z.
-Notation c31 := 31%Z.
-
-Notation zero := 0%Z.
-Notation ra := 1%Z.
-Notation sp := 2%Z.
-Notation gp := 3%Z.
-Notation tp := 4%Z.
-Notation t0 := 5%Z.
-Notation t1 := 6%Z.
-Notation t2 := 7%Z.
-Notation s0 := 8%Z.
-Notation fp := 8%Z.
-Notation s1 := 9%Z.
-Notation a0 := 10%Z.
-Notation a1 := 11%Z.
-Notation a2 := 12%Z.
-Notation a3 := 13%Z.
-Notation a4 := 14%Z.
-Notation a5 := 15%Z.
-Notation a6 := 16%Z.
-Notation a7 := 17%Z.
-Notation s2 := 18%Z.
-Notation s3 := 19%Z.
-Notation s4 := 20%Z.
-Notation s5 := 21%Z.
-Notation s6 := 22%Z.
-Notation s7 := 23%Z.
-Notation s8 := 24%Z.
-Notation s9 := 25%Z.
-Notation s10 := 26%Z.
-Notation s11 := 27%Z.
-Notation t3 := 28%Z.
-Notation t4 := 29%Z.
-Notation t5 := 30%Z.
-Notation t6 := 31%Z.
-
 Local Open Scope cheriot_assembly_scope.
 
 Notation "'addi' pd , ps1 , pimm" := (ProgInst (Build_Instruction "AddI" ps1 x0 pd 0%Z pimm) false) (at level 65).
@@ -247,22 +147,10 @@ Section Enc.
     | Some fu => match findFu fu with
                  | Some ie =>
                      let ip := instProperties ie in
-                     if isNonNegZ cs1I &&  Z.ltb cs1I NumRegId
-                     then if isNonNegZ cs2I && Z.ltb cs2I (if hasScr ip
-                                                           then NumRegIdFixed
-                                                           else NumRegId)
-                          then if isNonNegZ cdI && Z.ltb cdI NumRegId
-                               then if isNonNegZ csrI && Z.ltb csrI (Z.pow 2 12)
-                                    then if (isNonNegZ immI || signExt ip) &&
-                                              zWithinWidthStart immI (immStart ie) (immEnd ie)
-                                         then inl (splitInst (encodeInst ie
-                                                                (ZToWord _ cs1I) (ZToWord _ cs2I) (ZToWord _ cdI)
-                                                                (ZToWord _ csrI) (ZToWord _ immI)))
-                                         else inr Imm
-                                    else inr Csr
-                               else inr Cd
-                          else inr Cs2
-                     else inr Cs1
+                     if (isNonNegZ immI || signExt ip) &&
+                          zWithinWidthStart immI (immStart ie) (immEnd ie)
+                     then inl (splitInst (encodeInst ie (getRegScrId cs1I) (getRegScrId cs2I) (getRegScrId cdI) (getCsrId csrI) (ZToWord _ immI)))
+                     else inr Imm
                  | None => inr InstAsmName
                  end
     | None => inr InstAsmName

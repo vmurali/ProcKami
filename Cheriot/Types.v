@@ -176,9 +176,9 @@ Record InstProperties :=
     hasCd       : bool ;
     hasScr      : bool ;
     hasCsr      : bool ;
-    implicitReg : nat ;
-    implicitScr : nat ;
-    implicitCsr : word (snd immField);
+    implicitReg : word RegIdSz ;
+    implicitScr : word ScrIdSz ;
+    implicitCsr : word CsrIdSz;
     signExt     : bool;
     isLoad      : bool ;
     isStore     : bool }.
@@ -195,8 +195,8 @@ Definition DefProperties :=
     hasCd       := true ;
     hasScr      := false ;
     hasCsr      := false ;
-    implicitReg := 0 ;
-    implicitScr := 0 ;
+    implicitReg := wzero _ ;
+    implicitScr := wzero _ ;
     implicitCsr := wzero _ ;
     signExt     := true ;
     isLoad      := false ;
@@ -416,6 +416,8 @@ Section InstEntry.
   End DecoderExpr.
 End InstEntry.
 
+Definition InstEntrySpec := InstEntry FullOutput.
+
 Record FuncEntryFull :=
   { funcNameFull        : string;
     localFuncInputFull  : Kind;
@@ -443,11 +445,11 @@ Definition mkFuncEntry (fe : FuncEntryFull) :=
   |}.
 
 Record ScrReg :=
-  { scrRegInfo    : RegInfo RegFixedIdSz;
+  { scrRegInfo    : RegInfo ScrIdSz;
     isLegal       : forall ty, Data @# ty -> Bool @# ty;
     legalize      : forall ty, Data @# ty -> Data @# ty }.
 
 Record CsrReg :=
-  { csrRegInfo    : RegInfo Imm12Sz;
+  { csrRegInfo    : RegInfo CsrIdSz;
     isSystemCsr   : bool;
     csrMask       : option (word Xlen) }.

@@ -99,9 +99,9 @@ Section DecExec.
       Definition hasScrPropFn := propertiesFuncEntry (fun _ x => Const ty (hasScr (instProperties x))).
       Definition hasCsrPropFn := propertiesFuncEntry (fun _ x => Const ty (hasCsr (instProperties x))).
       Definition implicitRegPropFn :=
-        propertiesFuncEntry (fun _ x => Const ty (natToWord RegIdSz (implicitReg (instProperties x)))).
+        propertiesFuncEntry (fun _ x => Const ty (implicitReg (instProperties x))).
       Definition implicitScrPropFn :=
-        propertiesFuncEntry (fun _ x => Const ty (natToWord (snd rs2FixedField) (implicitScr (instProperties x)))).
+        propertiesFuncEntry (fun _ x => Const ty (implicitScr (instProperties x))).
       Definition implicitCsrPropFn := propertiesFuncEntry (fun _ x => Const ty (implicitCsr (instProperties x))).
     End allMatches.
 

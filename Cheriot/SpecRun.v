@@ -74,7 +74,7 @@ Section Run.
       setException (#topBound && #illegal) $$false $$false
         $0 $InstIllegal (ZeroExtendTruncLsb Xlen #inst)).
   
-  Definition specDecExecRule (ie: InstEntry FullOutput) :=
+  Definition specDecExecRule (ie: InstEntrySpec) :=
     ( Read pcCap : Cap <- @^pcCapReg;
       Read pcVal : Addr <- @^pcValReg;
       LETAE baseTop <- getCapBaseTop (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal });
@@ -83,10 +83,10 @@ Section Run.
       LET inst <- pack (readArrayConstSize #pcVal #memArr (InstSz/8));
       Read regs : Array NumRegs FullCapWithTag <- regsArray;
       let instProps := instProperties ie in
-      LET cs1Idx <- if (Nat.eq_dec (implicitReg instProps) 0) then (rs1 #inst) else $(implicitReg instProps);
+      LET cs1Idx <- if (weq (implicitReg instProps) (wzero _)) then (rs1 #inst) else $$(implicitReg instProps);
       LET cs2Idx <- rs2 #inst;
-      LET scrIdx <- if (Nat.eq_dec (implicitScr instProps) 0)
-                    then (rs2Fixed #inst) else $(implicitScr instProps);
+      LET scrIdx <- if (weq (implicitScr instProps) (wzero _))
+                    then (rs2Fixed #inst) else $$(implicitScr instProps);
       LET csrIdx <- if (weq (implicitCsr instProps) (wzero _)) then (imm #inst) else $$(implicitCsr instProps);
       LET cs1 <- #regs@[#cs1Idx];
       LET cs2 <- #regs@[#cs2Idx];

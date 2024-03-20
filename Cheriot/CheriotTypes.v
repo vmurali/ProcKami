@@ -51,6 +51,7 @@ Definition imm5_B  := [(11, 1); (1, 4)].
 Definition imm7_B  := [(5, 6); (12, 1)].
 
 Definition ScrIdSz := 5.
+Definition CsrIdSz := Imm12Sz.
 
 Definition CapException        := N.to_nat (hex "1c").
 Definition CapBoundsViolation  := 1.  (* Reg/PC *)
@@ -109,16 +110,6 @@ Section Fields.
                               extractFieldFromInst (21, 10), $$(WO~0) >}).
   Definition auiLuiOffset := extractFieldFromInst auiLuiField.
 End Fields.
-
-Notation mtcc := 28%Z.
-Notation mtdc := 29%Z.
-Notation mscratchc := 30%Z.
-Notation mepcc := 31%Z.
-
-Notation mstatus := (Z.of_N (hex "300")).
-Notation mie := (Z.of_N (hex "304")).
-Notation mcause := (Z.of_N (hex "342")).
-Notation mtval := (Z.of_N (hex "343")).
 
 Definition Cap : Kind :=
   (STRUCT_TYPE {
@@ -346,3 +337,291 @@ Section CapHelpers.
       LETE baseTop2 <- getBaseTop (cap @% "cap" @% "B") (cap @% "cap" @% "T") (cap @% "cap" @% "E") addr;
       RetE ((#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase")) ).
 End CapHelpers.
+
+Inductive RegScrName :=
+| x0
+| x1
+| x2
+| x3
+| x4
+| x5
+| x6
+| x7
+| x8
+| x9
+| x10
+| x11
+| x12
+| x13
+| x14
+| x15
+| x16
+| x17
+| x18
+| x19
+| x20
+| x21
+| x22
+| x23
+| x24
+| x25
+| x26
+| x27
+| x28
+| x29
+| x30
+| x31
+| c0
+| c1
+| c2
+| c3
+| c4
+| c5
+| c6
+| c7
+| c8
+| c9
+| c10
+| c11
+| c12
+| c13
+| c14
+| c15
+| c16
+| c17
+| c18
+| c19
+| c20
+| c21
+| c22
+| c23
+| c24
+| c25
+| c26
+| c27
+| c28
+| c29
+| c30
+| c31
+| zero
+| ra
+| sp
+| gp
+| tp
+| t0
+| t1
+| t2
+| s0
+| fp
+| s1
+| a0
+| a1
+| a2
+| a3
+| a4
+| a5
+| a6
+| a7
+| s2
+| s3
+| s4
+| s5
+| s6
+| s7
+| s8
+| s9
+| s10
+| s11
+| t3
+| t4
+| t5
+| t6
+| czero
+| cra
+| csp
+| cgp
+| ctp
+| ct0
+| ct1
+| ct2
+| cs0
+| cfp
+| cs1
+| ca0
+| ca1
+| ca2
+| ca3
+| ca4
+| ca5
+| ca6
+| ca7
+| cs2
+| cs3
+| cs4
+| cs5
+| cs6
+| cs7
+| cs8
+| cs9
+| cs10
+| cs11
+| ct3
+| ct4
+| ct5
+| ct6
+| mtcc
+| mtdc
+| mscratchc
+| mepcc.
+
+Definition getRegScrId (name: RegScrName) : word RegIdSz :=
+  match name with
+  | x0 => $0
+  | x1 => $1
+  | x2 => $2
+  | x3 => $3
+  | x4 => $4
+  | x5 => $5
+  | x6 => $6
+  | x7 => $7
+  | x8 => $8
+  | x9 => $9
+  | x10 => $10
+  | x11 => $11
+  | x12 => $12
+  | x13 => $13
+  | x14 => $14
+  | x15 => $15
+  | x16 => $16
+  | x17 => $17
+  | x18 => $18
+  | x19 => $19
+  | x20 => $20
+  | x21 => $21
+  | x22 => $22
+  | x23 => $23
+  | x24 => $24
+  | x25 => $25
+  | x26 => $26
+  | x27 => $27
+  | x28 => $28
+  | x29 => $29
+  | x30 => $30
+  | x31 => $31
+  | c0 => $0
+  | c1 => $1
+  | c2 => $2
+  | c3 => $3
+  | c4 => $4
+  | c5 => $5
+  | c6 => $6
+  | c7 => $7
+  | c8 => $8
+  | c9 => $9
+  | c10 => $10
+  | c11 => $11
+  | c12 => $12
+  | c13 => $13
+  | c14 => $14
+  | c15 => $15
+  | c16 => $16
+  | c17 => $17
+  | c18 => $18
+  | c19 => $19
+  | c20 => $20
+  | c21 => $21
+  | c22 => $22
+  | c23 => $23
+  | c24 => $24
+  | c25 => $25
+  | c26 => $26
+  | c27 => $27
+  | c28 => $28
+  | c29 => $29
+  | c30 => $30
+  | c31 => $31
+  | zero => $0
+  | ra => $1
+  | sp => $2
+  | gp => $3
+  | tp => $4
+  | t0 => $5
+  | t1 => $6
+  | t2 => $7
+  | s0 => $8
+  | fp => $8
+  | s1 => $9
+  | a0 => $10
+  | a1 => $11
+  | a2 => $12
+  | a3 => $13
+  | a4 => $14
+  | a5 => $15
+  | a6 => $16
+  | a7 => $17
+  | s2 => $18
+  | s3 => $19
+  | s4 => $20
+  | s5 => $21
+  | s6 => $22
+  | s7 => $23
+  | s8 => $24
+  | s9 => $25
+  | s10 => $26
+  | s11 => $27
+  | t3 => $28
+  | t4 => $29
+  | t5 => $30
+  | t6 => $31
+  | czero => $0
+  | cra => $1
+  | csp => $2
+  | cgp => $3
+  | ctp => $4
+  | ct0 => $5
+  | ct1 => $6
+  | ct2 => $7
+  | cs0 => $8
+  | cfp => $8
+  | cs1 => $9
+  | ca0 => $10
+  | ca1 => $11
+  | ca2 => $12
+  | ca3 => $13
+  | ca4 => $14
+  | ca5 => $15
+  | ca6 => $16
+  | ca7 => $17
+  | cs2 => $18
+  | cs3 => $19
+  | cs4 => $20
+  | cs5 => $21
+  | cs6 => $22
+  | cs7 => $23
+  | cs8 => $24
+  | cs9 => $25
+  | cs10 => $26
+  | cs11 => $27
+  | ct3 => $28
+  | ct4 => $29
+  | ct5 => $30
+  | ct6 => $31
+  | mtcc => $28
+  | mtdc => $29
+  | mscratchc => $30
+  | mepcc => $31
+  end.
+
+Inductive CsrName :=
+| mstatus
+| mie
+| mcause
+| mtval.
+
+Definition getCsrId (name: CsrName) : word CsrIdSz :=
+  match name with
+  | mstatus => _ 'h "300"
+  | mie => _ 'h "304"
+  | mcause => _ 'h "342"
+  | mtval => _ 'h "343"
+  end.

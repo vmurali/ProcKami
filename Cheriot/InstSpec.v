@@ -433,8 +433,6 @@ Section InstBaseSpec.
                 "cap" ::= #newCap;
                 "val" ::= cs1 @% "val" } : FullCapWithTag @# ty) ).
 
-  Definition CgpIndex := 3.
-
   Definition capInsts: InstEntryFull FullOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -449,7 +447,7 @@ Section InstBaseSpec.
                       @%[ "cdTag" <- (cs1 @% "tag") && !isCapSealed (cs1 @% "cap") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
-          instProperties := DefProperties<| implicitReg := CgpIndex |>;
+          instProperties := DefProperties<| implicitReg := getRegScrId cgp |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |};
@@ -1099,7 +1097,7 @@ Section InstBaseSpec.
                       @%[ "exceptionValue" <- #newAddr ]
                       @%[ "baseException?" <- #representable ]
                       @%[ "pcCapException?" <- !#representable ]));
-          instProperties := DefProperties <| implicitCsr := ZToWord Imm12Sz mstatus |>;
+          instProperties := DefProperties <| implicitCsr := getCsrId mstatus |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |};
@@ -1145,7 +1143,7 @@ Section InstBaseSpec.
                       @%[ "baseException?" <- #fullException @% "snd" ]
                       @%[ "changeIe?" <- #ieSentry || #idSentry ]
                       @%[ "newIe" <- #ieSentry ] ));
-          instProperties := DefProperties<| hasCs1 := true |><| implicitCsr := ZToWord Imm12Sz mstatus |>;
+          instProperties := DefProperties<| hasCs1 := true |><| implicitCsr := getCsrId mstatus |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |}
@@ -1211,7 +1209,7 @@ Section InstBaseSpec.
                       @%[ "exceptionValue" <- #newMepc ]
                       @%[ "scrException?" <- !(#pcPerms @% "SR") ]
                       @%[ "pcCapException?" <- #pcPerms @% "SR" ]));
-          instProperties := DefProperties<| implicitScr := Z.to_nat mepcc |><| hasCd := false |>;
+          instProperties := DefProperties<| implicitScr := getRegScrId mepcc |><| hasCd := false |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |}
@@ -1224,16 +1222,16 @@ Section InstBaseSpec.
 
   Definition scrList : list ScrReg :=
     let ZeroBits := if compressed then 1 else 2 in
-    [ {|scrRegInfo := Build_RegInfo (ZToWord _ mtcc) mtccReg;
+    [ {|scrRegInfo := Build_RegInfo (getRegScrId mtcc) mtccReg;
         isLegal ty val := $$true;
         legalize ty val := val |};
-      {|scrRegInfo := Build_RegInfo (ZToWord _ mtdc) mtdcReg;
+      {|scrRegInfo := Build_RegInfo (getRegScrId mtdc) mtdcReg;
         isLegal ty val := isZero (ZeroExtendTruncLsb 2 val);
         legalize ty val := ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) val, $$(wzero 2) >}) |};
-      {|scrRegInfo := Build_RegInfo (ZToWord _ mscratchc) mScratchCReg;
+      {|scrRegInfo := Build_RegInfo (getRegScrId mscratchc) mScratchCReg;
         isLegal ty val := $$true;
         legalize ty val := val |};
-      {|scrRegInfo := Build_RegInfo (ZToWord _ mepcc) mepccReg;
+      {|scrRegInfo := Build_RegInfo (getRegScrId mepcc) mepccReg;
         isLegal ty val := isZero (ZeroExtendTruncLsb ZeroBits val);
         legalize ty val :=
           ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - ZeroBits) val, $$(wzero ZeroBits) >}) |}
@@ -1293,16 +1291,16 @@ Section InstBaseSpec.
                              (if MsieInit then _ 'h"8" else wzero 4)).
 
   Definition csrList : list CsrReg := [
-      {|csrRegInfo := Build_RegInfo (ZToWord Imm12Sz mstatus) mStatusReg;
+      {|csrRegInfo := Build_RegInfo (getCsrId mstatus) mStatusReg;
         isSystemCsr := true;
         csrMask := Some (Xlen 'h"8") |};
-      {|csrRegInfo := Build_RegInfo (ZToWord Imm12Sz mie) mieReg;
+      {|csrRegInfo := Build_RegInfo (getCsrId mie) mieReg;
         isSystemCsr := true;
         csrMask := Some (Xlen 'h"888") |};
-      {|csrRegInfo := Build_RegInfo (ZToWord Imm12Sz mcause) mCauseReg;
+      {|csrRegInfo := Build_RegInfo (getCsrId mcause) mCauseReg;
         isSystemCsr := true;
         csrMask := None |};
-      {|csrRegInfo := Build_RegInfo (ZToWord Imm12Sz mtval) mtValReg;
+      {|csrRegInfo := Build_RegInfo (getCsrId mtval) mtValReg;
         isSystemCsr := true;
         csrMask := None |} ].
   
@@ -1312,7 +1310,7 @@ Section InstBaseSpec.
   Inductive CsrOp := UpdCsr | SetCsr | ClearCsr.
 
   Definition mkCsrEntry (name: string) (isCs1: bool) (csrOp: CsrOp) (funct3Val: word (snd funct3Field)):
-    InstEntry FullOutput.
+    InstEntrySpec.
     refine
       {|instName := name;
         uniqId := [fieldVal opcodeField (5'b"11100");

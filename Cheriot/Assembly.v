@@ -1,14 +1,14 @@
-Require Import Kami.AllNotations.
+Require Import Kami.AllNotations ProcKami.Cheriot.Types.
 
 Record Instruction := {
     instAsmName : string;
-    cs1         : Z;
-    cs2         : Z;
-    cd          : Z;
-    csr         : Z;
+    cs1         : RegScrName;
+    cs2         : RegScrName;
+    cd          : RegScrName;
+    csr         : CsrName;
     immVal      : Z }.
 
-Inductive AssemblyError := InstAsmName | Cs1 | Cs2 | Cd | Csr | Imm.
+Inductive AssemblyError := InstAsmName | Imm.
 
 Definition getInstructionRel (inst: Instruction) (curr: Z) (immRel: bool) :=
   match immRel with
@@ -112,10 +112,10 @@ Section Assembler.
         | inr err => (inr (err, ProgInst inst immRel), idx)
         end
     | ResolvedProgSeq p1 p2 => match getInstBytesResolved p1 curr idx with
-                               | (inl (p1', c2), i2) => match getInstBytesResolved p2 c2 i2 with
-                                                        | (inl (p2', c), i) => (inl (p1' ++ p2', c), i)
-                                                        | (inr errProg, i) => (inr errProg, i)
-                                                        end
+                               | (inl (p1', curr2), i2) => match getInstBytesResolved p2 curr2 i2 with
+                                                           | (inl (p2', c), i) => (inl (p1' ++ p2', c), i)
+                                                           | (inr errProg, i) => (inr errProg, i)
+                                                           end
                                | (inr errProg, i) => (inr errProg, i)
                                end
     | ResolvedProgData size vals => (inl (firstn (Z.to_nat size) vals, curr + size)%Z, S idx)
