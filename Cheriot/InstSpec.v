@@ -1,8 +1,7 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.DecExec.
+Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
 Require Import RecordUpdate.RecordUpdate.
 
 Section InstBaseSpec.
-  Context `{procParams: ProcParams}.
   Local Open Scope kami_expr.
 
   Section ty.
@@ -415,31 +414,27 @@ Section InstBaseSpec.
       ]
     |}.
 
-  Definition justFullCap ty (x: FullCapWithTag @# ty) : FullCap @# ty :=
-    STRUCT { "cap" ::= x @% "cap";
-             "val" ::= x @% "val" }.
-        
-
-  Definition representableFn ty (cs1: FullCap @# ty) (addr: Addr @# ty) : Bool ## ty :=
-    ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-      LETE baseTop2 <- getCapBaseTop capAccessors (cs1 @% "cap") addr;
-      RetE ((#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase")) ).
-
+  Definition rmTag ty (cap: FullCapWithTag @# ty) : FullCap @# ty :=
+    STRUCT { "cap" ::= cap @% "cap"; "val" ::= cap @% "val" }.
+  
   Definition setBounds ty (cs1: FullCapWithTag @# ty) (len: Data @# ty) (isExact: Bool @# ty): FullCapWithTag ## ty :=
-    ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
+    ( LETE baseTop <- getCapBaseTop (rmTag cs1);
       LETC baseBound <- (cs1 @% "val") >= (#baseTop @% "base");
       LETC topBound <- (ZeroExtend 1 (cs1 @% "val") + ZeroExtend 1 len) <= (#baseTop @% "top");
-      LETE capBounds <- getCapBounds capAccessors (cs1 @% "val") len;
-      LETC newCap <- setCapBounds capAccessors
-                       (cs1 @% "cap") (#capBounds @% "B") (#capBounds @% "T") (#capBounds @% "exp");
+      LETE capBounds <- getCapBounds (cs1 @% "val") len;
+      LETC E <- getCapEFromExp (#capBounds @% "exp");
+      LETC newCap : Cap <- (cs1 @% "cap")
+                             @%[ "B" <- #capBounds @% "B"]
+                             @%[ "T" <- #capBounds @% "T"]
+                             @%[ "E" <- #E ];
       RetE (STRUCT {
-                "tag" ::= (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "cap") && (#baseBound && #topBound)
+                "tag" ::= (cs1 @% "tag") && !isCapSealed (cs1 @% "cap") && (#baseBound && #topBound)
                           && (!isExact || (#capBounds @% "exact?"));
                 "cap" ::= #newCap;
                 "val" ::= cs1 @% "val" } : FullCapWithTag @# ty) ).
 
   Definition CgpIndex := 3.
-  
+
   Definition capInsts: InstEntryFull FullOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -449,9 +444,9 @@ Section InstBaseSpec.
           immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_U];
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
-              LETE representable <- representableFn (justFullCap cs1) #newAddr;
+              LETE representable <- representableFnCap (rmTag cs1) #newAddr;
               RetE ((DefWbFullOutput ty)
-                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "cap") && #representable ]
+                      @%[ "cdTag" <- (cs1 @% "tag") && !isCapSealed (cs1 @% "cap") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
           instProperties := DefProperties<| implicitReg := CgpIndex |>;
@@ -463,7 +458,7 @@ Section InstBaseSpec.
           immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_U];
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
-              LETE representable <- representableFn pc #newAddr;
+              LETE representable <- representableFnCap pc #newAddr;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- #representable ]
                       @%[ "cdCap" <- pc @% "cap" ]
@@ -478,10 +473,11 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"d")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
+            ( LETC cs1Cap <- cs1 @% "cap";
+              LETC perms <- getCapPerms (cs1 @% "cap");
               LETC newPerms <- unpack CapPerms (ZeroExtendTruncLsb (size CapPerms)
                                                   ((ZeroExtendTruncLsb Xlen (pack #perms)) .& (cs2 @% "val")));
-              LETE newCap <- setCapPerms capAccessors #newPerms (cs1 @% "cap");
+              LETC newCap <- (cs1 @% "cap") @%[ "p" <- encodePerms #newPerms ];
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- cs1 @% "tag" ]
                       @%[ "cdCap" <- #newCap ]
@@ -525,7 +521,7 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"7f")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
+            ( LETE baseTop <- getCapBaseTop (rmTag cs1);
               RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- #baseTop @% "base" ]));
           instProperties := DefProperties<| hasCs1 := true |>;
@@ -539,8 +535,9 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"7f")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( RetE ((DefWbFullOutput ty)
-                      @%[ "cdVal" <- cs1 @% "cap" ]));
+            ( LETC cap <- cs1 @% "cap";
+              RetE ((DefWbFullOutput ty)
+                      @%[ "cdVal" <- pack #cap ]));
           instProperties := DefProperties<| hasCs1 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -552,7 +549,7 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"7f")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
+            ( LETE baseTop <- getCapBaseTop (rmTag cs1);
               LETC len <- (#baseTop @% "top") - (ZeroExtend 1 (#baseTop @% "base"));
               LETC lenMsb <- unpack Bool (UniBit (TruncMsb Xlen 1) #len);
               LETC lenLsb <- UniBit (TruncLsb Xlen 1) #len;
@@ -569,7 +566,7 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"7f")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
+            ( LETC perms <- getCapPerms (cs1 @% "cap");
               RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen (pack #perms) ]));
           instProperties := DefProperties<| hasCs1 := true |>;
@@ -596,7 +593,7 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"7f")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
+            ( LETE baseTop <- getCapBaseTop (rmTag cs1);
               LETC topMsb <- unpack Bool (UniBit (TruncMsb Xlen 1) (#baseTop @% "top"));
               LETC topLsb <- UniBit (TruncLsb Xlen 1) (#baseTop @% "top");
               RetE ((DefWbFullOutput ty)
@@ -612,7 +609,7 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"7f")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETC oType <- getCapOType capAccessors (cs1 @% "cap");
+            ( LETC oType <- cs1 @% "cap" @% "oType";
               RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #oType ]));
           instProperties := DefProperties<| hasCs1 := true |>;
@@ -626,9 +623,9 @@ Section InstBaseSpec.
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (cs1 @% "val") + (cs2 @% "val");
-              LETE representable <- representableFn (justFullCap cs1) #newAddr;
+              LETE representable <- representableFnCap (rmTag cs1) #newAddr;
               RetE ((DefWbFullOutput ty)
-                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && #representable ]
+                      @%[ "cdTag" <- (cs1 @% "tag") && !isCapSealed (cs1 @% "cap") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
           instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
@@ -641,9 +638,9 @@ Section InstBaseSpec.
           immEncoder := [Build_ImmEncoder (fst immField) imm12];
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
-              LETE representable <- representableFn (justFullCap cs1) #newAddr;
+              LETE representable <- representableFnCap (rmTag cs1) #newAddr;
               RetE ((DefWbFullOutput ty)
-                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && #representable ]
+                      @%[ "cdTag" <- (cs1 @% "tag") && !isCapSealed (cs1 @% "cap") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
           instProperties := DefProperties<| hasCs1 := true |>;
@@ -665,14 +662,14 @@ Section InstBaseSpec.
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |};
-        {|instName := "CRepresentableAlignmentMask";
+        {|instName := "CRAM";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"9");
                      fieldVal funct7Field (7'h"7f")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE capBounds <- getCapBounds capAccessors ($0) (cs1 @% "val");
+            ( LETE capBounds <- getCapBounds ($0) (cs1 @% "val");
               LETC mask <- $$(wones Xlen) << (#capBounds @% "exp");
               RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- #mask ]));
@@ -680,14 +677,14 @@ Section InstBaseSpec.
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |};
-        {|instName := "CRoundRepresentableLength";
+        {|instName := "CRRL";
           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
                      fieldVal funct3Field (3'h"0");
                      fieldVal rs2FixedField (5'h"8");
                      fieldVal funct7Field (7'h"7f")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE capBounds <- getCapBounds capAccessors ($0) (cs1 @% "val");
+            ( LETE capBounds <- getCapBounds ($0) (cs1 @% "val");
               LETC mask <- $$(wones Xlen) << (#capBounds @% "exp");
               LETC repLen <- (cs1 @% "val" + (~#mask)) .& #mask;
               RetE ((DefWbFullOutput ty)
@@ -703,9 +700,9 @@ Section InstBaseSpec.
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- cs2 @% "val";
-              LETE representable <- representableFn (justFullCap cs1) #newAddr;
+              LETE representable <- representableFnCap (rmTag cs1) #newAddr;
               RetE ((DefWbFullOutput ty)
-                      @%[ "cdTag" <- (cs1 @% "tag") && !isSealed capAccessors (cs1 @% "val") && #representable ]
+                      @%[ "cdTag" <- (cs1 @% "tag") && !isCapSealed (cs1 @% "cap") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
           instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
@@ -779,7 +776,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- $$false ]
-                      @%[ "cdCap" <- cs2 @% "val" ]
+                      @%[ "cdCap" <- unpack Cap (cs2 @% "val") ]
                       @%[ "cdVal" <- cs1 @% "val" ]));
           instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
           goodInstEncode := eq_refl;
@@ -803,15 +800,15 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"20")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
-              LETE baseTop2 <- getCapBaseTop capAccessors (cs2 @% "cap") (cs2 @% "val");
+            ( LETE baseTop <- getCapBaseTop (rmTag cs1);
+              LETE baseTop2 <- getCapBaseTop (rmTag cs2);
               LETC baseBound <- (#baseTop2 @% "base") >= (#baseTop @% "base");
               LETC topBound <- (#baseTop2 @% "top") <= (#baseTop @% "top");
               LETC tagEq <- (cs1 @% "tag") == (cs2 @% "tag");
-              LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
-              LETE perms2 <- getCapPerms capAccessors (cs2 @% "cap");
-              LETC permsAnd <- (pack #perms .& pack #perms2);
-              LETC permsSub <- #permsAnd == pack #perms2;
+              LETC perms <- getCapPerms (cs1 @% "cap");
+              LETC perms2 <- getCapPerms (cs2 @% "cap");
+              LETC permsAnd <- unpack CapPerms (pack #perms .& pack #perms2);
+              LETC permsSub <- #permsAnd == #perms2;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <-
                             ZeroExtendTruncLsb Xlen (pack (#baseBound && #topBound && #tagEq && #permsSub)) ]));
@@ -825,18 +822,17 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"b")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE baseTop2 <- getCapBaseTop capAccessors (cs2 @% "cap") (cs2 @% "val");
+            ( LETE baseTop2 <- getCapBaseTop (rmTag cs2);
               LETC baseBound <- (cs2 @% "val") >= (#baseTop2 @% "base");
               LETC topBound <- ZeroExtend 1 (cs2 @% "val") + $1 <= (#baseTop2 @% "top");
-              LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
-              LETE perms2 <- getCapPerms capAccessors (cs2 @% "cap");
-              LETC validSealAddr <- isSealAddr capAccessors (cs2 @% "val") (#perms @% "EX");
-              LETC newCap <- seal capAccessors
-                               (ZeroExtendTruncLsb (CapOTypeSz capAccessors) (cs2 @% "val")) (cs1 @% "cap");
+              LETC perms <- getCapPerms (cs1 @% "cap");
+              LETC perms2 <- getCapPerms (cs2 @% "cap");
+              LETC validSealAddr <- isCapSealAddr (cs2 @% "val") (#perms @% "EX");
+              LETC newCap <- sealCap (cs1 @% "cap") (ZeroExtendTruncLsb CapOTypeSz (cs2 @% "val"));
               RetE ((DefWbFullOutput ty)
-                      @%[ "cdTag" <- (cs2 @% "tag") && !isSealed capAccessors (cs2 @% "cap") &&
+                      @%[ "cdTag" <- (cs2 @% "tag") && !isCapSealed (cs2 @% "cap") &&
                                        (#baseBound && #topBound) && (cs1 @% "tag") &&
-                                       !isSealed capAccessors (cs1 @% "cap") && (#perms2 @% "SE") && #validSealAddr]
+                                       !isCapSealed (cs1 @% "cap") && (#perms2 @% "SE") && #validSealAddr]
                       @%[ "cdCap" <- #newCap ]
                       @%[ "cdVal" <- cs1 @% "val" ]));
           instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
@@ -849,20 +845,20 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'h"c")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE baseTop2 <- getCapBaseTop capAccessors (cs2 @% "cap") (cs2 @% "val");
+            ( LETE baseTop2 <- getCapBaseTop (rmTag cs2);
               LETC baseBound <- (cs2 @% "val") >= (#baseTop2 @% "base");
               LETC topBound <- ZeroExtend 1 (cs2 @% "val") + $1 <= (#baseTop2 @% "top");
-              LETC oType <- getCapOType capAccessors (cs1 @% "cap");
+              LETC oType <- cs1 @% "cap" @% "oType";
               LETC oTypeEq <- ZeroExtendTruncLsb Xlen #oType == (cs2 @% "val");
-              LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
-              LETE perms2 <- getCapPerms capAccessors (cs2 @% "cap");
+              LETC perms <- getCapPerms (cs1 @% "cap");
+              LETC perms2 <- getCapPerms (cs2 @% "cap");
               LETC newPerms <- #perms @%[ "GL" <- #perms @% "GL" && #perms2 @% "GL" ];
-              LETE newCapWithPerms <- setCapPerms capAccessors #newPerms (cs1 @% "cap");
-              LETC newCap <- unseal capAccessors #newCapWithPerms;
+              LETC newCapWithPerms <- (cs1 @% "cap") @%[ "p" <- encodePerms #newPerms];
+              LETC newCap <- unsealCap #newCapWithPerms;
               RetE ((DefWbFullOutput ty)
-                      @%[ "cdTag" <- (cs2 @% "tag") && !isSealed capAccessors (cs2 @% "cap") &&
+                      @%[ "cdTag" <- (cs2 @% "tag") && !isCapSealed (cs2 @% "cap") &&
                                        (#baseBound && #topBound) && (cs1 @% "tag") &&
-                                       isSealed capAccessors (cs1 @% "cap") && (#perms2 @% "US") && #oTypeEq]
+                                       isCapSealed (cs1 @% "cap") && (#perms2 @% "US") && #oTypeEq]
                       @%[ "cdCap" <- #newCap ]
                       @%[ "cdVal" <- cs1 @% "val" ]));
           instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
@@ -881,25 +877,21 @@ Section InstBaseSpec.
         spec ty pc inst cs1 cs2 scr csr :=
           ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen (branchOffset inst);
             LETE taken <- takenFn (cs1 @% "val") (cs2 @% "val");
-            LETC size <- $(if compressed then 2 else 4);
-            LETE baseTop <- getCapBaseTop capAccessors (pc @% "cap") (pc @% "val");
-            LETC baseBound <- #newAddr >= (#baseTop @% "base");
-            LETC topBound <- ZeroExtend 1 #newAddr + #size <= (#baseTop @% "top");
-            LETC inBounds <- #baseBound && #topBound;
+            LETE representable <- representableFnCap (rmTag cs1) #newAddr;
             RetE ((DefFullOutput ty)
                     @%[ "taken?" <- #taken ]
                     @%[ "pcMemAddr" <- #newAddr ]
                     @%[ "exception?" <- if compressed
-                                        then !#inBounds
-                                        else !#inBounds || isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
+                                        then !#representable
+                                        else !#representable || isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
                     @%[ "exceptionCause" <- if compressed
                                             then Const ty (natToWord Xlen CapBoundsViolation)
-                                            else (IF #inBounds
+                                            else (IF #representable
                                                   then Const ty (natToWord Xlen InstMisaligned)
-                                                  else Const ty (natToWord Xlen CapBoundsViolation))]
+                                                  else Const ty (natToWord Xlen CapBoundsViolation)) ]
                     @%[ "exceptionValue" <- #newAddr ]
-                    @%[ "baseException?" <- #inBounds ]
-                    @%[ "pcCapException?" <- !#inBounds ]));
+                    @%[ "baseException?" <- #representable ]
+                    @%[ "pcCapException?" <- !#representable ]));
         instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |><| hasCd := false |>;
         goodInstEncode := eq_refl;
         goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -944,15 +936,15 @@ Section InstBaseSpec.
       immEncoder := [Build_ImmEncoder (fst immField) imm12];
       spec ty pc inst cs1 cs2 scr csr :=
         ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
-          LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
+          LETE baseTop <- getCapBaseTop (rmTag cs1);
           LETC baseBound <- #newAddr >= (#baseTop @% "base");
           LETC topBound <- ZeroExtend 1 #newAddr + $size <= (#baseTop @% "top");
-          LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
+          LETC perms <- getCapPerms (cs1 @% "cap");
           LETC fullException
             : Maybe Data <-
                 (IF !(cs1 @% "tag")
                  then Valid (Const ty (natToWord Xlen CapTagViolation))
-                 else (IF isSealed capAccessors (cs1 @% "cap")
+                 else (IF isCapSealed (cs1 @% "cap")
                        then Valid (Const ty (natToWord Xlen CapSealViolation))
                        else (IF !(#perms @% "LD")
                              then Valid (Const ty (natToWord Xlen CapLdViolation))
@@ -1012,17 +1004,17 @@ Section InstBaseSpec.
                      Build_ImmEncoder (fst funct7Field) imm7];
       spec ty pc inst cs1 cs2 scr csr :=
         ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen ({< funct7 inst, rdFixed inst >});
-          LETE baseTop <- getCapBaseTop capAccessors (cs1 @% "cap") (cs1 @% "val");
+          LETE baseTop <- getCapBaseTop (rmTag cs1);
           LETC baseBound <- #newAddr >= (#baseTop @% "base");
           LETC topBound <- ZeroExtend 1 #newAddr + $size <= (#baseTop @% "top");
-          LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
-          LETE perms2 <- getCapPerms capAccessors (cs2 @% "cap");
+          LETC perms <- getCapPerms (cs1 @% "cap");
+          LETC perms2 <- getCapPerms (cs2 @% "cap");
           LETC newTag <- (cs2 @% "tag") && ((#perms2 @% "GL") || (#perms @% "SL"));
           LETC fullException
             : Maybe Data <-
                 (IF !(cs1 @% "tag")
                  then Valid (Const ty (natToWord Xlen CapTagViolation))
-                 else (IF isSealed capAccessors (cs1 @% "cap")
+                 else (IF isCapSealed (cs1 @% "cap")
                        then Valid (Const ty (natToWord Xlen CapSealViolation))
                        else (IF !(#perms @% "SD")
                              then Valid (Const ty (natToWord Xlen CapStViolation))
@@ -1036,16 +1028,16 @@ Section InstBaseSpec.
                                                 (Valid (Const ty (natToWord Xlen CapStMisaligned)))
                                                 Invalid)))));
           RetE ((DefFullOutput ty)
+                  @%[ "cdTag" <- #newTag ]
+                  @%[ "cdCap" <- cs2 @% "cap" ]
+                  @%[ "cdVal" <- cs2 @% "val" ]
                   @%[ "exception?" <- #fullException @% "valid" ]
                   @%[ "exceptionCause" <- #fullException @% "data" ]
                   @%[ "pcMemAddr" <- #newAddr ]
                   @%[ "memCap?" <- $$isCap ]
                   @%[ "memSize" <- Const ty (natToWord MemSizeSz size) ]
                   @%[ "mem?" <- $$true ]
-                  @%[ "store?" <- $$true ]
-                  @%[ "cdTag" <- #newTag]
-                  @%[ "cdCap" <- cs2 @% "cap"]
-                  @%[ "cdVal" <- cs2 @% "val"] ));
+                  @%[ "store?" <- $$true ] ));
       instProperties :=
         DefProperties<| hasCs1 := true |><| hasCs2 := true |><| hasCd := false |><| isStore := true |>;
       goodInstEncode := eq_refl;
@@ -1077,8 +1069,6 @@ Section InstBaseSpec.
       ]
     |}.
 
-  Definition MStatusIndex := (snd immField) 'h"300".
-
   Definition jumpInsts: InstEntryFull FullOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -1089,31 +1079,27 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen (jalOffset inst);
               LETC linkAddr <- (pc @% "val") + ITE (isInstNotCompressed inst) $4 $2;
-              LETC mstatusArr <- unpack (Array (S (Xlen-1)) Bool) (castBits XlenSXlenMinus1 csr);
+              LETC mstatusArr <- unpack (Array (S (Xlen-1)) Bool) csr;
               LETC ie <- #mstatusArr ![ 3 ];
-              LETC size <- $(if compressed then 2 else 4);
-              LETE baseTop <- getCapBaseTop capAccessors (pc @% "cap") (pc @% "val");
-              LETC baseBound <- #newAddr >= (#baseTop @% "base");
-              LETC topBound <- ZeroExtend 1 #newAddr + #size <= (#baseTop @% "top");
-              LETC inBounds <- #baseBound && #topBound;
+              LETE representable <- representableFnCap pc #newAddr;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- $$true ]
-                      @%[ "cdCap" <- seal capAccessors (getOTypeFromIe capAccessors #ie) (pc @% "cap") ]
+                      @%[ "cdCap" <- sealCap (pc @% "cap") (getCapOTypeFromIe #ie) ]
                       @%[ "cdVal" <- #linkAddr ]
                       @%[ "taken?" <- $$true ]
                       @%[ "pcMemAddr" <- #newAddr ]
                       @%[ "exception?" <- if compressed
-                                          then !#inBounds
-                                          else !#inBounds || isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
+                                          then !#representable
+                                          else !#representable || isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
                       @%[ "exceptionCause" <- if compressed
                                               then Const ty (natToWord Xlen CapBoundsViolation)
-                                              else (IF #inBounds
+                                              else (IF #representable
                                                     then Const ty (natToWord Xlen InstMisaligned)
                                                     else Const ty (natToWord Xlen CapBoundsViolation)) ]
                       @%[ "exceptionValue" <- #newAddr ]
-                      @%[ "baseException?" <- #inBounds ]
-                      @%[ "pcCapException?" <- !#inBounds] ));
-          instProperties := DefProperties <| implicitCsr := MStatusIndex |>;
+                      @%[ "baseException?" <- #representable ]
+                      @%[ "pcCapException?" <- !#representable ]));
+          instProperties := DefProperties <| implicitCsr := ZToWord Imm12Sz mstatus |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |};
@@ -1125,45 +1111,41 @@ Section InstBaseSpec.
             ( LETC newAddrTemp <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
               LETC newAddr <- ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 1) #newAddrTemp, $$WO~0 >});
               LETC linkAddr <- (pc @% "val") + ITE (isInstNotCompressed inst) $4 $2;
-              LETE perms <- getCapPerms capAccessors (cs1 @% "cap");
-              LETC size <- $(if compressed then 2 else 4);
-              LETE baseTop <- getCapBaseTop capAccessors (pc @% "cap") (pc @% "val");
-              LETC baseBound <- #newAddr >= (#baseTop @% "base");
-              LETC topBound <- ZeroExtend 1 #newAddr + #size <= (#baseTop @% "top");
-              LETC inBounds <- #baseBound && #topBound;
+              LETC perms <- getCapPerms (cs1 @% "cap");
+              LETE representable <- representableFnCap (rmTag cs1) #newAddr;
               LETC fullException
                 : Pair (Maybe Data) Bool <-
                     (IF !(cs1 @% "tag")
                      then mkPair (Valid (Const ty (natToWord Xlen CapTagViolation))) ($$false)
-                     else (IF isSealed capAccessors (cs1 @% "cap") &&
-                             (!isSentry capAccessors (cs1 @% "cap") || isNotZero (imm inst) )
+                     else (IF isCapSealed (cs1 @% "cap") &&
+                             (!isCapSentry (cs1 @% "cap") || isNotZero (imm inst) )
                            then mkPair (Valid (Const ty (natToWord Xlen CapSealViolation))) ($$false)
                            else (IF !(#perms @% "EX")
                                  then mkPair (Valid (Const ty (natToWord Xlen CapExecViolation))) ($$false)
-                                 else (IF !#inBounds
+                                 else (IF !#representable
                                        then mkPair (Valid (Const ty (natToWord Xlen CapBoundsViolation))) ($$false)
-                                       else StaticIf (negb compressed) (isNotZero (ZeroExtendTruncLsb 2 #newAddr))
-                                              (mkPair (Valid (Const ty (natToWord Xlen InstMisaligned))) ($$true))
-                                              (mkPair Invalid ($$false))))));
-              LETC mstatusArr <- unpack (Array (S (Xlen-1)) Bool) (castBits XlenSXlenMinus1 csr);
+                                       else (StaticIf (negb compressed) (isNotZero (ZeroExtendTruncLsb 2 #newAddr))
+                                               (mkPair (Valid (Const ty (natToWord Xlen InstMisaligned))) ($$true))
+                                               (mkPair Invalid ($$false)))))));
+              LETC mstatusArr <- unpack (Array (S (Xlen-1)) Bool) csr;
               LETC ie <- #mstatusArr ![ 3 ];
-              LETC ieSentry <- isIeSentry capAccessors (cs1 @% "cap");
-              LETC idSentry <- isIdSentry capAccessors (cs1 @% "cap");
+              LETC ieSentry <- isCapIeSentry (cs1 @% "cap");
+              LETC idSentry <- isCapIdSentry (cs1 @% "cap");
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- $$true ]
-                      @%[ "cdCap" <- seal capAccessors (getOTypeFromIe capAccessors #ie) (pc @% "cap") ]
+                      @%[ "cdCap" <- sealCap (pc @% "cap") (getCapOTypeFromIe #ie) ]
                       @%[ "cdVal" <- #linkAddr ]
                       @%[ "taken?" <- $$true ]
                       @%[ "pcMemAddr" <- #newAddr ]
                       @%[ "changePcCap?" <- $$true ]
-                      @%[ "pcCap" <- unseal capAccessors (cs1 @% "cap") ]
+                      @%[ "pcCap" <- unsealCap (cs1 @% "cap") ]
                       @%[ "exception?" <- #fullException @% "fst" @% "valid" ]
                       @%[ "exceptionCause" <- #fullException @% "fst" @% "data" ]
                       @%[ "exceptionValue" <- #newAddr ]
                       @%[ "baseException?" <- #fullException @% "snd" ]
                       @%[ "changeIe?" <- #ieSentry || #idSentry ]
                       @%[ "newIe" <- #ieSentry ] ));
-          instProperties := DefProperties<| hasCs1 := true |><| implicitCsr := MStatusIndex |>;
+          instProperties := DefProperties<| hasCs1 := true |><| implicitCsr := ZToWord Imm12Sz mstatus |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |}
@@ -1173,8 +1155,6 @@ Section InstBaseSpec.
   Definition isJumpInsts ty (inst: Inst @# ty) :=
     redLet (@Kor _ _) (fun x => RetE (matchUniqId inst (uniqId x))) (filterInsts [jumpInsts]).
 
-
-  Definition MepccIndex := 31.
 
   Definition exceptionInsts: InstEntryFull FullOutput :=
     {|xlens := [32; 64];
@@ -1206,8 +1186,8 @@ Section InstBaseSpec.
                      fieldVal funct7Field (7'b"0011000")];
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
-              LETE mepcPerms <- getCapPerms capAccessors (scr @% "cap");
+            ( LETC pcPerms <- getCapPerms (pc @% "cap");
+              LETC mepcPerms <- getCapPerms (scr @% "cap");
               LETC exceptionCause <- ITE (!(#pcPerms @% "SR"))
                                        (Const ty (natToWord Xlen CapSysRegViolation))
                                        (ITE (!(#mepcPerms @% "EX"))
@@ -1218,8 +1198,8 @@ Section InstBaseSpec.
                                      ({< ZeroExtendTruncMsb (Xlen - 1) (scr @% "val"), $$WO~0 >})
                               else ZeroExtendTruncLsb Xlen
                                      ({< ZeroExtendTruncMsb (Xlen - 2) (scr @% "val"), $$(2'b"00") >});
-              LETE representable <- representableFn (justFullCap scr) #newMepc;
-              LETC exception <- !((scr @% "tag") && !isSealed capAccessors (scr @% "cap") && #representable
+              LETE representable <- representableFnCap (rmTag scr) #newMepc;
+              LETC exception <- !((scr @% "tag") && !isCapSealed (scr @% "cap") && #representable
                                   && (#mepcPerms @% "EX") && (#pcPerms @% "SR"));
               RetE ((DefFullOutput ty)
                       @%[ "taken?" <- $$true ]
@@ -1231,7 +1211,7 @@ Section InstBaseSpec.
                       @%[ "exceptionValue" <- #newMepc ]
                       @%[ "scrException?" <- !(#pcPerms @% "SR") ]
                       @%[ "pcCapException?" <- #pcPerms @% "SR" ]));
-          instProperties := DefProperties<| implicitScr := MepccIndex |><| hasCd := false |>;
+          instProperties := DefProperties<| implicitScr := Z.to_nat mepcc |><| hasCd := false |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |}
@@ -1242,86 +1222,70 @@ Section InstBaseSpec.
     redLet (@Kor _ _) (fun x => RetE (matchUniqId inst (uniqId x)))
       (filter (fun x => String.eqb (instName x) "ECall") (filterInsts [exceptionInsts])).
 
-  Definition ExecRoot : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
-                                                                "cap" ::= ExecRootCap;
-                                                                "val" ::= MtccVal }.
-
-  Definition DataRoot : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
-                                                                "cap" ::= DataRootCap;
-                                                                "val" ::= MtdcVal }.
-
-  Definition SealRoot : ConstT FullCapWithTag := STRUCT_CONST { "tag" ::= true;
-                                                                "cap" ::= SealRootCap;
-                                                                "val" ::= $0 }.
-
   Definition scrList : list ScrReg :=
     let ZeroBits := if compressed then 1 else 2 in
-    [ {|scrRegInfo := Build_RegInfo ($27)%word "MEPrevPCC" (Some (SyntaxConst DataRoot));
-        isLegal ty val := isZero (ZeroExtendTruncLsb ZeroBits val);
-        legalize ty val :=
-          ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - ZeroBits) val, $$(wzero ZeroBits) >}) |};
-      {|scrRegInfo := Build_RegInfo ($28)%word "MTCC" (Some (SyntaxConst ExecRoot));
+    [ {|scrRegInfo := Build_RegInfo (ZToWord _ mtcc) mtccReg;
         isLegal ty val := $$true;
         legalize ty val := val |};
-      {|scrRegInfo := Build_RegInfo ($29)%word "MTDC" (Some (SyntaxConst DataRoot));
+      {|scrRegInfo := Build_RegInfo (ZToWord _ mtdc) mtdcReg;
         isLegal ty val := isZero (ZeroExtendTruncLsb 2 val);
         legalize ty val := ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) val, $$(wzero 2) >}) |};
-      {|scrRegInfo := Build_RegInfo ($30)%word "MScratchC" (Some (SyntaxConst SealRoot));
+      {|scrRegInfo := Build_RegInfo (ZToWord _ mscratchc) mScratchCReg;
         isLegal ty val := $$true;
         legalize ty val := val |};
-      {|scrRegInfo := Build_RegInfo ($MepccIndex)%word "MEPCC" (Some (SyntaxConst ExecRoot));
+      {|scrRegInfo := Build_RegInfo (ZToWord _ mepcc) mepccReg;
         isLegal ty val := isZero (ZeroExtendTruncLsb ZeroBits val);
         legalize ty val :=
           ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - ZeroBits) val, $$(wzero ZeroBits) >}) |}
     ].
 
-  Definition isValidScrs ty (inst : Inst @# ty) :=
-    Kor (map (fun scr => rs2Fixed inst == Const ty (regAddr (scrRegInfo scr))) scrList).
+ Definition isValidScrs ty (inst : Inst @# ty) :=
+   Kor (map (fun scr => rs2Fixed inst == Const ty (regAddr (scrRegInfo scr))) scrList).
 
-  Definition legalizeScrs ty (inst : Inst @# ty) (cs1 : FullCapWithTag @# ty): FullCapWithTag @# ty :=
-    Kor (map (fun '(Build_ScrReg regInfo islegal legalizer) =>
-                let cs1Val := cs1 @% "val" in
-                ITE (rs2Fixed inst == Const ty (regAddr regInfo))
-                  ((STRUCT { "tag" ::= (cs1 @% "tag") && islegal _ (cs1 @% "val");
-                             "cap" ::= cs1 @% "cap";
-                             "val" ::= legalizer _ cs1Val }) : FullCapWithTag @# ty)
-                  (Const _ Default)) scrList).
+ Definition legalizeScrs ty (inst : Inst @# ty) (cs1 : FullCapWithTag @# ty): FullCapWithTag @# ty :=
+   Kor (map (fun '(Build_ScrReg regInfo islegal legalizer) =>
+               let cs1Val := cs1 @% "val" in
+               ITE (rs2Fixed inst == Const ty (regAddr regInfo))
+                 ((STRUCT { "tag" ::= (cs1 @% "tag") && islegal _ (cs1 @% "val");
+                            "cap" ::= cs1 @% "cap";
+                            "val" ::= legalizer _ cs1Val }) : FullCapWithTag @# ty)
+                 (Const _ Default)) scrList).
 
-  Definition scrInsts: InstEntryFull FullOutput :=
-    {|xlens := [32; 64];
-      extension := Base;
-      instEntries :=
-        [ {|instName := ("CSpecialRW")%string;
-            uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
-                       fieldVal funct3Field (3'h"0");
-                       fieldVal funct7Field (7'h"1")];
-            immEncoder := [];
-            spec ty pc inst cs1 cs2 scr csr :=
-              ( LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
-                LETC legal <- isValidScrs inst;
-                LETC fixCs1 <- legalizeScrs inst cs1;
-                LETC isWriteScr <- isNotZero (rs1 inst);
-                LETC tag <- (#fixCs1 @% "tag") && !isSealed capAccessors (#fixCs1 @% "cap");
-                RetE ((DefWbFullOutput ty)
-                        @%[ "cdTag" <- scr @% "tag" ]
-                        @%[ "cdCap" <- scr @% "cap" ]
-                        @%[ "cdVal" <- scr @% "val" ]
-                        @%[ "exception?" <- !(#pcPerms @% "SR") || !#legal ]
-                        @%[ "exceptionCause" <- (IF #legal
-                                                 then Const ty (natToWord Xlen CapSysRegViolation)
-                                                 else Const ty (natToWord Xlen InstIllegal))]
-                        @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
-                        @%[ "scrTag" <- ITE #isWriteScr #tag (scr @% "tag") ]
-                        @%[ "scrCap" <- ITE #isWriteScr (#fixCs1 @% "cap") (scr @% "cap") ]
-                        @%[ "scrVal" <- ITE #isWriteScr (#fixCs1 @% "val") (scr @% "cap") ]
-                        @%[ "baseException?" <- !#legal ]
-                        @%[ "scrException?" <- #legal ]));
-            instProperties :=
-              DefProperties<| hasCs1 := true |><| hasScr := true |>;
-            goodInstEncode := eq_refl;
-            goodImmEncode := ltac:(eexists; cbv; eauto)
-          |} ] 
-    |}.
+ Definition scrInsts: InstEntryFull FullOutput :=
+   {|xlens := [32; 64];
+     extension := Base;
+     instEntries :=
+       [ {|instName := ("CSpecialRW")%string;
+           uniqId := [fieldVal opcodeField (truncMsb (7'h"5b"));
+                      fieldVal funct3Field (3'h"0");
+                      fieldVal funct7Field (7'h"1")];
+           immEncoder := [];
+           spec ty pc inst cs1 cs2 scr csr :=
+             ( LETC pcPerms <- getCapPerms (pc @% "cap");
+               LETC legal <- isValidScrs inst;
+               LETC fixCs1 <- legalizeScrs inst cs1;
+               LETC isWriteScr <- isNotZero (rs1 inst);
+               LETC tag <- (#fixCs1 @% "tag") && !isCapSealed (#fixCs1 @% "cap");
+               RetE ((DefWbFullOutput ty)
+                       @%[ "cdTag" <- scr @% "tag" ]
+                       @%[ "cdCap" <- scr @% "cap" ]
+                       @%[ "cdVal" <- scr @% "val" ]
+                       @%[ "exception?" <- !(#pcPerms @% "SR") || !#legal ]
+                       @%[ "exceptionCause" <- (IF #legal
+                                                then Const ty (natToWord Xlen CapSysRegViolation)
+                                                else Const ty (natToWord Xlen InstIllegal))]
+                       @%[ "wbScr?" <- isNotZero (rs1Fixed inst)]
+                       @%[ "scrTag" <- ITE #isWriteScr #tag (scr @% "tag") ]
+                       @%[ "scrCap" <- ITE #isWriteScr (#fixCs1 @% "cap") (scr @% "cap") ]
+                       @%[ "scrVal" <- ITE #isWriteScr (#fixCs1 @% "val") (scr @% "val") ]
+                       @%[ "baseException?" <- !#legal ]
+                       @%[ "scrException?" <- #legal ]));
+           instProperties :=
+             DefProperties<| hasCs1 := true |><| hasScr := true |>;
+                                                             goodInstEncode := eq_refl;
+           goodImmEncode := ltac:(eexists; cbv; eauto)
+         |} ] 
+   |}.
 
   Definition MStatusInit := if IeInit then Xlen 'h"8" else wzero Xlen.
   Definition MIEInit := @wconcat (Xlen - 8) 8 Xlen (if MeieInit then _ 'h"8" else wzero (Xlen - 8))
@@ -1329,16 +1293,16 @@ Section InstBaseSpec.
                              (if MsieInit then _ 'h"8" else wzero 4)).
 
   Definition csrList : list CsrReg := [
-      {|csrRegInfo := Build_RegInfo MStatusIndex "MStatus" (Some (SyntaxConst MStatusInit));
+      {|csrRegInfo := Build_RegInfo (ZToWord Imm12Sz mstatus) mStatusReg;
         isSystemCsr := true;
         csrMask := Some (Xlen 'h"8") |};
-      {|csrRegInfo := Build_RegInfo (_ 'h"304") "MIE" (Some (SyntaxConst MIEInit));
+      {|csrRegInfo := Build_RegInfo (ZToWord Imm12Sz mie) mieReg;
         isSystemCsr := true;
         csrMask := Some (Xlen 'h"888") |};
-      {|csrRegInfo := Build_RegInfo (_ 'h"342") "MCause" None;
+      {|csrRegInfo := Build_RegInfo (ZToWord Imm12Sz mcause) mCauseReg;
         isSystemCsr := true;
         csrMask := None |};
-      {|csrRegInfo := Build_RegInfo (_ 'h"343") "MTVal" None;
+      {|csrRegInfo := Build_RegInfo (ZToWord Imm12Sz mtval) mtValReg;
         isSystemCsr := true;
         csrMask := None |} ].
   
@@ -1363,7 +1327,7 @@ Section InstBaseSpec.
                                                                               end))) csrList));
             LETC sysRegPermReq <- Kor (map (fun csrInfo => $$(isSystemCsr csrInfo) &&
                                                              (imm inst == $$(regAddr (csrRegInfo csrInfo)))) csrList);
-            LETE pcPerms <- getCapPerms capAccessors (pc @% "cap");
+            LETC pcPerms <- getCapPerms (pc @% "cap");
             LETC sysRegPermViolation <- #sysRegPermReq && !(#pcPerms @% "SR");
             LETC exception <- #illegal || #sysRegPermViolation;
             LETC exceptionCause <- ITE #illegal $$(natToWord Xlen InstIllegal) $$(natToWord Xlen CapSysRegViolation);
@@ -1474,14 +1438,11 @@ Section InstBaseSpec.
   Ltac simplify_insts :=
     cbn [filterInsts specFuncUnits concat map mkFuncEntry insts instsFull localFuncInputFull fold_left fold_right
            localFuncInput uniqIdToOptBoolList sortedUIdToOptBoolList wordToOptBoolList isDifferingBoolList];
-    pose proof extsHasBase;
-    simplify_field (@extension procParams FullOutput);
+    simplify_field (@extension FullOutput);
     destruct (in_dec Extension_eq_dec Base supportedExts);
-    [| unfold getBool; rewrite ?andb_false_r; simpl; auto; constructor];
-    simplify_field (@xlens procParams FullOutput);
-    let H := fresh in
-    destruct (xlenIs32_or_64) as [H | H];
-    repeat (rewrite H; simpl).
+      [| unfold getBool; rewrite ?andb_false_r; simpl; auto; constructor];
+    simplify_field (@xlens FullOutput);
+    unfold getBool; rewrite ?andb_false_r; simpl; auto.
 
   Ltac checkUniq :=
     simplify_insts;
@@ -1489,7 +1450,7 @@ Section InstBaseSpec.
     repeat match goal with
       | H: ?p \/ ?q |- _ => destruct H; try discriminate
       end; auto.
-  
+
   (*
   Theorem uniqAluIds:
     ForallOrdPairs isDifferingBoolList
@@ -1498,7 +1459,7 @@ Section InstBaseSpec.
     checkUniq.
   Qed.
 
-  Theorem uniqAluNames: NoDup (concat (map (fun x => map (@instName _ _) (insts x)) specFuncUnits)).
+  Theorem uniqAluNames: NoDup (concat (map (fun x => map (@instName _) (insts x)) specFuncUnits)).
   Proof.
     checkUniq.
   Qed.

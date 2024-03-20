@@ -105,17 +105,6 @@ Notation t4 := 29%Z.
 Notation t5 := 30%Z.
 Notation t6 := 31%Z.
 
-Notation meprevpcc := 27%Z.
-Notation mtcc := 28%Z.
-Notation mtdc := 29%Z.
-Notation mscratchc := 30%Z.
-Notation mepcc := 31%Z.
-
-Notation mstatus := (Z.of_N (hex "300")).
-Notation mie := (Z.of_N (hex "304")).
-Notation mcause := (Z.of_N (hex "342")).
-Notation mtval := (Z.of_N (hex "343")).
-
 Local Open Scope cheriot_assembly_scope.
 
 Notation "'addi' pd , ps1 , pimm" := (ProgInst (Build_Instruction "AddI" ps1 x0 pd 0%Z pimm) false) (at level 65).
@@ -235,7 +224,7 @@ Section Enc.
                                   | _ => true
                                   end.
 
-  Definition NumRegId := Z.pow 2 (Z.of_nat (@RegIdSz procParams)).
+  Definition NumRegId := Z.pow 2 (Z.of_nat RegIdSz).
   Definition NumRegIdFixed := Z.pow 2 (Z.of_nat RegFixedIdSz).
 
   Section z.
@@ -257,7 +246,7 @@ Section Enc.
                           end) specFuncUnits with
     | Some fu => match findFu fu with
                  | Some ie =>
-                     let ip := @instProperties procParams _ ie in
+                     let ip := instProperties ie in
                      if isNonNegZ cs1I &&  Z.ltb cs1I NumRegId
                      then if isNonNegZ cs2I && Z.ltb cs2I (if hasScr ip
                                                            then NumRegIdFixed

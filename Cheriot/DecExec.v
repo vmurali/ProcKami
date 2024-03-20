@@ -1,7 +1,6 @@
 Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
 
 Section DecExec.
-  Context `{procParams: ProcParams}.
   Variable ty: Kind -> Type.
   Local Open Scope kami_expr.
 
@@ -11,14 +10,6 @@ Section DecExec.
   Variable cs2: FullCapWithTag @# ty.
   Variable scr: FullCapWithTag @# ty.
   Variable csr: Data @# ty.
-
-  Definition matchField (f: FieldRange) :=
-    let '(existT (start, size) field) := f in
-    UniBit (TruncMsb start size) (ZeroExtendTruncLsb (start + size) inst) ==
-      Const ty field.
-
-  Definition matchUniqId (uid: UniqId) :=
-    CABool And (map matchField uid).
 
   Section ListInstEntry.
     Variable ik: Kind.
@@ -31,7 +22,7 @@ Section DecExec.
 
     Definition matchInstEntry: MatchInstEntryStruct ## ty :=
       structLet (fun x => instName x) (fun _ => Bool)
-        (fun x => RetE (matchUniqId (uniqId x))) ls.
+        (fun x => RetE (matchUniqId inst (uniqId x))) ls.
 
     Section matches.
       Variable matches: MatchInstEntryStruct @# ty.
@@ -118,7 +109,7 @@ Section DecExec.
       refine
         (redLet (@Kor _ (Maybe FullOutput))
            (fun x => ( LETC decodes <- ReadStruct allDecodes (finTagMapFin x);
-                       execInstEntry (@localFunc _ (finTagMapVal (finTagMapVal x)) ty) (_ #decodes) ))
+                       execInstEntry (@localFunc (finTagMapVal (finTagMapVal x)) ty) (_ #decodes) ))
            (finTagMapPf
               (fun x => (funcName (finTagMapVal x), Maybe (localFuncInput (finTagMapVal x)))) finLs)).
       rewrite (finTagMapPrf x).

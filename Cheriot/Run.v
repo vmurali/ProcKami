@@ -3,9 +3,11 @@ Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
 Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.BankedMem.
 
 Section Run.
-  Context `{procParams: ProcParams}.
+  Context `{coreConfigParams: CoreConfigParams}.
+  Instance memParamsInst: MemParams := memParams.
   
   Variable ty: Kind -> Type.
+  Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
 
   Definition CompressedOutput :=
     STRUCT_TYPE {
@@ -43,14 +45,14 @@ Section Run.
       LETC cd : FullCapWithTag <-
                   STRUCT {
                       "tag" ::= inp @% "cdTag";
-                      "cap" ::= ITE (inp @% "exception?") (inp @% "exceptionValue") (inp @% "cdCap");
+                      "cap" ::= ITE (inp @% "exception?") (unpack Cap (inp @% "exceptionValue")) (inp @% "cdCap");
                       "val" ::= (IF (inp @% "exception?")
                                  then inp @% "exceptionCause"
                                  else inp @% "cdVal") };
       RetE (STRUCT {
                 "data" ::= #cd;
                 "pcOrScrCapOrMemOp" ::= (IF (inp @% "mem?")
-                                         then ZeroExtendTruncLsb CapSz (pack #memOp)
+                                         then unpack Cap (ZeroExtendTruncLsb CapSz (pack #memOp))
                                          else (IF (inp @% "wbScr?")
                                                then inp @% "scrCap"
                                                else inp @% "pcCap"));
@@ -91,21 +93,21 @@ Section Run.
   Definition instRetProcess (pcCap: Cap @# ty) (pcVal: Addr @# ty) (instRet : InstRet @# ty) : FetchOut ## ty :=
     ( LETC rawInst <- instRet @% "inst";
       LETC notCompressed <- isInstNotCompressed #rawInst;
-      LETE baseTop <- getCapBaseTop capAccessors pcCap pcVal;
-      LETC baseBound <- pcVal >= (#baseTop @% "base");
-      LETC topBound <- ZeroExtend 1 pcVal + (ITE #notCompressed $4 $2) <= (#baseTop @% "top");
+      LETE baseTop <- getCapBaseTop (STRUCT { "cap" ::= pcCap; "val" ::= pcVal });
+      LETC topBound <- ZeroExtend 1 pcVal + (if compressed then ITE #notCompressed $4 $2 else $4) <=
+        (#baseTop @% "top");
       RetE ((STRUCT { "pc" ::= STRUCT { "cap" ::= pcCap ; "val" ::= pcVal } ;
                       "inst" ::= #rawInst;
                       "badLower16?" ::= instRet @% "badLower16?";
                       "error?" ::= instRet @% "error?";
                       "fault?" ::= instRet @% "fault?";
                       "justFenceI?" ::= instRet @% "justFenceI?";
-                      "bounds?" ::= #baseBound && #topBound }): FetchOut @# ty )).
+                      "bounds?" ::= #topBound }): FetchOut @# ty )).
 
   Definition fetchSpec: ActionT ty FetchOut :=
-    ( Read pcCap : Cap <- pcCapReg;
-      Read pcVal : Addr <- pcValReg;
-      LETA instRet <- instReq #pcVal;
+    ( Read pcCap : Cap <- @^pcCapReg;
+      Read pcVal : Addr <- @^pcValReg;
+      LETA instRet <- instReq procName #pcVal;
       RetAE (instRetProcess #pcCap #pcVal #instRet) ).
 
   Definition UncompressOut := STRUCT_TYPE {
@@ -217,17 +219,17 @@ Section Run.
       LETA cs1 <- regReadNondet (#regReadId @% "cs1?")
                     ( If #cs1Idx == $0
                       then Ret (Const ty Default)
-                      else callReadRegFile FullCapWithTag regsRead1 #cs1Idx as retVal;
+                      else callReadRegFile FullCapWithTag @^regsRead1 #cs1Idx as retVal;
                       Ret #retVal);
       LETA cs2 <- regReadNondet (#regReadId @% "cs2?")
                     ( If #cs2Idx == $0
                       then Ret (Const ty Default)
-                      else callReadRegFile FullCapWithTag regsRead2 #cs2Idx as retVal;
+                      else callReadRegFile FullCapWithTag @^regsRead2 #cs2Idx as retVal;
                       Ret #retVal);
       LETA scr <- regReadNondet (#regReadId @% "scr?")
-                    (readRegs procName scrRegInfos (#regReadId @% "scrIdx"));
+                    (readRegs procName scrRegInfos (#regReadId @% "scrIdx") FullCapWithTag);
       LETA csr <- regReadNondet (#regReadId @% "csr?")
-                    (readRegs procName csrRegInfos (#regReadId @% "csrIdx"));
+                    (readRegs procName csrRegInfos (#regReadId @% "csrIdx") Data);
       Ret (STRUCT { "uncompressOut" ::= regReadIdOut @% "uncompressOut";
                     "allMatches" ::= regReadIdOut @% "allMatches";
                     "regRead" ::=
@@ -244,7 +246,8 @@ Section Run.
       rfWrite := regsWrite;
       rfIdxNum := Nat.pow 2 RegIdSz;
       rfData := FullCapWithTag;
-      rfInit := RFFile isRegsAscii isRegsRfArg regsRfString 0 (Nat.pow 2 RegIdSz) regsInit |}.
+      rfInit := RFFile isRegsAscii isRegsRfArg regsRfString 0 (Nat.pow 2 RegIdSz)
+                  (fun i => convTypeToConst (regsInit i)) |}.
 
   Definition DecodeOut := STRUCT_TYPE {
                               "pc" :: FullCap;
@@ -318,9 +321,9 @@ Section Run.
                                then $$true
                                else #funcOutData @% "pcCapException?" );
       LETC exceptionValue <- ( IF decodeOut @% "error?" || decodeOut @% "fault?"
-                               then #pc + ITE (decodeOut @% "badLower16?") $0 $2
+                               then unpack Cap (#pc + ITE (decodeOut @% "badLower16?") $0 $2)
                                else ( IF !(decodeOut @% "legal?") || !(#funcOut @% "valid")
-                                      then ZeroExtendTruncLsb CapSz #inst
+                                      then unpack Cap (ZeroExtendTruncLsb CapSz #inst)
                                       else #funcOutDataData @% "cap" ) );
       LETC result : CompressedOutput <- #funcOutData
                                     @%[ "exception?" <- #exception ]
@@ -339,8 +342,8 @@ Section Run.
       LETC memRetData <- memRet @% "data";
       LETC loadCap <- #memRetData @% "cap";
       LETC loadTag <- #memRetData @% "tag";
-      LETE loadPerms <- getCapPerms capAccessors #loadCap;
-      LETC loadIsSealed <- isSealed capAccessors #loadCap;
+      LETC loadPerms <- getCapPerms #loadCap;
+      LETC loadIsSealed <- isCapSealed #loadCap;
       LETC keepGL_LG <- !#loadTag || (memInfo @% "LG");
       LETC keepSD_LM <- !#loadTag || (memInfo @% "LM") || #loadIsSealed;
       LETC newLoadPerms <- #loadPerms
@@ -349,7 +352,7 @@ Section Run.
                              @%[ "SD" <- #keepSD_LM && (#loadPerms @% "SD") ]
                              @%[ "LM" <- #keepSD_LM && (#loadPerms @% "LM") ];
       LETC newLoadTag <- (memInfo @% "MC") && #loadTag;
-      LETE newLoadCap <- setCapPerms capAccessors #newLoadPerms #loadCap;
+      LETC newLoadCap <- #loadCap @%[ "p" <- encodePerms #newLoadPerms ];
       LETC exception <- (memRet @% "dataError?") || (memRet @% "dataFault?")
                         || (memRet @% "tagError?") || (memRet @% "tagFault?");
       LETC newDataVal : Data <- ( IF memRet @% "dataError?"
@@ -369,7 +372,7 @@ Section Run.
       (* TODO : Revocation *)
       LETC newFuncOutData <- STRUCT {
                                  "tag" ::= #newLoadTag;
-                                 "cap" ::= ITE #exception #exceptionValue #newLoadCap;
+                                 "cap" ::= ITE #exception (unpack Cap #exceptionValue) #newLoadCap;
                                  "val" ::= #newDataVal };
       RetE (funcOut @%[ "data" <- #newFuncOutData]
               @%[ "exception?" <- #exception ])).
@@ -380,21 +383,21 @@ Section Run.
   Definition memSpec (execOut: ExecOut @# ty) : ActionT ty (Maybe MemOutData) :=
     ( LET funcOut : CompressedOutput <- execOut @% "result";
       LET memInfo <- unpack MemOpInfo (ZeroExtendTruncLsb (size MemOpInfo)
-                                         (#funcOut @% "pcOrScrCapOrMemOp"));
-      Read reqJustFenceI: Bool <- reqJustFenceIReg;
+                                         (pack (#funcOut @% "pcOrScrCapOrMemOp")));
+      Read reqJustFenceI: Bool <- @^reqJustFenceIReg;
       LET exception <- #funcOut @% "exception?";
       LET dontDrop <- !#reqJustFenceI || execOut @% "justFenceI?";
 
       If #dontDrop && !#exception && (#funcOut @% "mem?")
       then (
-          LETA memRet : DataRet <- loadStoreReq (#funcOut @% "addrOrScrOrCsrVal") (#memInfo @% "size")
+          LETA memRet : DataRet <- loadStoreReq procName (#funcOut @% "addrOrScrOrCsrVal") (#memInfo @% "size")
                                      (#memInfo @% "cap?") (#memInfo @% "sign?")
                                      (#memInfo @% "op" == $StOp) (#funcOut @% "data");
           RetAE (memRetProcess #funcOut #memInfo #memRet) )
       else Ret #funcOut
       as retFuncOut ;
       LET setFenceI <- !#exception && (#funcOut @% "fenceI?");
-      WriteIf #dontDrop Then reqJustFenceIReg : Bool <- #setFenceI;
+      WriteIf #dontDrop Then @^reqJustFenceIReg : Bool <- #setFenceI;
       LET memOutData : MemOutData <- STRUCT { "inst" ::= execOut @% "inst";
                                               "result" ::= #retFuncOut };
       Ret (STRUCT {"valid" ::= #dontDrop ; "data" ::= #memOutData } : Maybe _ @# _) ).
@@ -404,18 +407,14 @@ Section Run.
      But the spec says otherwise :(
    *)
 
-  Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
-
   Definition wb (spec : bool) (memOut: Maybe MemOutData @# ty) : ActionT ty Void :=
     ( If (memOut @% "valid")
       then (
           LET memOutData <- memOut @% "data";
           LET result <- #memOutData @% "result";
           LET exception <- #result @% "exception?";
-          Read pcCap : Cap <- pcCapReg;
-          Read pcVal : Addr <- pcValReg;
-          Read prevPcCap: Cap <- prevPcCapReg;
-          Read prevPcVal: Addr <- prevPcValReg;
+          Read pcCap : Cap <- @^pcCapReg;
+          Read pcVal : Addr <- @^pcValReg;
           Read mtcc : FullCapWithTag <- @^"MTCC";
           Read mstatus: Data <- @^"mstatus";
 
@@ -432,7 +431,7 @@ Section Run.
                             then (if spec then #pcCap else (#mtcc @% "cap"))
                             else (IF #result @% "changePcCap?"
                                   then #result @% "pcOrScrCapOrMemOp"
-                                  else #prevPcCap));
+                                  else #pcCap));
 
           LET mstatusArr : Array Xlen Bool <-
                              BuildArray (fun i => match i with
@@ -447,14 +446,12 @@ Section Run.
           LET data <- #result @% "data";
           LET setFenceI <- !#exception && (#result @% "fenceI?");
 
-          Write pcCapReg : Cap <- #nextPcCap;
-          Write pcValReg : Addr <- #nextPcVal;
-          Write prevPcCapReg : Cap <- #pcCap;
-          Write prevPcValReg : Addr <- #pcVal;
-          WriteIf #setFenceI Then startFenceIReg : Bool <- $$true;
+          Write @^pcCapReg : Cap <- #nextPcCap;
+          Write @^pcValReg : Addr <- #nextPcVal;
+          WriteIf #setFenceI Then @^startFenceIReg : Bool <- $$true;
 
           WriteIf (!#exception && (#result @% "changeIe?")) Then
-            @^"MStatus" : Data <- castBits (@Nat.mul_1_r Xlen) (pack #mstatusArr);
+            @^"MStatus" : Data <- pack #mstatusArr;
 
           LETA _ <- writeRegsPred procName scrRegInfos (!#exception && (#result @% "wbScr?"))
                       #cs2Idx (STRUCT { "tag" ::= #result @% "scrTag";
@@ -470,16 +467,11 @@ Section Run.
                                                    "val" ::= #pcVal };
 
           WriteIf (#exception) Then
-            @^"MEPrevPCC" : FullCapWithTag <- STRUCT { "tag" ::= Const ty true;
-                                                       "cap" ::= #prevPcCap;
-                                                       "val" ::= #prevPcVal };
-
-          WriteIf (#exception) Then
             @^"MCause" : Data <- ITE (#result @% "baseException?") (#data @% "val") $CapException;
 
           WriteIf (#exception) Then
             @^"MTVal" : Data <- (IF (#result @% "baseException?")
-                                 then #data @% "cap"
+                                 then pack (#data @% "cap")
                                  else ZeroExtendTruncLsb Xlen
                                         (pack (STRUCT { "S" ::= (#result @% "scrException?");
                                                         "capIdx" ::= (IF (#result @% "pcCapException?")
@@ -488,7 +480,7 @@ Section Run.
                                                         "cause" ::= ZeroExtendTruncLsb 5 (#data @% "val") } )));
 
           If !#exception && (#result @% "wb?") && isNotZero #cdIdx
-          then callWriteRegFile regsWrite #cdIdx #data
+          then callWriteRegFile @^regsWrite #cdIdx #data
           else Retv;
           Retv )
       else Retv;
@@ -505,8 +497,8 @@ Section Run.
       wb true #memOut ).
 
   Definition startFenceIRule: ActionT ty Void :=
-    ( Read startFenceI : Bool <- startFenceIReg;
-      WriteIf #startFenceI Then justFenceIReg : Bool <- $$true;
-      Write startFenceIReg : Bool <- $$false;
+    ( Read startFenceI : Bool <- @^startFenceIReg;
+      WriteIf #startFenceI Then @^justFenceIReg : Bool <- $$true;
+      Write @^startFenceIReg : Bool <- $$false;
       Retv ).
 End Run.

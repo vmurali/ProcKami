@@ -1,7 +1,10 @@
 Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
   
 Section BankedMem.
-  Context `{procParams: ProcParams}.
+  Variable procName: string.
+  Context `{memParams: MemParams}.
+  Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
+
   Definition InstRet := STRUCT_TYPE {
                             "inst" :: Inst;
                             "badLower16?" :: Bool;
@@ -20,9 +23,9 @@ Section BankedMem.
   Definition createRegFile (mb: Fin.t NumBanks * MemBankInit) :=
     {|rfIsWrMask := false;
       rfNum := 1;
-      rfDataArray := memArrayName (snd mb);
-      rfRead := Async [instRqName (snd mb); loadRqName (snd mb)];
-      rfWrite := storeRqName (snd mb);
+      rfDataArray := @^(memArrayName (snd mb));
+      rfRead := Async [@^(instRqName (snd mb)); @^(loadRqName (snd mb))];
+      rfWrite := @^(storeRqName (snd mb));
       rfIdxNum := NumMemBytes;
       rfData := Bit 8;
       rfInit := RFFile isMemAscii isMemRfArg (memRfString (snd mb)) 0 NumMemBytes
@@ -39,9 +42,9 @@ Section BankedMem.
   Definition tagFile (n : nat) :=
     {|rfIsWrMask := false;
       rfNum := 1;
-      rfDataArray := (tagArray ++ natToBinStr n)%string;
-      rfRead := Async [(tagRead ++ natToBinStr n)%string];
-      rfWrite := (tagWrite ++ natToBinStr n)%string;
+      rfDataArray := (@^tagArray ++ natToBinStr n)%string;
+      rfRead := Async [(@^tagRead ++ natToBinStr n)%string];
+      rfWrite := (@^tagWrite ++ natToBinStr n)%string;
       rfIdxNum := NumMemBytes/2;
       rfData := Bool;
       rfInit := RFNonFile _ (Some (ConstBool false)) |}.
@@ -63,7 +66,7 @@ Section BankedMem.
           match mbs return ActionT ty (Array (length exprs + length mbs) (Bit 8)) with
           | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
           | m :: ms => ( LET actualIdx <- ITE ($pos < idxLsb) idxPlus1 idx;
-                         LETA ret <- callReadRegFile (Bit 8) (instRqName m) #actualIdx;
+                         LETA ret <- callReadRegFile (Bit 8) (@^(instRqName m)) #actualIdx;
                          (eq_rect _ _ (instReqCallHelp ms
                                          (exprs ++ [#ret]) (S pos)) _ _))
           end.
@@ -104,17 +107,17 @@ Section BankedMem.
 
         Local Fixpoint memReqCallHelp (mbs: list MemBankInit) (pos: nat)
           (exprs: list (Bit 8 @# ty)) : ActionT ty (Array (length exprs + length mbs) (Bit 8)). refine
-          match mbs with
+          match mbs return ActionT ty (Array (length exprs + length mbs) (Bit 8))with
           | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
           | m :: ms => ( LET inpPos <- $pos - idxLsb;
                          LET actualIdx <- ITE (unpack Bool (ZeroExtendTruncMsb 1 #inpPos)) idxPlus1 idx;
                          LET isWrite <- (ZeroExtend 1 #inpPos) < size;
                          If isStore
                          then ( If #isWrite
-                                then callWriteRegFile (storeRqName m) #actualIdx (bytes @[ #inpPos ])
+                                then callWriteRegFile (@^(storeRqName m)) #actualIdx (bytes @[ #inpPos ])
                                 else Retv;
                                 Ret (Const ty Default) )
-                         else callReadRegFile (Bit 8) (loadRqName m) #actualIdx
+                         else callReadRegFile (Bit 8) (@^(loadRqName m)) #actualIdx
                          as ret;
                          (eq_rect _ _ (memReqCallHelp ms (S pos) (exprs ++ [#ret])) _ _))
           end.
@@ -123,63 +126,57 @@ Section BankedMem.
       End CommonIdx.
 
       Local Ltac dischargeDiv8 :=
-        unfold NumBanks, FullCap, Cap, CapSz, Data;
-        let H := fresh in
-        destruct (xlenIs32_or_64) as [H | H]; rewrite H; auto.
+        unfold NumBanks, FullCap, Cap, CapSz, Data; auto.
 
-      Definition loadStoreReq: ActionT ty DataRet.
-        refine
-          ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
-                         (ZeroExtendTruncMsb (Xlen - Nat.log2_up NumBanks) addr);
-            LET idxPlus1 <- #idx + $1;
-            LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
-            LET capVal <- {< (data @% "cap"), (data @% "val") >};
-            LET bytes <- unpack (Array NumBanks (Bit 8)) (castBits _ #capVal);
-            LETA ldBytes <- memReqCallHelp #idx #idxPlus1 #idxLsb #bytes memBankInits 0 [];
-            LET shuffledLdBytes <- ShuffleArray #ldBytes #idxLsb;
-            LET ldSignVal <- (IF signed
-                              then TruncToDynamicSizeArraySigned #shuffledLdBytes size
-                              else TruncToDynamicSizeArrayUnsigned #shuffledLdBytes size);
-            LET ldVal <- unpack FullCap (castBits _ (pack #ldSignVal));
-            LET straddle <- ZeroExtend 1 #idxLsb + size <= $NumBanks;
-            LET tagIdxBaseMsb <- ZeroExtendTruncMsb (LgNumMemBytes-1) #idx;
-            LET tagIdx : Maybe _ <- Valid #tagIdxBaseMsb;
-            LET tagIdxPlus1 : Maybe _ <- (STRUCT { "valid" ::= #straddle;
-                                                   "data" ::= (#tagIdxBaseMsb + $1)}: Maybe _ @# ty);
-            LET tagIdxLsbIs0 <- unpack Bool (ZeroExtendTruncLsb 1 #idx);
-            LET tag0Idx <- ITE #tagIdxLsbIs0 #tagIdx #tagIdxPlus1;
-            LET tag1Idx <- ITE #tagIdxLsbIs0 #tagIdxPlus1 #tagIdx;
-            (* For stores, if isCap, then tagIdx is valid and tagIdxPlus1 is invalid,
+      Definition loadStoreReq: ActionT ty DataRet :=
+        ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
+                       (ZeroExtendTruncMsb (Xlen - Nat.log2_up NumBanks) addr);
+          LET idxPlus1 <- #idx + $1;
+          LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
+          LET capVal <- {< pack (data @% "cap"), (data @% "val") >};
+          LET bytes <- unpack (Array NumBanks (Bit 8)) #capVal;
+          LETA ldBytes <- memReqCallHelp #idx #idxPlus1 #idxLsb #bytes memBankInits 0 [];
+          LET shuffledLdBytes <- ShuffleArray #ldBytes #idxLsb;
+          LET ldSignVal <- (IF signed
+                            then TruncToDynamicSizeArraySigned #shuffledLdBytes size
+                            else TruncToDynamicSizeArrayUnsigned #shuffledLdBytes size);
+          LET ldVal <- unpack FullCap (pack #ldSignVal);
+          LET straddle <- ZeroExtend 1 #idxLsb + size <= $NumBanks;
+          LET tagIdxBaseMsb <- ZeroExtendTruncMsb (LgNumMemBytes-1) #idx;
+          LET tagIdx : Maybe _ <- Valid #tagIdxBaseMsb;
+          LET tagIdxPlus1 : Maybe _ <- (STRUCT { "valid" ::= #straddle;
+                                                 "data" ::= (#tagIdxBaseMsb + $1)}: Maybe _ @# ty);
+          LET tagIdxLsbIs0 <- unpack Bool (ZeroExtendTruncLsb 1 #idx);
+          LET tag0Idx <- ITE #tagIdxLsbIs0 #tagIdx #tagIdxPlus1;
+          LET tag1Idx <- ITE #tagIdxLsbIs0 #tagIdxPlus1 #tagIdx;
+          (* For stores, if isCap, then tagIdx is valid and tagIdxPlus1 is invalid,
              so only one of tag0Idx or tag1Idx is valid *)
-            If isStore
-            then ( If (#tag0Idx @% "valid")
-                   then callWriteRegFile (tagWrite ++ "0")%string (#tag0Idx @% "data")
-                          (ITE isCap (data @% "tag") $$false)
-                   else Retv;
-                   If (#tag1Idx @% "valid")
-                   then callWriteRegFile (tagWrite ++ "1")%string (#tag1Idx @% "data")
-                          (ITE isCap (data @% "tag") $$false)
-                   else Retv;
-                   Ret (Const ty Default) )
-            else ( If isCap
-                   then callReadRegFile Bool tagRead #idx
-                   else Ret (Const ty Default)
-                   as retTag;
-                   Ret #retTag )
-            as tag;
-            Ret (STRUCT {
-                     "data" ::= (STRUCT {
-                                     "tag" ::= #tag;
-                                     "cap" ::= #ldVal @% "cap";
-                                     "val" ::= #ldVal @% "val" } : FullCapWithTag @# ty);
-                     "lowestByte" ::= $0;
-                     "dataError?" ::= Const ty false;
-                     "dataFault?" ::= Const ty false;
-                     "tagError?" ::= Const ty false;
-                     "tagFault?" ::= Const ty false } : DataRet @# ty) ).
-        - abstract dischargeDiv8.
-        - abstract (rewrite lengthMemBankInits; dischargeDiv8).
-      Defined.
+          If isStore
+          then ( If (#tag0Idx @% "valid")
+                 then callWriteRegFile (@^tagWrite ++ "0")%string (#tag0Idx @% "data")
+                        (ITE isCap (data @% "tag") $$false)
+                 else Retv;
+                 If (#tag1Idx @% "valid")
+                 then callWriteRegFile (@^tagWrite ++ "1")%string (#tag1Idx @% "data")
+                        (ITE isCap (data @% "tag") $$false)
+                 else Retv;
+                 Ret (Const ty Default) )
+          else ( If isCap
+                 then callReadRegFile Bool @^tagRead #idx
+                 else Ret (Const ty Default)
+                 as retTag;
+                 Ret #retTag )
+          as tag;
+          Ret (STRUCT {
+                   "data" ::= (STRUCT {
+                                   "tag" ::= #tag;
+                                   "cap" ::= #ldVal @% "cap";
+                                   "val" ::= #ldVal @% "val" } : FullCapWithTag @# ty);
+                   "lowestByte" ::= $0;
+                   "dataError?" ::= Const ty false;
+                   "dataFault?" ::= Const ty false;
+                   "tagError?" ::= Const ty false;
+                   "tagFault?" ::= Const ty false } : DataRet @# ty) ).
     End LoadStore.
   End ty.
 End BankedMem.
