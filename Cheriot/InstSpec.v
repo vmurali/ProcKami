@@ -414,9 +414,6 @@ Section InstBaseSpec.
       ]
     |}.
 
-  Definition rmTag ty (cap: FullCapWithTag @# ty) : FullCap @# ty :=
-    STRUCT { "cap" ::= cap @% "cap"; "val" ::= cap @% "val" }.
-  
   Definition setBounds ty (cs1: FullCapWithTag @# ty) (len: Data @# ty) (isExact: Bool @# ty): FullCapWithTag ## ty :=
     ( LETE baseTop <- getCapBaseTop (rmTag cs1);
       LETC baseBound <- (cs1 @% "val") >= (#baseTop @% "base");
@@ -1060,13 +1057,6 @@ Section InstBaseSpec.
       ]
     |}.
   
-  Definition st64Insts: InstEntryFull FullOutput :=
-    {|xlens := [64];
-      extension := Base;
-      instEntries := [
-      ]
-    |}.
-
   Definition jumpInsts: InstEntryFull FullOutput :=
     {|xlens := [32; 64];
       extension := Base;
@@ -1077,7 +1067,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen (jalOffset inst);
               LETC linkAddr <- (pc @% "val") + ITE (isInstNotCompressed inst) $4 $2;
-              LETC mstatusArr <- unpack (Array (S (Xlen-1)) Bool) csr;
+              LETC mstatusArr <- unpack (Array Xlen Bool) csr;
               LETC ie <- #mstatusArr ![ 3 ];
               LETE representable <- representableFnCap pc #newAddr;
               RetE ((DefWbFullOutput ty)
@@ -1125,10 +1115,12 @@ Section InstBaseSpec.
                                        else (StaticIf (negb compressed) (isNotZero (ZeroExtendTruncLsb 2 #newAddr))
                                                (mkPair (Valid (Const ty (natToWord Xlen InstMisaligned))) ($$true))
                                                (mkPair Invalid ($$false)))))));
-              LETC mstatusArr <- unpack (Array (S (Xlen-1)) Bool) csr;
+              LETC mstatusArr <- unpack (Array Xlen Bool) csr;
               LETC ie <- #mstatusArr ![ 3 ];
               LETC ieSentry <- isCapIeSentry (cs1 @% "cap");
               LETC idSentry <- isCapIdSentry (cs1 @% "cap");
+              LETC mstatusArr <- unpack (Array Xlen Bool) csr;
+              LETC newMStatus <- UpdateArrayConst #mstatusArr (@natToFin 3 _) #ieSentry;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- $$true ]
                       @%[ "cdCap" <- sealCap (pc @% "cap") (getCapOTypeFromIe #ie) ]
@@ -1141,8 +1133,8 @@ Section InstBaseSpec.
                       @%[ "exceptionCause" <- #fullException @% "fst" @% "data" ]
                       @%[ "exceptionValue" <- #newAddr ]
                       @%[ "baseException?" <- #fullException @% "snd" ]
-                      @%[ "changeIe?" <- #ieSentry || #idSentry ]
-                      @%[ "newIe" <- #ieSentry ] ));
+                      @%[ "wbCsr?" <- #ieSentry || #idSentry ]
+                      @%[ "csrVal" <- pack #newMStatus ] ));
           instProperties := DefProperties<| hasCs1 := true |><| implicitCsr := getCsrId mstatus |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -1199,6 +1191,9 @@ Section InstBaseSpec.
               LETE representable <- representableFnCap (rmTag scr) #newMepc;
               LETC exception <- !((scr @% "tag") && !isCapSealed (scr @% "cap") && #representable
                                   && (#mepcPerms @% "EX") && (#pcPerms @% "SR"));
+              LETC mstatusArr <- unpack (Array Xlen Bool) csr;
+              LETC pie <- #mstatusArr ![ 7 ];
+              LETC newMStatus <- UpdateArrayConst #mstatusArr (@natToFin 3 _) #pie;
               RetE ((DefFullOutput ty)
                       @%[ "taken?" <- $$true ]
                       @%[ "changePcCap?" <- $$true ]
@@ -1208,8 +1203,12 @@ Section InstBaseSpec.
                       @%[ "exceptionCause" <- #exceptionCause ]
                       @%[ "exceptionValue" <- #newMepc ]
                       @%[ "scrException?" <- !(#pcPerms @% "SR") ]
-                      @%[ "pcCapException?" <- #pcPerms @% "SR" ]));
-          instProperties := DefProperties<| implicitScr := getRegScrId mepcc |><| hasCd := false |>;
+                      @%[ "pcCapException?" <- #pcPerms @% "SR" ]
+                      @%[ "wbCsr?" <- $$true]
+                      @%[ "csrVal" <- pack #newMStatus ]));
+          instProperties := DefProperties
+                              <| implicitScr := getRegScrId mepcc |>
+                                                  <| implicitCsr := getCsrId mstatus |><| hasCd := false |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |}
@@ -1286,14 +1285,15 @@ Section InstBaseSpec.
    |}.
 
   Definition MStatusInit := if IeInit then Xlen 'h"8" else wzero Xlen.
-  Definition MIEInit := @wconcat (Xlen - 8) 8 Xlen (if MeieInit then _ 'h"8" else wzero (Xlen - 8))
-                          (wconcat (if MtieInit then _ 'h"8" else wzero 4)
-                             (if MsieInit then _ 'h"8" else wzero 4)).
+  Definition MIEInit : word Xlen := evalExpr (ZeroExtend (Xlen - 12)
+                                                ({<if MeieInit then Const type (4'h"8") else $0,
+                                                    if MtieInit then Const type (4'h"8") else $0,
+                                                    if MsieInit then Const type (4'h"8") else $0>})).
 
   Definition csrList : list CsrReg := [
       {|csrRegInfo := Build_RegInfo (getCsrId mstatus) mStatusReg;
         isSystemCsr := true;
-        csrMask := Some (Xlen 'h"8") |};
+        csrMask := Some (Xlen 'h"88") |};
       {|csrRegInfo := Build_RegInfo (getCsrId mie) mieReg;
         isSystemCsr := true;
         csrMask := Some (Xlen 'h"888") |};
@@ -1390,7 +1390,7 @@ Section InstBaseSpec.
         localFuncInputFull := FullOutput;
         localFuncFull ty x := RetE x;
         instsFull := [aluInsts; alu64Insts; capInsts; branchInsts;
-                      ldInsts; ld32Insts; ld64Insts; stInsts; st32Insts; st64Insts;
+                      ldInsts; ld32Insts; ld64Insts; stInsts; st32Insts;
                       jumpInsts; exceptionInsts; scrInsts; csrInsts; iFenceInsts]
       |}
     ].
@@ -1398,10 +1398,10 @@ Section InstBaseSpec.
   Fixpoint isDifferingBoolList (a b: list (option bool)) :=
     match a, b with
     | x :: xs, y :: ys => match x, y with
-                          | Some p, Some q => if Bool.eqb p q then isDifferingBoolList xs ys else True
+                          | Some p, Some q => orb (negb (Bool.eqb p q)) (isDifferingBoolList xs ys)
                           | _, _ => isDifferingBoolList xs ys
                           end
-    | _, _ => False
+    | _, _ => false
     end.
 
   Fixpoint wordToOptBoolList n (w: word n) :=
@@ -1420,46 +1420,56 @@ Section InstBaseSpec.
   Definition uniqIdToOptBoolList (u: UniqId) :=
     sortedUIdToOptBoolList 0 (SigWordSort.sort u).
 
+  Ltac unfoldXlensExtension x :=
+    match x with
+    | context [xlens ?P] => let y := eval cbn [xlens P] in x in unfoldXlensExtension y
+    | context [extension ?P] => let y := eval cbn [extension P] in x in unfoldXlensExtension y
+    | _ => exact x
+    end.
 
-  (* Run the following only if the uniqId, instName, immEncoder or instProperties field changes for any instruction.
-     (Corrollary: every time a new instruction is added, it must be run)
-   *)
+  Ltac unfoldInstEntries x :=
+    match x with
+    | context [instEntries ?P] => let y := eval cbn [instEntries P] in x in unfoldInstEntries y
+    | _ => exact x
+    end.
+  
+  Definition specInstEntries: list InstEntrySpec :=
+    ltac:(let x := 
+            eval cbv [filterInsts specFuncUnits concat map mkFuncEntry insts instsFull localFuncInputFull fold_left
+                        fold_right localFuncInput uniqIdToOptBoolList sortedUIdToOptBoolList
+                        wordToOptBoolList isDifferingBoolList] in specFuncUnits in
+            match x with
+            | [ {| insts := ?ins |} ] =>
+                let y := eval cbn [Xlen orb andb Extension_eqb Nat.eqb existsb supportedExts] in
+                ltac:(unfoldXlensExtension ins) in
+                  let z := eval cbn [app] in ltac:(unfoldInstEntries y) in exact z
+            end).
 
-  Ltac simplify_field field :=
-    repeat match goal with
-           | |- context [field ?P] =>
-               let sth := fresh "sth" in
-               let Heq_sth := fresh "Heq_sth" in
-               remember (field P) as sth eqn: Heq_sth; simpl in Heq_sth; rewrite Heq_sth; clear Heq_sth sth
+  Section EvalProp.
+    Variable A: Type.
+    Variable R: A -> A -> bool.
+
+    Fixpoint NoDupEval (ls: list A) :=
+      match ls with
+      | nil => true
+      | x :: xs => andb (negb (existsb (R x) xs)) (NoDupEval xs)
       end.
 
-  Ltac simplify_insts :=
-    cbn [filterInsts specFuncUnits concat map mkFuncEntry insts instsFull localFuncInputFull fold_left fold_right
-           localFuncInput uniqIdToOptBoolList sortedUIdToOptBoolList wordToOptBoolList isDifferingBoolList];
-    simplify_field (@extension FullOutput);
-    destruct (in_dec Extension_eq_dec Base supportedExts);
-      [| unfold getBool; rewrite ?andb_false_r; simpl; auto; constructor];
-    simplify_field (@xlens FullOutput);
-    unfold getBool; rewrite ?andb_false_r; simpl; auto.
-
-  Ltac checkUniq :=
-    simplify_insts;
-    repeat constructor; unfold In, not; intros;
-    repeat match goal with
-      | H: ?p \/ ?q |- _ => destruct H; try discriminate
-      end; auto.
-
-  (*
+    Fixpoint ForallOrdPairsEval (ls: list A) :=
+      match ls with
+      | nil => true
+      | x :: xs => andb (forallb (R x) xs) (ForallOrdPairsEval xs)
+      end.
+  End EvalProp.
+  
   Theorem uniqAluIds:
-    ForallOrdPairs isDifferingBoolList
-      (concat (map (fun x => map (fun y => uniqIdToOptBoolList (uniqId y)) (insts x)) specFuncUnits)).
+    ForallOrdPairsEval isDifferingBoolList (map (fun y => uniqIdToOptBoolList (uniqId y)) specInstEntries) = true.
   Proof.
-    checkUniq.
+    auto.
   Qed.
 
-  Theorem uniqAluNames: NoDup (concat (map (fun x => map (@instName _) (insts x)) specFuncUnits)).
+  Theorem uniqAluNames: NoDupEval (String.eqb) (map (@instName _) specInstEntries) = true.
   Proof.
-    checkUniq.
+    auto.
   Qed.
-   *)
 End InstBaseSpec.

@@ -1,114 +1,52 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Assembly ProcKami.Cheriot.Types.
+Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
 
 Require Import ProcKami.Cheriot.InstSpec ProcKami.Cheriot.CoreConfig.
 
-Declare Scope cheriot_assembly_scope.
-Delimit Scope cheriot_assembly_scope with cheriot_assembly.
+Record Instruction := {
+    instEntry : InstEntrySpec;
+    cs1       : RegScrName;
+    cs2       : RegScrName;
+    cd        : RegScrName;
+    csr       : CsrName;
+    immVal    : Z }.
 
-Local Open Scope cheriot_assembly_scope.
+Definition getInstructionRel (inst: Instruction) (curr: Z) (immRel: bool) :=
+  match immRel with
+  | false => inst
+  | true => let '(Build_Instruction ie cs1Idx cs2Idx cdIdx csrIdx immV) := inst in
+            Build_Instruction ie cs1Idx cs2Idx cdIdx csrIdx (immV - curr)%Z
+  end.
 
-Notation "'addi' pd , ps1 , pimm" := (ProgInst (Build_Instruction "AddI" ps1 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'slti' pd , ps1 , pimm" := (ProgInst (Build_Instruction "SLTI" ps1 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'sltiu' pd , ps1 , pimm" := (ProgInst (Build_Instruction "SLTIU" ps1 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'xori' pd , ps1 , pimm" := (ProgInst (Build_Instruction "XorI" ps1 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'ori' pd , ps1 , pimm" := (ProgInst (Build_Instruction "OrI" ps1 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'andi' pd , ps1 , pimm" := (ProgInst (Build_Instruction "AndI" ps1 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'slli' pd , ps1 , pimm" := (ProgInst (Build_Instruction "SLLI" ps1 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'srli' pd , ps1 , pimm" := (ProgInst (Build_Instruction "SRLI" ps1 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'srai' pd , ps1 , pimm" := (ProgInst (Build_Instruction "SRAI" ps1 x0 pd 0%Z pimm) false) (at level 65).
+Inductive Prog :=
+| ProgInst (inst: Instruction) (immRel: bool)
+| ProgSeq (p1 p2: Prog)
+| ProgDeclLabel (cont: Z -> Prog)
+| ProgLabel (label: Z)
+| ProgData (size: Z) (val: list (word 8))
+| ProgAlign (size: Z).
 
-Notation "'add' pd , ps1 , ps2" := (ProgInst (Build_Instruction "Add" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'sub' pd , ps1 , ps2" := (ProgInst (Build_Instruction "Sub" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'slt' pd , ps1 , ps2" := (ProgInst (Build_Instruction "SLT" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'sltu' pd , ps1 , ps2" := (ProgInst (Build_Instruction "SLTU" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'xor' pd , ps1 , ps2" := (ProgInst (Build_Instruction "Xor" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'or' pd , ps1 , ps2" := (ProgInst (Build_Instruction "Or" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'and' pd , ps1 , ps2" := (ProgInst (Build_Instruction "And" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'sll' pd , ps1 , ps2" := (ProgInst (Build_Instruction "SLL" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'srl' pd , ps1 , ps2" := (ProgInst (Build_Instruction "SRL" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'sra' pd , ps1 , ps2" := (ProgInst (Build_Instruction "SRA" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'lui' pd , ps1 , ps2" := (ProgInst (Build_Instruction "LUI" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
+Inductive ResolvedProg :=
+| ResolvedProgInst (inst: Instruction) (immRel: bool)
+| ResolvedProgSeq (p1 p2: ResolvedProg)
+| ResolvedProgData (size: Z) (val: list (word 8))
+| ResolvedProgAlign (size: Z).
 
-Notation "'auicgp' pd , pimm" := (ProgInst (Build_Instruction "AUICGP" x0 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'auipcc' pd , pimm" := (ProgInst (Build_Instruction "AUIPCC" x0 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'candperm' pd , ps1 , ps2" := (ProgInst (Build_Instruction "CAndPerm" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'ccleartag' pd , ps1" := (ProgInst (Build_Instruction "CClearTag" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cgetaddr' pd , ps1" := (ProgInst (Build_Instruction "CGetAddr" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cgetbase' pd , ps1" := (ProgInst (Build_Instruction "CGetBase" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cgethigh' pd , ps1" := (ProgInst (Build_Instruction "CGetHigh" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cgetlen' pd , ps1" := (ProgInst (Build_Instruction "CGetLen" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cgetperm' pd , ps1" := (ProgInst (Build_Instruction "CGetPerm" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cgettag' pd , ps1" := (ProgInst (Build_Instruction "CGetTag" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cgettop' pd , ps1" := (ProgInst (Build_Instruction "CGetTop" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cgettype' pd , ps1" := (ProgInst (Build_Instruction "CGetType" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cincaddr' pd , ps1 , ps2" := (ProgInst (Build_Instruction "CIncAddr" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cincaddrimm' pd , ps1 , pimm" := (ProgInst (Build_Instruction "CIncAddrPimm" ps1 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'cmove' pd , ps1" := (ProgInst (Build_Instruction "CMove" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cram' pd , ps1" := (ProgInst (Build_Instruction "CRepresentableAlignmentMask" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'crrl' pd , ps1" := (ProgInst (Build_Instruction "CRoundRepresentableLength" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'csetaddr' pd , ps1 , ps2" := (ProgInst (Build_Instruction "CSetAddr" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'csetbounds' pd , ps1 , ps2" := (ProgInst (Build_Instruction "CSetBounds" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'csetboundsexact' pd , ps1 , ps2" := (ProgInst (Build_Instruction "CSetBoundsExact" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'csetboundsimm' pd , ps1 , pimm" := (ProgInst (Build_Instruction "CSetBoundsPimm" ps1 x0 pd 0%Z pimm) false) (at level 65).
-Notation "'csetequalexact' pd , ps1 , ps2" := (ProgInst (Build_Instruction "CSetEqualExact" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'csethigh' pd , ps1 , ps2" := (ProgInst (Build_Instruction "CSetHigh" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'csub' pd , ps1 , ps2" := (ProgInst (Build_Instruction "CSub" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'ctestsubset' pd , ps1 , ps2" := (ProgInst (Build_Instruction "CTestSubset" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cseal' pd , ps1 , ps2" := (ProgInst (Build_Instruction "CSeal" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cunseal' pd , ps1 , ps2" := (ProgInst (Build_Instruction "CUnseal" ps1 ps2 pd 0%Z 0%Z) false) (at level 65).
+Definition findInstEntry name : option InstEntrySpec :=
+  find (fun x => String.eqb name (instName x)) specInstEntries.
 
-Notation "'beq' ps1 , ps2 , imm" := (ProgInst (Build_Instruction "BEq" ps1 ps2 x0 0%Z imm) true) (at level 65).
-Notation "'bne' ps1 , ps2 , imm" := (ProgInst (Build_Instruction "BNE" ps1 ps2 x0 0%Z imm) true) (at level 65).
-Notation "'blt' ps1 , ps2 , imm" := (ProgInst (Build_Instruction "BLT" ps1 ps2 x0 0%Z imm) true) (at level 65).
-Notation "'bge' ps1 , ps2 , imm" := (ProgInst (Build_Instruction "BGE" ps1 ps2 x0 0%Z imm) true) (at level 65).
-Notation "'bltu' ps1 , ps2 , imm" := (ProgInst (Build_Instruction "BLTU" ps1 ps2 x0 0%Z imm) true) (at level 65).
-Notation "'bgeu' ps1 , ps2 , imm" := (ProgInst (Build_Instruction "BGEU" ps1 ps2 x0 0%Z imm) true) (at level 65).
+Ltac findInstEntryLtac name :=
+  let x := eval cbv [findInstEntry find String.eqb Ascii.eqb Bool.eqb instName specInstEntries mkBranchInst mkLdInst mkStInst
+             scrList isValidScrs legalizeScrs csrList isValidCsrs mkCsrEntry]
+  in (findInstEntry name)
+    in match x with
+       | Some ?y => exact (y: InstEntrySpec)
+       end.
 
-Notation "'clb' pd , imm ( ps1 )" := (ProgInst (Build_Instruction "CLB" ps1 x0 pd 0%Z imm) false) (at level 65).
-Notation "'clh' pd , imm ( ps1 )" := (ProgInst (Build_Instruction "CLh" ps1 x0 pd 0%Z imm) false) (at level 65).
-Notation "'clw' pd , imm ( ps1 )" := (ProgInst (Build_Instruction "CLw" ps1 x0 pd 0%Z imm) false) (at level 65).
-Notation "'clbu' pd , imm ( ps1 )" := (ProgInst (Build_Instruction "CLBU" ps1 x0 pd 0%Z imm) false) (at level 65).
-Notation "'clhu' pd , imm ( ps1 )" := (ProgInst (Build_Instruction "CLHU" ps1 x0 pd 0%Z imm) false) (at level 65).
-Notation "'clc' pd , imm ( ps1 )" := (ProgInst (Build_Instruction "CLC" ps1 x0 pd 0%Z imm) false) (at level 65).
-
-Notation "'csb' imm ( ps1 ), ps2" := (ProgInst (Build_Instruction "CLB" ps1 ps2 x0 0%Z imm) false) (at level 65).
-Notation "'csh' imm ( ps1 ), ps2" := (ProgInst (Build_Instruction "CLH" ps1 ps2 x0 0%Z imm) false) (at level 65).
-Notation "'csw' imm ( ps1 ), ps2" := (ProgInst (Build_Instruction "CLW" ps1 ps2 x0 0%Z imm) false) (at level 65).
-Notation "'csc' imm ( ps1 ), ps2" := (ProgInst (Build_Instruction "CLC" ps1 ps2 x0 0%Z imm) false) (at level 65).
-
-Notation "'cjal' pd , imm" := (ProgInst (Build_Instruction "CJAL" x0 x0 pd 0%Z imm) true) (at level 65).
-Notation "'cj' imm" := (ProgInst (Build_Instruction "CJAL" x0 x0 x0 0%Z imm) true) (at level 65).
-
-Notation "'cjalr' pd , ps1" := (ProgInst (Build_Instruction "CJALR" ps1 x0 pd 0%Z 0%Z) false) (at level 65).
-Notation "'cjr' ps1" := (ProgInst (Build_Instruction "CJALR" ps1 x0 x0 0%Z 0%Z) false) (at level 65).
-
-Notation "'ecall'" := (ProgInst (Build_Instruction "ECall" x0 x0 x0 0%Z 0%Z) false) (at level 65).
-Notation "'mret'" := (ProgInst (Build_Instruction "MRet" x0 x0 x0 0%Z 0%Z) false) (at level 65).
-Notation "'fence.i'" := (ProgInst (Build_Instruction "FenceI" x0 x0 x0 0%Z 0%Z) false) (at level 65).
-
-Notation "'csrrw' pd , csrId , ps1" := (ProgInst (Build_Instruction "CSRRW" ps1 x0 pd csrId 0%Z) false) (at level 65).
-Notation "'csrrs' pd , csrId , ps1" := (ProgInst (Build_Instruction "CSRRS" ps1 x0 pd csrId 0%Z) false) (at level 65).
-Notation "'csrrc' pd , csrId , ps1" := (ProgInst (Build_Instruction "CSRRC" ps1 x0 pd csrId 0%Z) false) (at level 65).
-
-Notation "'csrw' csrId , ps1" := (ProgInst (Build_Instruction "CSRRW" ps1 x0 x0 csrId 0%Z) false) (at level 65).
-Notation "'csrs' csrId , ps1" := (ProgInst (Build_Instruction "CSRRS" ps1 x0 x0 csrId 0%Z) false) (at level 65).
-Notation "'csrc' csrId , ps1" := (ProgInst (Build_Instruction "CSRRC" ps1 x0 x0 csrId 0%Z) false) (at level 65).
-
-Notation "'csrr' pd , csrId" := (ProgInst (Build_Instruction "CSRRW" x0 x0 pd csrId 0%Z) false) (at level 65).
-
-Notation "'csrrwi' pd , csrId , imm" := (ProgInst (Build_Instruction "CSRRWI" x0 x0 pd csrId imm) false) (at level 65).
-Notation "'csrrsi' pd , csrId , imm" := (ProgInst (Build_Instruction "CSRRSI" x0 x0 pd csrId imm) false) (at level 65).
-Notation "'csrrci' pd , csrId , imm" := (ProgInst (Build_Instruction "CSRRCI" x0 x0 pd csrId imm) false) (at level 65).
-
-Notation "'csrwi' csrId , imm" := (ProgInst (Build_Instruction "CSRRWI" x0 x0 x0 csrId imm) false) (at level 65).
-Notation "'csrsi' csrId , imm" := (ProgInst (Build_Instruction "CSRRSI" x0 x0 x0 csrId imm) false) (at level 65).
-Notation "'csrci' csrId , imm" := (ProgInst (Build_Instruction "CSRRCI" x0 x0 x0 csrId imm) false) (at level 65).
-
-Notation "'cspecialrw' pd , scrId , ps1" := (ProgInst (Build_Instruction "CSpecialRW" ps1 x0 pd scrId 0%Z) false) (at level 65).
-Notation "'cspecialr' pd , scrId" := (ProgInst (Build_Instruction "CSpecialR" x0 x0 pd scrId 0%Z) false) (at level 65).
-Notation "'cspecialw' scrId , ps1" := (ProgInst (Build_Instruction "CSpecialRW" ps1 x0 x0 scrId 0%Z) false) (at level 65).
-
-Local Close Scope cheriot_assembly_scope.
+Definition splitWord n (w: word n) k :=
+  let numWords := (n + k - 1)/k in
+  let a := @truncLsb (numWords * k) _ w in
+  let arr := evalExpr (unpack (Array numWords (Bit k)) (Const type a)) in
+  convertToList arr.
 
 Definition splitInst (w: word InstSz): list (word 8) :=
   [truncLsb w; truncLsb (@truncMsb 24 _ w); truncLsb (@truncMsb 16 _ w); truncMsb w].
@@ -116,43 +54,231 @@ Definition splitInst (w: word InstSz): list (word 8) :=
 Definition splitCompInst (w: word CompInstSz): list (word 8) :=
   [truncLsb w; truncMsb w].
 
-Section Enc.
-  Context `{coreConfigParams: CoreConfigParams}.
+Definition isNonNegZ (z : Z) := match z with
+                                | Z.neg _ => false
+                                | _ => true
+                                end.
 
-  Definition isNonNegZ (z : Z) := match z with
-                                  | Z.neg _ => false
-                                  | _ => true
-                                  end.
+Section z.
+  Variable z: Z.
+  Local Definition zWithinWidthSigned (width: nat) :=
+    let pow2PredWidth := Z.pow 2 (Z.of_nat (width - 1)) in
+    Z.geb z (- pow2PredWidth)%Z && Z.ltb z pow2PredWidth.
 
-  Definition NumRegId := Z.pow 2 (Z.of_nat RegIdSz).
-  Definition NumRegIdFixed := Z.pow 2 (Z.of_nat RegFixedIdSz).
+  Local Definition zWithinWidthUnsigned (width: nat) :=
+    let pow2Width := Z.pow 2 (Z.of_nat width) in
+    isNonNegZ z && Z.ltb z pow2Width.
 
-  Section z.
-    Variable z: Z.
-    Local Definition zWithinWidth (pow2PredWidth: Z) := Z.geb z (- pow2PredWidth)%Z && Z.ltb z pow2PredWidth.
+  Local Definition zStart0Bits (start: nat) := Z.eqb (Z.modulo (Z.pow 2 (Z.of_nat start)) z) 0%Z.
 
-    Local Definition zStart0Bits (start: nat) := Z.eqb (Z.modulo (Z.pow 2 (Z.of_nat start)) z) 0%Z.
+  Local Definition zWithinWidthStart (start width: nat) (signed: bool) :=
+    zStart0Bits start && if signed
+                         then zWithinWidthSigned width
+                         else zWithinWidthUnsigned width.
+End z.
 
-    Local Definition zWithinWidthStart (start width: nat) := zStart0Bits start &&
-                                                               zWithinWidth (Z.pow 2 (Z.of_nat (width - 1))).
-  End z.
+Definition instEncoder (i: Instruction) : option (list (word 8)) :=
+  let '(Build_Instruction ie cs1I cs2I cdI csrI immI) := i in
+  if zWithinWidthStart immI (immStart ie) (immEnd ie) (signExt (instProperties ie))
+  then Some (splitInst (encodeInst ie (getRegScrId cs1I) (getRegScrId cs2I)
+                          (getRegScrId cdI) (getCsrId csrI) (ZToWord _ immI)))
+  else None.
 
-  Definition instAssemblyEnc (i: Instruction) : (list (word 8) + AssemblyError) :=
-    let '(Build_Instruction name cs1I cs2I cdI csrI immI) := i in
-    let findFu fu := find (fun ie => String.eqb (instName ie) name) (insts fu) in
-    match find (fun fu => match findFu fu with
-                          | Some _ => true
-                          | None => false
-                          end) specFuncUnits with
-    | Some fu => match findFu fu with
-                 | Some ie =>
-                     let ip := instProperties ie in
-                     if (isNonNegZ immI || signExt ip) &&
-                          zWithinWidthStart immI (immStart ie) (immEnd ie)
-                     then inl (splitInst (encodeInst ie (getRegScrId cs1I) (getRegScrId cs2I) (getRegScrId cdI) (getCsrId csrI) (ZToWord _ immI)))
-                     else inr Imm
-                 | None => inr InstAsmName
-                 end
-    | None => inr InstAsmName
+Definition startAlign := 2%Z.
+
+Definition instSize (inst: Instruction) := match instEncoder inst with
+                                           | Some xs => Z.of_nat (length xs)
+                                           | None => 0%Z
+                                           end.
+
+Definition getNextAlignDiff (sz curr: Z) :=
+  let realCurr := Z.modulo (Z.pow 2 startAlign + curr) sz in
+  (Z.modulo (sz - realCurr) sz)%Z.
+
+Fixpoint getAddrMap (prog: Prog) (currLabelAddrMap: Z * Z * (Z -> Z)): Z * Z * (Z -> Z) :=
+  match prog with
+  | ProgInst inst rel => let '(curr, label, addrMap) := currLabelAddrMap in
+                         (curr + instSize inst, label, addrMap)%Z
+  | ProgSeq p1 p2 => getAddrMap p2 (getAddrMap p1 currLabelAddrMap)
+  | ProgDeclLabel cont => let '(curr, label, addrMap) := currLabelAddrMap in
+                          getAddrMap (cont (label + 1)%Z) (curr, label + 1, addrMap)%Z
+  | ProgLabel l => let '(curr, label, addrMap) := currLabelAddrMap in
+                   (curr, label, fun i => if (i =? l)%Z
+                                          then curr
+                                          else addrMap i)
+  | ProgData sz _ => let '(curr, label, addrMap) := currLabelAddrMap in
+                     (curr + sz, label, addrMap)%Z
+  | ProgAlign sz => let '(curr, label, addrMap) := currLabelAddrMap in
+                    (curr + getNextAlignDiff sz curr, label, addrMap)%Z
+  end.
+
+Section setLabel.
+  Variable addrMap: Z -> Z.
+  Fixpoint setLabel (prog: Prog) (label: Z): ResolvedProg * Z :=
+    match prog with
+    | ProgInst inst rel => (ResolvedProgInst inst rel, label)
+    | ProgSeq p1 p2 => let '(p1', l2) := setLabel p1 label in
+                       let '(p2', l) := setLabel p2 l2 in
+                       (ResolvedProgSeq p1' p2', l)
+    | ProgDeclLabel cont => setLabel (cont (label + 1)%Z) (label + 1)%Z
+    | ProgLabel l => (ResolvedProgData 0 [], (addrMap l))
+    | ProgData sz data => (ResolvedProgData sz data, label)
+    | ProgAlign sz => (ResolvedProgAlign sz, label)
     end.
-End Enc.
+End setLabel.
+
+Fixpoint getInstBytesResolved (prog: ResolvedProg) (curr: Z) (idx: nat): (((list (word 8) * Z) + (Instruction * bool))%type * nat) :=
+  match prog with
+  | ResolvedProgInst inst immRel =>
+      match instEncoder (getInstructionRel inst curr immRel) with
+      | Some instBytes => (inl (instBytes, curr + Z.of_nat (length instBytes))%Z, S idx)
+      | None => (inr (inst, immRel), idx)
+      end
+  | ResolvedProgSeq p1 p2 => match getInstBytesResolved p1 curr idx with
+                             | (inl (p1', curr2), i2) => match getInstBytesResolved p2 curr2 i2 with
+                                                         | (inl (p2', c), i) => (inl (p1' ++ p2', c), i)
+                                                         | (inr errProg, i) => (inr errProg, i)
+                                                         end
+                             | (inr errProg, i) => (inr errProg, i)
+                             end
+  | ResolvedProgData size vals => (inl (firstn (Z.to_nat size) vals, curr + size)%Z, S idx)
+  | ResolvedProgAlign size =>
+      let len := getNextAlignDiff size curr in
+      (inl (repeat (wzero 8) (Z.to_nat len), curr + len)%Z, S idx)
+  end.
+
+(* Bytes of instruction or the first error with assembly instruction, whether it's relative or not and a line number *)
+Definition getInstBytes (prog: Prog): ((list (word 8)) + (Instruction * bool * nat))%type :=
+  let '(_, _, addrMap) := getAddrMap prog (0%Z, 0%Z, fun i => (-1)%Z) in
+  let '(resolved, _) := setLabel addrMap prog 0%Z in
+  match getInstBytesResolved resolved 0%Z 0 with
+  | (inl (xs, _), _) => inl xs
+  | (inr instR, line) => inr (instR, line)
+  end.
+
+Declare Scope cheriot_assembly_scope.
+Delimit Scope cheriot_assembly_scope with cheriot_assembly.
+
+Local Notation BuildInst name ps1 ps2 pd csrId immV rel :=
+  (ProgInst (Build_Instruction ltac:(findInstEntryLtac name) ps1 ps2 pd csrId immV%Z) rel)
+    (only parsing).
+
+Local Open Scope cheriot_assembly_scope.
+
+Notation "p1 ;; p2" := (ProgSeq p1 p2) (at level 65, right associativity): cheriot_assembly_scope.
+Notation "'LOCAL' l ';' p" := (ProgDeclLabel (fun l => p)) (at level 65, l ident, right associativity): cheriot_assembly_scope.
+Notation "l ':;'" := (ProgLabel l) (at level 8, no associativity, format "l ':;'"): cheriot_assembly_scope.
+Notation "l ':;;' p" := (ProgSeq (ProgLabel l) p) (at level 8, p at level 65, right associativity, format "l ':;;' p"): cheriot_assembly_scope.
+Notation "'.align' sz" := (ProgAlign sz%Z) (at level 65): cheriot_assembly_scope.
+Notation "'.byte' val" := (ProgData 1%Z [ZToWord 8 val]) (at level 65): cheriot_assembly_scope.
+Notation "'.hword' val" := (ProgData 2%Z [ZToWord 8 val; ZToWord 8 (val/(Z.pow 2 8))]) (at level 65): cheriot_assembly_scope.
+Notation "'.word' val" := (ProgData 4%Z [ZToWord 8 val; ZToWord 8 (val/(Z.pow 2 8)); ZToWord 8 (val/(Z.pow 2 16)); ZToWord 8 (val/(Z.pow 2 24))]) (at level 65): cheriot_assembly_scope.
+Notation "'.dword' val" :=
+  (ProgData 4%Z [ZToWord 8 val; ZToWord 8 (val/(Z.pow 2 8)); ZToWord 8 (val/(Z.pow 2 16)); ZToWord 8 (val/(Z.pow 2 24));
+                 ZToWord 8 (val/(Z.pow 2 32)); ZToWord 8 (val/(Z.pow 2 40)); ZToWord 8 (val/(Z.pow 2 48)); ZToWord 8 (val/(Z.pow 2 56))]) (at level 65): cheriot_assembly_scope.
+
+Notation "'addi' pd , ps1 , pimm" := (BuildInst "AddI" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'slti' pd , ps1 , pimm" := (BuildInst "SLTI" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'sltiu' pd , ps1 , pimm" := (BuildInst "SLTIU" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'xori' pd , ps1 , pimm" := (BuildInst "XorI" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'ori' pd , ps1 , pimm" := (BuildInst "OrI" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'andi' pd , ps1 , pimm" := (BuildInst "AndI" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'slli' pd , ps1 , pimm" := (BuildInst "SLLI" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'srli' pd , ps1 , pimm" := (BuildInst "SRLI" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'srai' pd , ps1 , pimm" := (BuildInst "SRAI" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'add' pd , ps1 , ps2" := (BuildInst "Add" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'sub' pd , ps1 , ps2" := (BuildInst "Sub" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'slt' pd , ps1 , ps2" := (BuildInst "SLT" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'sltu' pd , ps1 , ps2" := (BuildInst "SLTU" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'xor' pd , ps1 , ps2" := (BuildInst "Xor" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'or' pd , ps1 , ps2" := (BuildInst "Or" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'and' pd , ps1 , ps2" := (BuildInst "And" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'sll' pd , ps1 , ps2" := (BuildInst "SLL" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'srl' pd , ps1 , ps2" := (BuildInst "SRL" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'sra' pd , ps1 , ps2" := (BuildInst "SRA" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'lui' pd , ps1 , ps2" := (BuildInst "LUI" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'auicgp' pd , pimm" := (BuildInst "AUICGP" x0 x0 pd 0%Z pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'auipcc' pd , pimm" := (BuildInst "AUIPCC" x0 x0 pd 0%Z pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'candperm' pd , ps1 , ps2" := (BuildInst "CAndPerm" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'ccleartag' pd , ps1" := (BuildInst "CClearTag" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cgetaddr' pd , ps1" := (BuildInst "CGetAddr" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cgetbase' pd , ps1" := (BuildInst "CGetBase" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cgethigh' pd , ps1" := (BuildInst "CGetHigh" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cgetlen' pd , ps1" := (BuildInst "CGetLen" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cgetperm' pd , ps1" := (BuildInst "CGetPerm" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cgettag' pd , ps1" := (BuildInst "CGetTag" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cgettop' pd , ps1" := (BuildInst "CGetTop" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cgettype' pd , ps1" := (BuildInst "CGetType" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cincaddr' pd , ps1 , ps2" := (BuildInst "CIncAddr" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cincaddrimm' pd , ps1 , pimm" := (BuildInst "CIncAddrImm" ps1 x0 pd csr0 pimm%Z false)
+                                              (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cmove' pd , ps1" := (BuildInst "CMove" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cram' pd , ps1" := (BuildInst "CRAM" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'crrl' pd , ps1" := (BuildInst "CRRL" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csetaddr' pd , ps1 , ps2" := (BuildInst "CSetAddr" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csetbounds' pd , ps1 , ps2" := (BuildInst "CSetBounds" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csetboundsexact' pd , ps1 , ps2" := (BuildInst "CSetBoundsExact" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csetboundsimm' pd , ps1 , pimm" := (BuildInst "CSetBoundsImm" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csetequalexact' pd , ps1 , ps2" := (BuildInst "CSetEqualExact" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csethigh' pd , ps1 , ps2" := (BuildInst "CSetHigh" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csub' pd , ps1 , ps2" := (BuildInst "CSub" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'ctestsubset' pd , ps1 , ps2" := (BuildInst "CTestSubset" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cseal' pd , ps1 , ps2" := (BuildInst "CSeal" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cunseal' pd , ps1 , ps2" := (BuildInst "CUnseal" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'beq' ps1 , ps2 , pimm" := (BuildInst "BEq" ps1 ps2 x0 csr0 pimm%Z true) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'bne' ps1 , ps2 , pimm" := (BuildInst "BNE" ps1 ps2 x0 csr0 pimm%Z true) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'blt' ps1 , ps2 , pimm" := (BuildInst "BLT" ps1 ps2 x0 csr0 pimm%Z true) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'bge' ps1 , ps2 , pimm" := (BuildInst "BGE" ps1 ps2 x0 csr0 pimm%Z true) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'bltu' ps1 , ps2 , pimm" := (BuildInst "BLTU" ps1 ps2 x0 csr0 pimm%Z true) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'bgeu' ps1 , ps2 , pimm" := (BuildInst "BGEU" ps1 ps2 x0 csr0 pimm%Z true) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'clb' pd , pimm #[ ps1 ]" := (BuildInst "CLB" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'clh' pd , pimm #[ ps1 ]" := (BuildInst "CLh" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'clw' pd , pimm #[ ps1 ]" := (BuildInst "CLW" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'clbu' pd , pimm #[ ps1 ]" := (BuildInst "CLBU" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'clhu' pd , pimm #[ ps1 ]" := (BuildInst "CLHU" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'clc' pd , pimm #[ ps1 ]" := (BuildInst "CLC" ps1 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'csb' pimm #[ ps1 ], ps2" := (BuildInst "CSB" ps1 ps2 x0 csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csh' pimm #[ ps1 ], ps2" := (BuildInst "CSH" ps1 ps2 x0 csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csw' pimm #[ ps1 ], ps2" := (BuildInst "CSW" ps1 ps2 x0 csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csc' pimm #[ ps1 ], ps2" := (BuildInst "CSC" ps1 ps2 x0 csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'cjal' pd , pimm" := (BuildInst "CJAL" x0 x0 pd csr0 pimm%Z true) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cj' pimm" := (BuildInst "CJAL" x0 x0 x0 csr0 pimm%Z true) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'cjalr' pd , ps1" := (BuildInst "CJALR" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cjr' ps1" := (BuildInst "CJALR" ps1 x0 x0 csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'ecall'" := (BuildInst "ECall" x0 x0 x0 csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'mret'" := (BuildInst "MRet" x0 x0 x0 csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'fence: cheriot_assembly_scope.i'" := (BuildInst "FenceI" x0 x0 x0 csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'csrrw' pd , csrId , ps1" := (BuildInst "CSRRW" ps1 x0 pd csrId 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csrrs' pd , csrId , ps1" := (BuildInst "CSRRS" ps1 x0 pd csrId 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csrrc' pd , csrId , ps1" := (BuildInst "CSRRC" ps1 x0 pd csrId 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'csrw' csrId , ps1" := (BuildInst "CSRRW" ps1 x0 x0 csrId 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csrs' csrId , ps1" := (BuildInst "CSRRS" ps1 x0 x0 csrId 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csrc' csrId , ps1" := (BuildInst "CSRRC" ps1 x0 x0 csrId 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'csrr' pd , csrId" := (BuildInst "CSRRW" x0 x0 pd csrId 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'csrrwi' pd , csrId , pimm" := (BuildInst "CSRRWI" x0 x0 pd csrId pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csrrsi' pd , csrId , pimm" := (BuildInst "CSRRSI" x0 x0 pd csrId pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csrrci' pd , csrId , pimm" := (BuildInst "CSRRCI" x0 x0 pd csrId pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'csrwi' csrId , pimm" := (BuildInst "CSRRWI" x0 x0 x0 csrId pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csrsi' csrId , pimm" := (BuildInst "CSRRSI" x0 x0 x0 csrId pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'csrci' csrId , pimm" := (BuildInst "CSRRCI" x0 x0 x0 csrId pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'cspecialrw' pd , scrId , ps1" := (BuildInst "CSpecialRW" ps1 scrId pd csr0 0%Z false)
+                                              (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cspecialr' pd , scrId" := (BuildInst "CSpecialRW" x0 scrId pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'cspecialw' scrId , ps1" := (BuildInst "CSpecialRW" ps1 scrId x0 csr0 0%Z false)
+                                        (at level 65, only parsing): cheriot_assembly_scope.
+
+Local Close Scope cheriot_assembly_scope.

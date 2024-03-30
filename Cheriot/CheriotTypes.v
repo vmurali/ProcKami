@@ -78,6 +78,10 @@ Definition TagPageFault        := 25. (* Addr *)
 Definition InstIllegal         := 2.  (* Inst *)
 Definition ECall               := 8.
 
+Definition SoftwareInterrupt   := 3.
+Definition TimerInterrupt      := 7.
+Definition ExternalInterrupt   := 11.
+
 Section Fields.
   Variable ty: Kind -> Type.
   Variable inst: Bit InstSz @# ty.
@@ -474,154 +478,231 @@ Inductive RegScrName :=
 | mscratchc
 | mepcc.
 
-Definition getRegScrId (name: RegScrName) : word RegIdSz :=
+Definition getRegScrIdZ (name: RegScrName) : Z :=
   match name with
-  | x0 => $0
-  | x1 => $1
-  | x2 => $2
-  | x3 => $3
-  | x4 => $4
-  | x5 => $5
-  | x6 => $6
-  | x7 => $7
-  | x8 => $8
-  | x9 => $9
-  | x10 => $10
-  | x11 => $11
-  | x12 => $12
-  | x13 => $13
-  | x14 => $14
-  | x15 => $15
-  | x16 => $16
-  | x17 => $17
-  | x18 => $18
-  | x19 => $19
-  | x20 => $20
-  | x21 => $21
-  | x22 => $22
-  | x23 => $23
-  | x24 => $24
-  | x25 => $25
-  | x26 => $26
-  | x27 => $27
-  | x28 => $28
-  | x29 => $29
-  | x30 => $30
-  | x31 => $31
-  | c0 => $0
-  | c1 => $1
-  | c2 => $2
-  | c3 => $3
-  | c4 => $4
-  | c5 => $5
-  | c6 => $6
-  | c7 => $7
-  | c8 => $8
-  | c9 => $9
-  | c10 => $10
-  | c11 => $11
-  | c12 => $12
-  | c13 => $13
-  | c14 => $14
-  | c15 => $15
-  | c16 => $16
-  | c17 => $17
-  | c18 => $18
-  | c19 => $19
-  | c20 => $20
-  | c21 => $21
-  | c22 => $22
-  | c23 => $23
-  | c24 => $24
-  | c25 => $25
-  | c26 => $26
-  | c27 => $27
-  | c28 => $28
-  | c29 => $29
-  | c30 => $30
-  | c31 => $31
-  | zero => $0
-  | ra => $1
-  | sp => $2
-  | gp => $3
-  | tp => $4
-  | t0 => $5
-  | t1 => $6
-  | t2 => $7
-  | s0 => $8
-  | fp => $8
-  | s1 => $9
-  | a0 => $10
-  | a1 => $11
-  | a2 => $12
-  | a3 => $13
-  | a4 => $14
-  | a5 => $15
-  | a6 => $16
-  | a7 => $17
-  | s2 => $18
-  | s3 => $19
-  | s4 => $20
-  | s5 => $21
-  | s6 => $22
-  | s7 => $23
-  | s8 => $24
-  | s9 => $25
-  | s10 => $26
-  | s11 => $27
-  | t3 => $28
-  | t4 => $29
-  | t5 => $30
-  | t6 => $31
-  | czero => $0
-  | cra => $1
-  | csp => $2
-  | cgp => $3
-  | ctp => $4
-  | ct0 => $5
-  | ct1 => $6
-  | ct2 => $7
-  | cs0 => $8
-  | cfp => $8
-  | cs1 => $9
-  | ca0 => $10
-  | ca1 => $11
-  | ca2 => $12
-  | ca3 => $13
-  | ca4 => $14
-  | ca5 => $15
-  | ca6 => $16
-  | ca7 => $17
-  | cs2 => $18
-  | cs3 => $19
-  | cs4 => $20
-  | cs5 => $21
-  | cs6 => $22
-  | cs7 => $23
-  | cs8 => $24
-  | cs9 => $25
-  | cs10 => $26
-  | cs11 => $27
-  | ct3 => $28
-  | ct4 => $29
-  | ct5 => $30
-  | ct6 => $31
-  | mtcc => $28
-  | mtdc => $29
-  | mscratchc => $30
-  | mepcc => $31
+  | x0 => 0
+  | x1 => 1
+  | x2 => 2
+  | x3 => 3
+  | x4 => 4
+  | x5 => 5
+  | x6 => 6
+  | x7 => 7
+  | x8 => 8
+  | x9 => 9
+  | x10 => 10
+  | x11 => 11
+  | x12 => 12
+  | x13 => 13
+  | x14 => 14
+  | x15 => 15
+  | x16 => 16
+  | x17 => 17
+  | x18 => 18
+  | x19 => 19
+  | x20 => 20
+  | x21 => 21
+  | x22 => 22
+  | x23 => 23
+  | x24 => 24
+  | x25 => 25
+  | x26 => 26
+  | x27 => 27
+  | x28 => 28
+  | x29 => 29
+  | x30 => 30
+  | x31 => 31
+  | c0 => 0
+  | c1 => 1
+  | c2 => 2
+  | c3 => 3
+  | c4 => 4
+  | c5 => 5
+  | c6 => 6
+  | c7 => 7
+  | c8 => 8
+  | c9 => 9
+  | c10 => 10
+  | c11 => 11
+  | c12 => 12
+  | c13 => 13
+  | c14 => 14
+  | c15 => 15
+  | c16 => 16
+  | c17 => 17
+  | c18 => 18
+  | c19 => 19
+  | c20 => 20
+  | c21 => 21
+  | c22 => 22
+  | c23 => 23
+  | c24 => 24
+  | c25 => 25
+  | c26 => 26
+  | c27 => 27
+  | c28 => 28
+  | c29 => 29
+  | c30 => 30
+  | c31 => 31
+  | zero => 0
+  | ra => 1
+  | sp => 2
+  | gp => 3
+  | tp => 4
+  | t0 => 5
+  | t1 => 6
+  | t2 => 7
+  | s0 => 8
+  | fp => 8
+  | s1 => 9
+  | a0 => 10
+  | a1 => 11
+  | a2 => 12
+  | a3 => 13
+  | a4 => 14
+  | a5 => 15
+  | a6 => 16
+  | a7 => 17
+  | s2 => 18
+  | s3 => 19
+  | s4 => 20
+  | s5 => 21
+  | s6 => 22
+  | s7 => 23
+  | s8 => 24
+  | s9 => 25
+  | s10 => 26
+  | s11 => 27
+  | t3 => 28
+  | t4 => 29
+  | t5 => 30
+  | t6 => 31
+  | czero => 0
+  | cra => 1
+  | csp => 2
+  | cgp => 3
+  | ctp => 4
+  | ct0 => 5
+  | ct1 => 6
+  | ct2 => 7
+  | cs0 => 8
+  | cfp => 8
+  | cs1 => 9
+  | ca0 => 10
+  | ca1 => 11
+  | ca2 => 12
+  | ca3 => 13
+  | ca4 => 14
+  | ca5 => 15
+  | ca6 => 16
+  | ca7 => 17
+  | cs2 => 18
+  | cs3 => 19
+  | cs4 => 20
+  | cs5 => 21
+  | cs6 => 22
+  | cs7 => 23
+  | cs8 => 24
+  | cs9 => 25
+  | cs10 => 26
+  | cs11 => 27
+  | ct3 => 28
+  | ct4 => 29
+  | ct5 => 30
+  | ct6 => 31
+  | mtcc => 28
+  | mtdc => 29
+  | mscratchc => 30
+  | mepcc => 31
   end.
 
+Definition isSameRegScr (a b: RegScrName) : bool :=
+  Z.eqb (getRegScrIdZ a) (getRegScrIdZ b).
+
+Definition getRegScrId (name: RegScrName) : word RegIdSz :=
+  ZToWord _ (getRegScrIdZ name).
+
+Definition getRegNameOpt (id: Z): option RegScrName :=
+  match id with
+  | 0%Z => Some c0
+  | 1%Z => Some c1
+  | 2%Z => Some c2
+  | 3%Z => Some c3
+  | 4%Z => Some c4
+  | 5%Z => Some c5
+  | 6%Z => Some c6
+  | 7%Z => Some c7
+  | 8%Z => Some c8
+  | 9%Z => Some c9
+  | 10%Z => Some c10
+  | 11%Z => Some c11
+  | 12%Z => Some c12
+  | 13%Z => Some c13
+  | 14%Z => Some c14
+  | 15%Z => Some c15
+  | 16%Z => Some c16
+  | 17%Z => Some c17
+  | 18%Z => Some c18
+  | 19%Z => Some c19
+  | 20%Z => Some c20
+  | 21%Z => Some c21
+  | 22%Z => Some c22
+  | 23%Z => Some c23
+  | 24%Z => Some c24
+  | 25%Z => Some c25
+  | 26%Z => Some c26
+  | 27%Z => Some c27
+  | 28%Z => Some c28
+  | 29%Z => Some c29
+  | 30%Z => Some c30
+  | 31%Z => Some c31
+  | _ => None
+  end.
+
+Definition getRegName (id: Z) := forceOption _ _ (getRegNameOpt id) tt.
+
+Definition getScrNameOpt (id: Z): option RegScrName :=
+  match id with
+  | 28%Z => Some mtcc
+  | 29%Z => Some mtdc
+  | 30%Z => Some mscratchc
+  | 31%Z => Some mepcc
+  | _ => None
+  end.
+
+Definition getScrName (id: Z) := forceOption _ _ (getScrNameOpt id) tt.
+
 Inductive CsrName :=
+| csr0
 | mstatus
 | mie
 | mcause
 | mtval.
 
-Definition getCsrId (name: CsrName) : word CsrIdSz :=
+Definition getCsrIdN (name: CsrName) : N :=
   match name with
-  | mstatus => _ 'h "300"
-  | mie => _ 'h "304"
-  | mcause => _ 'h "342"
-  | mtval => _ 'h "343"
+  | csr0 => hex "0"
+  | mstatus => hex "300"
+  | mie => hex "304"
+  | mcause => hex "342"
+  | mtval => hex "343"
   end.
+
+Definition isSameCsr (a b: CsrName) :=
+  N.eqb (getCsrIdN a) (getCsrIdN b).
+
+Definition getCsrIdZ (name: CsrName) : Z := Z.of_N (getCsrIdN name).
+
+Definition getCsrId (name: CsrName) : word CsrIdSz := NToWord _ (getCsrIdN name).
+
+Definition getCsrNameOpt (id: Z): option CsrName :=
+  match id with
+  | 0%Z => Some csr0
+  | 768%Z => Some mstatus
+  | 772%Z => Some mie
+  | 834%Z => Some mcause
+  | 835%Z => Some mtval
+  | _ => None
+  end.
+
+Definition getCsrName (id: Z) := forceOption _ _ (getCsrNameOpt id) tt.

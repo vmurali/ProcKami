@@ -8,22 +8,9 @@ Section Prefix.
   Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
   Local Open Scope kami_expr.
 
-  Definition getInstEntrySpec (fe: FuncEntry) : list InstEntrySpec :=
-    map (fun ie => {|instName := instName ie;
-                     uniqId := uniqId ie;
-                     immEncoder := immEncoder ie;
-                     spec := fun ty pcc inst cs1 cs2 scr csr =>
-                               (LETE val <- spec ie pcc inst cs1 cs2 scr csr;
-                                localFunc fe #val)%kami_expr;
-                     instProperties := instProperties ie;
-                     goodInstEncode := goodInstEncode ie;
-                     goodImmEncode := goodImmEncode ie |}) (insts fe).
-
-  Definition specInstEntries := concat (map getInstEntrySpec specFuncUnits).
-
   Definition specRules : list (forall ty, ActionT ty Void) :=
-    specInstBoundsException ::
-      (fun ty => specInstIllegalException ty specInstEntries) ::
+    (fun ty => specInstBoundsExceptionRule ty scrList csrList) ::
+      (fun ty => specInstIllegalExceptionRule ty scrList csrList specInstEntries) ::
       map (fun ie ty => specDecExecRule ty scrList csrList ie) specInstEntries.
 
   Definition specRegs : list RegInitT :=
@@ -33,27 +20,30 @@ Section Prefix.
       (@^memArray, existT _ _ (Some (SyntaxConst (@convTypeToConst (Array (NumMemBytes * NumBanks) (Bit 8))
                                                     memInit)))) ::
       (@^tagArray, existT _ _ (Some (SyntaxConst (ConstArray (fun (i: Fin.t NumMemBytes) => false))))) ::
-      (@^mtccReg,
-        existT _ _ (Some (SyntaxConst
-                            (convTypeToConst
-                               (evalExpr (STRUCT { "tag" ::= Const type true;
-                                                   "cap" ::= ExecRootCapExpr type;
-                                                   "val" ::= Const _ (wcombine mtccValInit (wzero 2))})))))) ::
-      (@^mtdcReg,
-        existT _ _ (Some (SyntaxConst
-                            (convTypeToConst
-                               (evalExpr (STRUCT { "tag" ::= Const type true;
-                                                   "cap" ::= DataRootCapExpr type;
-                                                   "val" ::= Const _ (wcombine mtdcValInit (wzero 2))})))))) ::
-      (@^mScratchCReg,
-        existT _ _ (Some (SyntaxConst
-                            (convTypeToConst
-                               (evalExpr (STRUCT { "tag" ::= Const type true;
-                                                   "cap" ::= SealRootCapExpr type;
-                                                   "val" ::= Const _ (wzero Xlen)})))))) ::
-      (@^mepccReg, existT _ _ (Some (SyntaxConst (getDefaultConst FullCapWithTag)))) ::
-      (@^mStatusReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::
-      (@^mieReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::
-      (@^mCauseReg, existT _ (SyntaxKind Data) None) ::
-      (@^mtValReg, existT _ (SyntaxKind Data) None) :: nil.
+      if hasTrap
+      then
+        (@^mtccReg,
+          existT _ _ (Some (SyntaxConst
+                              (convTypeToConst
+                                 (evalExpr (STRUCT { "tag" ::= Const type true;
+                                                     "cap" ::= ExecRootCapExpr type;
+                                                     "val" ::= Const _ (wcombine mtccValInit (wzero 2))})))))) ::
+          (@^mtdcReg,
+            existT _ _ (Some (SyntaxConst
+                                (convTypeToConst
+                                   (evalExpr (STRUCT { "tag" ::= Const type true;
+                                                       "cap" ::= DataRootCapExpr type;
+                                                       "val" ::= Const _ (wcombine mtdcValInit (wzero 2))})))))) ::
+          (@^mScratchCReg,
+            existT _ _ (Some (SyntaxConst
+                                (convTypeToConst
+                                   (evalExpr (STRUCT { "tag" ::= Const type true;
+                                                       "cap" ::= SealRootCapExpr type;
+                                                       "val" ::= Const _ (wzero Xlen)})))))) ::
+          (@^mepccReg, existT _ _ (Some (SyntaxConst (getDefaultConst FullCapWithTag)))) ::
+          (@^mStatusReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::
+          (@^mieReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::
+          (@^mCauseReg, existT _ (SyntaxKind Data) None) ::
+          (@^mtValReg, existT _ (SyntaxKind Data) None) :: nil
+      else nil.
 End Prefix.

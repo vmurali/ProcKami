@@ -50,8 +50,8 @@ Section Roots.
   Definition SealRootCap : type Cap := evalExpr (SealRootCapExpr _).
 End Roots.
 
-Definition mkFullCap ty (cap: Cap @# ty) (val: Data @# ty) : FullCap @# ty :=
-  (STRUCT { "cap" ::= cap ; "val" ::= val })%kami_expr.
+Definition rmTag ty (cap: FullCapWithTag @# ty) : FullCap @# ty :=
+  (STRUCT { "cap" ::= cap @% "cap"; "val" ::= cap @% "val" })%kami_expr.
 
 Section ValidInits.
   Local Open Scope kami_expr.
@@ -83,6 +83,23 @@ Proof.
   decide equality.
 Qed.
 
+Definition Extension_eqb (e1 e2: Extension) : bool :=
+  match e1, e2 with
+  | Base, Base => true
+  | M, M => true
+  | _, _ => false
+  end.
+
+Theorem Extension_eqb_eq: forall e1 e2: Extension, (Extension_eqb e1 e2) = true <-> e1 = e2.
+Proof.
+  destruct e1, e2; constructor; discriminate || tauto.
+Qed.
+
+Theorem Extension_eqb_neq: forall e1 e2: Extension, (Extension_eqb e1 e2) = false <-> e1 <> e2.
+Proof.
+  destruct e1, e2; constructor; discriminate || tauto.
+Qed.
+
 Definition Inst := Bit InstSz.
 Definition CompInst := Bit CompInstSz.
 Definition RegId := Bit RegIdSz.
@@ -107,7 +124,7 @@ Definition prevPcCapReg := "prevPcCap".
 Definition prevPcValReg := "prevPcVal".
 Definition justFenceIReg := "justFenceI".
 Definition startFenceIReg := "startFenceI".
-Definition reqJustFenceIReg := "reqJustFenceI".
+Definition waitForJustFenceIReg := "waitForJustFenceI".
 Definition tagRead := "tagRead".
 Definition tagWrite := "tagWrite".
 Definition tagArray := "tagArray".
@@ -125,6 +142,9 @@ Definition mStatusReg := "MStatus".
 Definition mieReg := "MIE".
 Definition mCauseReg := "MCause".
 Definition mtValReg := "MTVal".
+Definition mTimeReg := "MTime".
+Definition mTimeCmpReg := "MTimeCmp".
+Definition mtiReg := "MTI".
 
 Record MemBankInit :=
   { instRqName: string;
@@ -171,17 +191,17 @@ Class CoreConfigParams := {
     mtdcValidThm: MtdcValid DataRootCap (wcombine mtdcValInit (wzero 2)) numProcesses }.
 
 Record InstProperties :=
-  { hasCs1      : bool ;
-    hasCs2      : bool ;
-    hasCd       : bool ;
-    hasScr      : bool ;
-    hasCsr      : bool ;
-    implicitReg : word RegIdSz ;
-    implicitScr : word ScrIdSz ;
-    implicitCsr : word CsrIdSz;
-    signExt     : bool;
-    isLoad      : bool ;
-    isStore     : bool }.
+  { hasCs1           : bool ;
+    hasCs2           : bool ;
+    hasCd            : bool ;
+    hasScr           : bool ;
+    hasCsr           : bool ;
+    implicitReg      : word RegIdSz ;
+    implicitScr      : word ScrIdSz ;
+    implicitCsr      : word CsrIdSz ;
+    signExt          : bool;
+    isLoad           : bool ;
+    isStore          : bool }.
 
 Global Instance InstPropertiesEtaX : Settable _ :=
   settable!
@@ -190,17 +210,17 @@ Global Instance InstPropertiesEtaX : Settable _ :=
 signExt ; isLoad ; isStore  >.
 
 Definition DefProperties :=
-  {|hasCs1      := false ;
-    hasCs2      := false ;
-    hasCd       := true ;
-    hasScr      := false ;
-    hasCsr      := false ;
-    implicitReg := wzero _ ;
-    implicitScr := wzero _ ;
-    implicitCsr := wzero _ ;
-    signExt     := true ;
-    isLoad      := false ;
-    isStore     := false |}.
+  {|hasCs1           := false ;
+    hasCs2           := false ;
+    hasCd            := true ;
+    hasScr           := false ;
+    hasCsr           := false ;
+    implicitReg      := wzero _ ;
+    implicitScr      := wzero _ ;
+    implicitCsr      := wzero _ ;
+    signExt          := true ;
+    isLoad           := false ;
+    isStore          := false |}.
 
 Definition FieldRange := {x: (nat * nat) & word (snd x)}.
 Definition UniqId := (list FieldRange)%type.
@@ -275,8 +295,6 @@ Definition FullOutput :=
       "pcMemAddr" :: Addr;
       "changePcCap?" :: Bool;
       "pcCap" :: Cap;
-      "changeIe?" :: Bool;
-      "newIe" :: Bool;
       "exception?" :: Bool;
       "exceptionCause" :: Data;
       "exceptionValue" :: Addr;
@@ -432,8 +450,8 @@ Record FuncEntry :=
 
 Definition filterInsts k (ls: list (InstEntryFull k)) :=
   fold_right (fun new rest =>
-                (if (getBool (in_dec Nat.eq_dec Xlen (xlens new)) &&
-                       getBool (in_dec Extension_eq_dec (extension new) supportedExts))%bool
+                (if (existsb (Nat.eqb Xlen) (xlens new) &&
+                       existsb (Extension_eqb (extension new)) supportedExts)%bool
                  then instEntries new
                  else []) ++ rest) [] ls.
 
