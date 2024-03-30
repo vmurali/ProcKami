@@ -187,12 +187,14 @@ Section Run.
                             "val" ::= #out @% "cdVal"});
       LET cdIdx <- rd #inst;
       LET instMatch <- matchUniqId #inst (uniqId ie);
-      LET updRegs <- #regs @[ #cdIdx <- ITE ((#cdIdx != $0) && (#out @% "wb?")) #cd (#regs@[#cdIdx])];
-
+      
       LETA mti <- if hasTrap
                   then ( Read mti : Bool <- @^mtiReg;
                          Ret #mti )
                   else Ret $$false;
+      LET updRegs <- #regs @[ #cdIdx <- ITE (!#mti && #topBound && #instMatch && (!(#out @% "exception?")) &&
+                                               (#out @% "wb?") && isNotZero(#cdIdx))
+                                          #cd (#regs@[#cdIdx])];
       handleException (!#mti && #topBound && #instMatch) (#out @% "exception?") (#out @% "baseException?")
         (#out @% "scrException?") (#out @% "pcCapException?") (#out @% "wbScr?") (#out @% "wbCsr?")
         ($$true) (#out @% "changePcCap?")
