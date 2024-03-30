@@ -2,6 +2,14 @@ Require Import Kami.AllNotations Coq.Sorting.Mergesort Coq.Structures.Orders.
 
 Notation "### x" := (Var type (SyntaxKind _) x) (no associativity, at level 0): kami_expr_scope.
 
+Section TruncExtend.
+  Variable ty: Kind -> Type.
+  Definition ZeroExtendTo outSz inSz (e: Bit inSz @# ty) := ZeroExtend (outSz - inSz) e.
+  Definition SignExtendTo outSz inSz (e: Bit inSz @# ty) := SignExtend (outSz - inSz) e.
+  Definition TruncLsbTo outSz restSz (e: Bit (outSz + restSz) @# ty) := UniBit (TruncLsb outSz restSz) e.
+  Definition TruncMsbTo outSz restSz (e: Bit (restSz + outSz) @# ty) := UniBit (TruncMsb restSz outSz) e.
+End TruncExtend.
+
 Fixpoint convTypeToConst [k: Kind] : forall (t: type k), ConstT k :=
   match k return type k -> ConstT k with
   | Bool => fun b => ConstBool b

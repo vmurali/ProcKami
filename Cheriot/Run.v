@@ -1,5 +1,5 @@
 Require Import Kami.AllNotations.
-Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.SpecRun.
+Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.RunSpec.
 Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.BankedMem.
 
 Section Run.
@@ -50,7 +50,7 @@ Section Run.
       RetE (STRUCT {
                 "data" ::= #cd;
                 "pcOrScrCapOrMemOp" ::= (IF (inp @% "mem?")
-                                         then unpack Cap (ZeroExtendTruncLsb CapSz (pack #memOp))
+                                         then unpack Cap (ZeroExtendTo CapSz (pack #memOp))
                                          else (IF (inp @% "wbScr?")
                                                then inp @% "scrCap"
                                                else inp @% "pcCap"));
@@ -119,7 +119,7 @@ Section Run.
 
   Definition uncompressValid (fetchOut: FetchOut @# ty) : UncompressOut ## ty :=
     ( LETC notCompressed <- isInstNotCompressed (fetchOut @% "inst");      
-      LETE maybeUncompressedInst <- uncompressFn (ZeroExtendTruncLsb CompInstSz (fetchOut @% "inst"));
+      LETE maybeUncompressedInst <- uncompressFn (TruncLsbTo CompInstSz _ (fetchOut @% "inst"));
       RetE ((STRUCT { "pc" ::= fetchOut @% "pc";
                       "inst" ::= ITE #notCompressed (fetchOut @% "inst") (#maybeUncompressedInst @% "data");
                       "badLower16?" ::= fetchOut @% "badLower16?";
@@ -323,7 +323,7 @@ Section Run.
       LETC exceptionValue <- ( IF decodeOut @% "error?" || decodeOut @% "fault?"
                                then unpack Cap (#pc + ITE (decodeOut @% "badLower16?") $0 $2)
                                else ( IF !(decodeOut @% "legal?") || !(#funcOut @% "valid")
-                                      then unpack Cap (ZeroExtendTruncLsb CapSz #inst)
+                                      then unpack Cap (ZeroExtendTo CapSz #inst)
                                       else #funcOutDataData @% "cap" ) );
       LETC result : CompressedOutput <- #funcOutData
                                     @%[ "exception?" <- #exception ]
@@ -366,10 +366,9 @@ Section Run.
                                                        then $TagPageFault
                                                        else (#memRetData @% "val")))));
       LETC exceptionValue : Addr <- funcOut @% "addrOrScrOrCsrVal" +
-                                      ZeroExtendTruncLsb Xlen
-                                        (ITE ((memRet @% "dataError?") || (memRet @% "dataFault?"))
-                                           (memRet @% "lowestByte")
-                                           $0);
+                                      (ITE ((memRet @% "dataError?") || (memRet @% "dataFault?"))
+                                         (ZeroExtendTo Xlen (memRet @% "lowestByte"))
+                                         $0);
       (* TODO : Revocation *)
       LETC newFuncOutData <- STRUCT {
                                  "tag" ::= #newLoadTag;
@@ -384,7 +383,7 @@ Section Run.
 
   Definition memSpec (execOut: ExecOut @# ty) : ActionT ty (Maybe MemOutData) :=
     ( LET funcOut : CompressedOutput <- execOut @% "result";
-      LET memInfo <- unpack MemOpInfo (ZeroExtendTruncLsb (size MemOpInfo)
+      LET memInfo <- unpack MemOpInfo (TruncLsbTo (size MemOpInfo) _
                                          (pack (#funcOut @% "pcOrScrCapOrMemOp")));
       Read waitForJustFenceI: Bool <- @^waitForJustFenceIReg;
       LET dontDrop <- !#waitForJustFenceI || execOut @% "justFenceI?";
@@ -456,7 +455,7 @@ Section Run.
                       "cap" ::= #out @% "pcOrScrCapOrMemOp";
                       "val" ::= #out @% "addrOrScrOrCsrVal" }) (#out @% "addrOrScrOrCsrVal")
             #cs2Idx #csrIdx (#out @% "data" @% "val") (pack (#out @% "data" @% "cap"))
-            (ITE (#out @% "pcCapException?") $0 (ZeroExtendTruncLsb RegFixedIdSz #cs1Idx)) )
+            (ITE (#out @% "pcCapException?") $0 (ZeroExtendTo RegFixedIdSz #cs1Idx)) )
       else Retv;
       Retv ).
 

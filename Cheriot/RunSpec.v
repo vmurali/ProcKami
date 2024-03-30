@@ -78,10 +78,10 @@ Section Run.
             @^mtValReg : Data <- (IF isException
                                   then ITE baseException
                                          exceptionVal
-                                         (ZeroExtendTruncLsb Xlen
+                                         (ZeroExtendTo Xlen
                                             (pack (STRUCT { "S" ::= scrException;
                                                             "capIdx" ::= exceptionIdx;
-                                                            "cause" ::= ZeroExtendTruncLsb RegFixedIdSz
+                                                            "cause" ::= TruncLsbTo RegFixedIdSz _
                                                                           exceptionCause })))
                                   else (IF wbCsr && csrIdx == $$(getCsrId mtval)
                                         then newCsr
@@ -153,7 +153,7 @@ Section Run.
         ( Read mti : Bool <- @^mtiReg;
           handleException (!#mti && #topBound) #illegal ($$true) ($$false) ($$true) ($$false) ($$false) ($$false) ($$false)
             ($0) ($$(getDefaultConst Cap)) ($$(getDefaultConst FullCapWithTag)) ($0)
-            ($0) ($0) ($InstIllegal) (ZeroExtendTruncLsb Xlen #inst)
+            ($0) ($0) ($InstIllegal) (ZeroExtendTo Xlen #inst)
             ($0) )
       else Retv ).
   
@@ -172,7 +172,7 @@ Section Run.
                     then (rs2Fixed #inst) else $$(implicitScr instProps);
       LET csrIdx <- if (weq (implicitCsr instProps) (wzero _)) then (imm #inst) else $$(implicitCsr instProps);
       LET cs1 <- #regs@[#cs1Idx];
-      LET cs2 <- #regs@[ZeroExtendTruncLsb RegIdSz #cs2Idx];
+      LET cs2 <- #regs@[TruncLsbTo RegIdSz _ #cs2Idx];
       LETA scr <- readRegs procName scrRegInfos #scrIdx FullCapWithTag;
       LETA csr <- readRegs procName csrRegInfos #csrIdx Data;
       LETAE out <- spec ie (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal }) #inst #cs1 #cs2 #scr #csr;
@@ -193,7 +193,7 @@ Section Run.
                   then ( Read mti : Bool <- @^mtiReg;
                          Ret #mti )
                   else Ret $$false;
-      handleException (!#mti && #topBound && #instMatch) (!(#out @% "exception?")) (#out @% "baseException?")
+      handleException (!#mti && #topBound && #instMatch) (#out @% "exception?") (#out @% "baseException?")
         (#out @% "scrException?") (#out @% "pcCapException?") (#out @% "wbScr?") (#out @% "wbCsr?")
         ($$true) (#out @% "changePcCap?")
         (ITE (#out @% "taken?") (#out @% "pcMemAddr") (#pcVal + $(InstSz/8))) (#out @% "pcCap")
@@ -201,5 +201,5 @@ Section Run.
                   "cap" ::= #out @% "scrCap";
                   "val" ::= #out @% "scrVal" }) (#out @% "csrVal")
         #cs2Idx #csrIdx (#out @% "exceptionCause") (#out @% "exceptionValue")
-        (ITE (#out @% "pcCapException?") $0 (ZeroExtendTruncLsb RegFixedIdSz #cs1Idx)) ).
+        (ITE (#out @% "pcCapException?") $0 (ZeroExtendTo RegFixedIdSz #cs1Idx)) ).
 End Run.

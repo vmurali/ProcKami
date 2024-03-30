@@ -31,7 +31,7 @@ Section MemSpec.
           LET ldVal <- unpack FullCap (pack #ldSignVal);
           Read tags: Array NumMemBytes Bool <- @^tagArray;
           LET tagIdx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
-                          (ZeroExtendTruncMsb (Xlen - Nat.log2_up NumBanks) addr);
+                          (TruncMsbTo (Xlen - Nat.log2_up NumBanks) (Nat.log2_up NumBanks) addr);
           LET tag <- ITE isCap (#tags@[#tagIdx]) $$false;
           Ret (STRUCT {
                    "tag" ::= #tag;
@@ -40,10 +40,10 @@ Section MemSpec.
 
       Definition storeReqSpec: ActionT ty Void :=
         ( Read memArr : Array NumMemBytes (Bit 8) <- @^memArray;
-          LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
+          LET idxLsb <- TruncLsbTo (Nat.log2_up NumBanks) _ addr;
           LET straddle <- ZeroExtend 1 #idxLsb + size <= $NumBanks;
           LET tagIdx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
-                          (ZeroExtendTruncMsb (Xlen - Nat.log2_up NumBanks) addr);
+                          (TruncMsbTo (Xlen - Nat.log2_up NumBanks) (Nat.log2_up NumBanks) addr);
           Read tags: Array NumMemBytes Bool <- @^tagArray;
           LET updTag <- #tags@[ #tagIdx <- ITE isCap (data @% "tag") $$false];
           (* #straddle implies !#isCap *)

@@ -1,5 +1,5 @@
 Require Import Kami.AllNotations.
-Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.InstSpec ProcKami.Cheriot.SpecRun.
+Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.InstSpec ProcKami.Cheriot.RunSpec.
 
 Section Prefix.
   Context `{coreConfigParams: CoreConfigParams}.

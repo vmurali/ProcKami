@@ -24,7 +24,7 @@ Section InstBaseSpec.
             immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             spec ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbFullOutput ty)
-                        @%[ "cdVal" <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst)]));
+                        @%[ "cdVal" <- (cs1 @% "val") + SignExtendTo Xlen (imm inst)]));
             instProperties := DefProperties<| hasCs1 := true |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -35,11 +35,11 @@ Section InstBaseSpec.
             immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             spec ty pc inst cs1 cs2 scr csr :=
               ( LETC in1 <- SignExtend 1 (cs1 @% "val");
-                LETC in2 <- SignExtendTruncLsb (Xlen + 1) (imm inst);
+                LETC in2 <- SignExtendTo (Xlen + 1) (imm inst);
                 LETC res <- #in1 - #in2;
                 LETC msb <- UniBit (TruncMsb Xlen 1) #res;
                 RetE ((DefWbFullOutput ty)
-                        @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #msb]));
+                        @%[ "cdVal" <- ZeroExtendTo Xlen #msb]));
             instProperties := DefProperties<| hasCs1 := true |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -50,11 +50,11 @@ Section InstBaseSpec.
             immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             spec ty pc inst cs1 cs2 scr csr :=
               ( LETC in1 <- ZeroExtend 1 (cs1 @% "val");
-                LETC in2 <- ZeroExtendTruncLsb (Xlen + 1) (imm inst);
+                LETC in2 <- ZeroExtendTo (Xlen + 1) (imm inst);
                 LETC res <- #in1 - #in2;
                 LETC msb <- UniBit (TruncMsb Xlen 1) #res;
                 RetE ((DefWbFullOutput ty)
-                        @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #msb]));
+                        @%[ "cdVal" <- ZeroExtendTo Xlen #msb]));
             instProperties := DefProperties<| hasCs1 := true |><| signExt := false |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -65,7 +65,7 @@ Section InstBaseSpec.
             immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             spec ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbFullOutput ty)
-                        @%[ "cdVal" <- ((cs1 @% "val") .^ (SignExtendTruncLsb Xlen (imm inst))) ]));
+                        @%[ "cdVal" <- ((cs1 @% "val") .^ (SignExtendTo Xlen (imm inst))) ]));
             instProperties := DefProperties<| hasCs1 := true |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -76,7 +76,7 @@ Section InstBaseSpec.
             immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             spec ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbFullOutput ty)
-                        @%[ "cdVal" <- ((cs1 @% "val") .| (SignExtendTruncLsb Xlen (imm inst))) ]));
+                        @%[ "cdVal" <- ((cs1 @% "val") .| (SignExtendTo Xlen (imm inst))) ]));
             instProperties := DefProperties<| hasCs1 := true |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -87,7 +87,7 @@ Section InstBaseSpec.
             immEncoder := [ Build_ImmEncoder (fst immField) imm12 ];
             spec ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbFullOutput ty)
-                        @%[ "cdVal" <- ((cs1 @% "val") .& (SignExtendTruncLsb Xlen (imm inst))) ]));
+                        @%[ "cdVal" <- ((cs1 @% "val") .& (SignExtendTo Xlen (imm inst))) ]));
             instProperties := DefProperties<| hasCs1 := true |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -104,7 +104,7 @@ Section InstBaseSpec.
             spec ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbFullOutput ty)
                         @%[ "cdVal" <- ((cs1 @% "val") <<
-                                          (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
+                                          (TruncLsbTo (Nat.log2_up Xlen) _ (imm inst)))]));
             instProperties := DefProperties<| hasCs1 := true |>;
             goodInstEncode := _;
             immEnd := if Xlen =? 32 then 5 else 6;
@@ -123,7 +123,7 @@ Section InstBaseSpec.
               ( RetE ((DefWbFullOutput ty)
                         @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
                                          ((ZeroExtend 1 (cs1 @% "val")) >>>
-                                            (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
+                                            (TruncLsbTo (Nat.log2_up Xlen) _ (imm inst)))]));
             instProperties := DefProperties<| hasCs1 := true |>;
             goodInstEncode := _;
             immEnd := if Xlen =? 32 then 5 else 6;
@@ -142,7 +142,7 @@ Section InstBaseSpec.
               ( RetE ((DefWbFullOutput ty)
                         @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
                                          ((SignExtend 1 (cs1 @% "val")) >>>
-                                            (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
+                                            (TruncLsbTo (Nat.log2_up Xlen) _ (imm inst)))]));
             instProperties := DefProperties<| hasCs1 := true |>;
             goodInstEncode := _;
             immEnd := if Xlen =? 32 then 5 else 6;
@@ -180,9 +180,9 @@ Section InstBaseSpec.
             spec ty pc inst cs1 cs2 scr csr :=
               ( LETC in1 <- SignExtend 1 (cs1 @% "val");
                 LETC in2 <- SignExtend 1 (cs2 @% "val");
-                LETC res <- UniBit (TruncMsb Xlen 1) (#in1 - #in2);
+                LETC msb <- UniBit (TruncMsb Xlen 1) (#in1 - #in2);
                 RetE ((DefWbFullOutput ty)
-                        @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #res]));
+                        @%[ "cdVal" <- ZeroExtendTo Xlen #msb]));
             instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -195,9 +195,9 @@ Section InstBaseSpec.
             spec ty pc inst cs1 cs2 scr csr :=
               ( LETC in1 <- ZeroExtend 1 (cs1 @% "val");
                 LETC in2 <- ZeroExtend 1 (cs2 @% "val");
-                LETC res <- UniBit (TruncMsb Xlen 1) (#in1 - #in2);
+                LETC msb <- UniBit (TruncMsb Xlen 1) (#in1 - #in2);
                 RetE ((DefWbFullOutput ty)
-                        @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #res]));
+                        @%[ "cdVal" <- ZeroExtendTo Xlen #msb]));
             instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -246,7 +246,7 @@ Section InstBaseSpec.
             spec ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbFullOutput ty)
                         @%[ "cdVal" <- (cs1 @% "val") <<
-                                         (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val"))]));
+                                         (TruncLsbTo (Nat.log2_up Xlen) _ (cs2 @% "val"))]));
             instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -260,7 +260,7 @@ Section InstBaseSpec.
               ( RetE ((DefWbFullOutput ty)
                         @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
                                          ((ZeroExtend 1 (cs1 @% "val")) >>>
-                                            (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val")))]));
+                                            (TruncLsbTo (Nat.log2_up Xlen) _ (cs2 @% "val")))]));
             instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -274,7 +274,7 @@ Section InstBaseSpec.
               ( RetE ((DefWbFullOutput ty)
                         @%[ "cdVal" <- UniBit (TruncLsb Xlen 1)
                                          ((SignExtend 1 (cs1 @% "val")) >>>
-                                            (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val")))]));
+                                            (TruncLsbTo (Nat.log2_up Xlen) _ (cs2 @% "val")))]));
             instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -284,7 +284,7 @@ Section InstBaseSpec.
             immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_U];
             spec ty pc inst cs1 cs2 scr csr :=
               ( RetE ((DefWbFullOutput ty)
-                        @%[ "cdVal" <- SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 12) >})]));
+                        @%[ "cdVal" <- ({< auiLuiOffset inst, $$(wzero 12) >})]));
             instProperties := DefProperties;
             goodInstEncode := eq_refl;
             goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -303,7 +303,7 @@ Section InstBaseSpec.
           immEncoder := [Build_ImmEncoder (fst immField) imm12 ];
           spec ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbFullOutput ty)
-                      @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst))]));
+                      @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") + SignExtendTo Xlen (imm inst))]));
           instProperties := DefProperties<| hasCs1 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -316,7 +316,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- Trunc32Signed Xlen ((cs1 @% "val") <<
-                                                           (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst)))]));
+                                                           (TruncLsbTo (Nat.log2_up Xlen) _ (imm inst)))]));
           instProperties := DefProperties<| hasCs1 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -329,7 +329,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- (Trunc32Unsigned Xlen (cs1 @% "val")) >>>
-                                       (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst))]));
+                                       (TruncLsbTo (Nat.log2_up Xlen) _ (imm inst))]));
           instProperties := DefProperties<| hasCs1 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -342,7 +342,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- (Trunc32Signed Xlen (cs1 @% "val")) >>>
-                                       (SignExtendTruncLsb (Nat.log2_up Xlen) (imm inst))]));
+                                       (TruncLsbTo (Nat.log2_up Xlen) _ (imm inst))]));
           instProperties := DefProperties<| hasCs1 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -380,7 +380,7 @@ Section InstBaseSpec.
             ( RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- Trunc32Signed Xlen
                                        ((cs1 @% "val") <<
-                                          (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val")))]));
+                                          (TruncLsbTo (Nat.log2_up Xlen) _ (cs2 @% "val")))]));
           instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -393,7 +393,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- (Trunc32Unsigned Xlen (cs1 @% "val")) >>>
-                                       (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val"))]));
+                                       (TruncLsbTo (Nat.log2_up Xlen) _ (cs2 @% "val"))]));
           instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -406,7 +406,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <- (Trunc32Signed Xlen (cs1 @% "val")) >>>
-                                       (ZeroExtendTruncLsb (Nat.log2_up Xlen) (cs2 @% "val"))]));
+                                       (TruncLsbTo (Nat.log2_up Xlen) _ (cs2 @% "val"))]));
           instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -438,7 +438,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"7b"))];
           immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_U];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
+            ( LETC newAddr <- (cs1 @% "val") + ZeroExtendTo Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
               LETE representable <- representableFnCap (rmTag cs1) #newAddr;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- (cs1 @% "tag") && !isCapSealed (cs1 @% "cap") && #representable ]
@@ -452,7 +452,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"17"))];
           immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_U];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
+            ( LETC newAddr <- (pc @% "val") + ZeroExtendTo Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
               LETE representable <- representableFnCap pc #newAddr;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- #representable ]
@@ -470,8 +470,8 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETC cs1Cap <- cs1 @% "cap";
               LETC perms <- getCapPerms (cs1 @% "cap");
-              LETC newPerms <- unpack CapPerms (ZeroExtendTruncLsb (size CapPerms)
-                                                  ((ZeroExtendTruncLsb Xlen (pack #perms)) .& (cs2 @% "val")));
+              LETC newPerms <- unpack CapPerms (TruncLsbTo (size CapPerms) _
+                                                  ((ZeroExtendTo Xlen (pack #perms)) .& (cs2 @% "val")));
               LETC newCap <- (cs1 @% "cap") @%[ "p" <- encodePerms #newPerms ];
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- cs1 @% "tag" ]
@@ -563,7 +563,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETC perms <- getCapPerms (cs1 @% "cap");
               RetE ((DefWbFullOutput ty)
-                      @%[ "cdVal" <- ZeroExtendTruncLsb Xlen (pack #perms) ]));
+                      @%[ "cdVal" <- ZeroExtendTo Xlen (pack #perms) ]));
           instProperties := DefProperties<| hasCs1 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -576,7 +576,7 @@ Section InstBaseSpec.
           immEncoder := [];
           spec ty pc inst cs1 cs2 scr csr :=
             ( RetE ((DefWbFullOutput ty)
-                      @%[ "cdVal" <- ZeroExtendTruncLsb Xlen (pack (cs1 @% "tag")) ]));
+                      @%[ "cdVal" <- ZeroExtendTo Xlen (pack (cs1 @% "tag")) ]));
           instProperties := DefProperties<| hasCs1 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -606,7 +606,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETC oType <- cs1 @% "cap" @% "oType";
               RetE ((DefWbFullOutput ty)
-                      @%[ "cdVal" <- ZeroExtendTruncLsb Xlen #oType ]));
+                      @%[ "cdVal" <- ZeroExtendTo Xlen #oType ]));
           instProperties := DefProperties<| hasCs1 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -632,7 +632,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"1")];
           immEncoder := [Build_ImmEncoder (fst immField) imm12];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
+            ( LETC newAddr <- (cs1 @% "val") + SignExtendTo Xlen (imm inst);
               LETE representable <- representableFnCap (rmTag cs1) #newAddr;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- (cs1 @% "tag") && !isCapSealed (cs1 @% "cap") && #representable ]
@@ -739,7 +739,7 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"2")];
           immEncoder := [Build_ImmEncoder (fst immField) imm12];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETE newCd <- setBounds cs1 (ZeroExtendTruncLsb Xlen (imm inst)) $$false;
+            ( LETE newCd <- setBounds cs1 (ZeroExtendTo Xlen (imm inst)) $$false;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- #newCd @% "tag" ]
                       @%[ "cdCap" <- #newCd @% "cap" ]
@@ -758,7 +758,7 @@ Section InstBaseSpec.
               LETC capEq <- (cs1 @% "cap") == (cs2 @% "cap");
               LETC valEq <- (cs1 @% "val") == (cs2 @% "val");
               RetE ((DefWbFullOutput ty)
-                      @%[ "cdVal" <- ZeroExtendTruncLsb Xlen (pack (#tagEq && #capEq && #valEq)) ]));
+                      @%[ "cdVal" <- ZeroExtendTo Xlen (pack (#tagEq && #capEq && #valEq)) ]));
           instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -806,7 +806,7 @@ Section InstBaseSpec.
               LETC permsSub <- #permsAnd == #perms2;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <-
-                            ZeroExtendTruncLsb Xlen (pack (#baseBound && #topBound && #tagEq && #permsSub)) ]));
+                            ZeroExtendTo Xlen (pack (#baseBound && #topBound && #tagEq && #permsSub)) ]));
           instProperties := DefProperties<| hasCs1 := true |><| hasCs2 := true |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -823,7 +823,7 @@ Section InstBaseSpec.
               LETC perms <- getCapPerms (cs1 @% "cap");
               LETC perms2 <- getCapPerms (cs2 @% "cap");
               LETC validSealAddr <- isCapSealAddr (cs2 @% "val") (#perms @% "EX");
-              LETC newCap <- sealCap (cs1 @% "cap") (ZeroExtendTruncLsb CapOTypeSz (cs2 @% "val"));
+              LETC newCap <- sealCap (cs1 @% "cap") (TruncLsbTo CapOTypeSz _ (cs2 @% "val"));
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- (cs2 @% "tag") && !isCapSealed (cs2 @% "cap") &&
                                        (#baseBound && #topBound) && (cs1 @% "tag") &&
@@ -844,7 +844,7 @@ Section InstBaseSpec.
               LETC baseBound <- (cs2 @% "val") >= (#baseTop2 @% "base");
               LETC topBound <- ZeroExtend 1 (cs2 @% "val") + $1 <= (#baseTop2 @% "top");
               LETC oType <- cs1 @% "cap" @% "oType";
-              LETC oTypeEq <- ZeroExtendTruncLsb Xlen #oType == (cs2 @% "val");
+              LETC oTypeEq <- ZeroExtendTo Xlen #oType == (cs2 @% "val");
               LETC perms <- getCapPerms (cs1 @% "cap");
               LETC perms2 <- getCapPerms (cs2 @% "cap");
               LETC newPerms <- #perms @%[ "GL" <- #perms @% "GL" && #perms2 @% "GL" ];
@@ -870,7 +870,7 @@ Section InstBaseSpec.
         immEncoder := [Build_ImmEncoder (fst rdFixedField) imm5_B;
                        Build_ImmEncoder (fst funct7Field) imm7_B];
         spec ty pc inst cs1 cs2 scr csr :=
-          ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen (branchOffset inst);
+          ( LETC newAddr <- (pc @% "val") + SignExtendTo Xlen (branchOffset inst);
             LETE taken <- takenFn (cs1 @% "val") (cs2 @% "val");
             LETE representable <- representableFnCap (rmTag cs1) #newAddr;
             RetE ((DefFullOutput ty)
@@ -878,7 +878,7 @@ Section InstBaseSpec.
                     @%[ "pcMemAddr" <- #newAddr ]
                     @%[ "exception?" <- if compressed
                                         then !#representable
-                                        else !#representable || isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
+                                        else !#representable || isNotZero (TruncLsbTo 2 _ #newAddr) ]
                     @%[ "exceptionCause" <- if compressed
                                             then Const ty (natToWord Xlen CapBoundsViolation)
                                             else (IF #representable
@@ -930,7 +930,7 @@ Section InstBaseSpec.
                  fieldVal funct3Field funct3Val];
       immEncoder := [Build_ImmEncoder (fst immField) imm12];
       spec ty pc inst cs1 cs2 scr csr :=
-        ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
+        ( LETC newAddr <- (cs1 @% "val") + SignExtendTo Xlen (imm inst);
           LETE baseTop <- getCapBaseTop (rmTag cs1);
           LETC baseBound <- #newAddr >= (#baseTop @% "base");
           LETC topBound <- ZeroExtend 1 #newAddr + $size <= (#baseTop @% "top");
@@ -946,7 +946,7 @@ Section InstBaseSpec.
                              else (IF !(#baseBound && #topBound)
                                    then Valid (Const ty (natToWord Xlen CapBoundsViolation))
                                    else StaticIf isCap
-                                          (isNotZero (ZeroExtendTruncLsb (Nat.log2_up ((Xlen + CapSz)/8)) #newAddr))
+                                          (isNotZero (TruncLsbTo (Nat.log2_up ((Xlen + CapSz)/8)) _ #newAddr))
                                           (Valid (Const ty (natToWord Xlen CapLdMisaligned)))
                                           Invalid))));
           RetE ((DefWbFullOutput ty)
@@ -998,7 +998,7 @@ Section InstBaseSpec.
       immEncoder := [Build_ImmEncoder (fst rdFixedField) imm5;
                      Build_ImmEncoder (fst funct7Field) imm7];
       spec ty pc inst cs1 cs2 scr csr :=
-        ( LETC newAddr <- (cs1 @% "val") + SignExtendTruncLsb Xlen ({< funct7 inst, rdFixed inst >});
+        ( LETC newAddr <- (cs1 @% "val") + SignExtendTo Xlen ({< funct7 inst, rdFixed inst >});
           LETE baseTop <- getCapBaseTop (rmTag cs1);
           LETC baseBound <- #newAddr >= (#baseTop @% "base");
           LETC topBound <- ZeroExtend 1 #newAddr + $size <= (#baseTop @% "top");
@@ -1019,7 +1019,7 @@ Section InstBaseSpec.
                                          then Valid (Const ty (natToWord Xlen CapBoundsViolation))
                                          else StaticIf isCap
                                                 (isNotZero
-                                                   (ZeroExtendTruncLsb (Nat.log2_up ((Xlen + CapSz)/8))#newAddr))
+                                                   (TruncLsbTo (Nat.log2_up ((Xlen + CapSz)/8)) _ #newAddr))
                                                 (Valid (Const ty (natToWord Xlen CapStMisaligned)))
                                                 Invalid)))));
           RetE ((DefFullOutput ty)
@@ -1065,7 +1065,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"6f"))];
           immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_J];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETC newAddr <- (pc @% "val") + SignExtendTruncLsb Xlen (jalOffset inst);
+            ( LETC newAddr <- (pc @% "val") + SignExtendTo Xlen (jalOffset inst);
               LETC linkAddr <- (pc @% "val") + ITE (isInstNotCompressed inst) $4 $2;
               LETC mstatusArr <- unpack (Array Xlen Bool) csr;
               LETC ie <- #mstatusArr ![ 3 ];
@@ -1078,7 +1078,7 @@ Section InstBaseSpec.
                       @%[ "pcMemAddr" <- #newAddr ]
                       @%[ "exception?" <- if compressed
                                           then !#representable
-                                          else !#representable || isNotZero (ZeroExtendTruncLsb 2 #newAddr) ]
+                                          else !#representable || isNotZero (TruncLsbTo 2 _ #newAddr) ]
                       @%[ "exceptionCause" <- if compressed
                                               then Const ty (natToWord Xlen CapBoundsViolation)
                                               else (IF #representable
@@ -1096,8 +1096,8 @@ Section InstBaseSpec.
                      fieldVal funct3Field (3'h"0")];
           immEncoder := [Build_ImmEncoder (fst immField) imm12];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETC newAddrTemp <- (cs1 @% "val") + SignExtendTruncLsb Xlen (imm inst);
-              LETC newAddr <- ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 1) #newAddrTemp, $$WO~0 >});
+            ( LETC newAddrTemp <- (cs1 @% "val") + SignExtendTo Xlen (imm inst);
+              LETC newAddr <- ({< TruncMsbTo (Xlen - 1) 1 #newAddrTemp, $$WO~0 >});
               LETC linkAddr <- (pc @% "val") + ITE (isInstNotCompressed inst) $4 $2;
               LETC perms <- getCapPerms (cs1 @% "cap");
               LETE representable <- representableFnCap (rmTag cs1) #newAddr;
@@ -1112,7 +1112,7 @@ Section InstBaseSpec.
                                  then mkPair (Valid (Const ty (natToWord Xlen CapExecViolation))) ($$false)
                                  else (IF !#representable
                                        then mkPair (Valid (Const ty (natToWord Xlen CapBoundsViolation))) ($$false)
-                                       else (StaticIf (negb compressed) (isNotZero (ZeroExtendTruncLsb 2 #newAddr))
+                                       else (StaticIf (negb compressed) (isNotZero (TruncLsbTo 2 _ #newAddr))
                                                (mkPair (Valid (Const ty (natToWord Xlen InstMisaligned))) ($$true))
                                                (mkPair Invalid ($$false)))))));
               LETC mstatusArr <- unpack (Array Xlen Bool) csr;
@@ -1184,10 +1184,8 @@ Section InstBaseSpec.
                                           (Const ty (natToWord Xlen CapExecViolation))
                                           (Const ty (natToWord Xlen CapTagViolation)));
               LETC newMepc <- if compressed
-                              then ZeroExtendTruncLsb Xlen
-                                     ({< ZeroExtendTruncMsb (Xlen - 1) (scr @% "val"), $$WO~0 >})
-                              else ZeroExtendTruncLsb Xlen
-                                     ({< ZeroExtendTruncMsb (Xlen - 2) (scr @% "val"), $$(2'b"00") >});
+                              then ({< TruncMsbTo (Xlen - 1) 1 (scr @% "val"), $$WO~0 >})
+                              else ({< TruncMsbTo (Xlen - 2) 2 (scr @% "val"), $$(2'b"00") >});
               LETE representable <- representableFnCap (rmTag scr) #newMepc;
               LETC exception <- !((scr @% "tag") && !isCapSealed (scr @% "cap") && #representable
                                   && (#mepcPerms @% "EX") && (#pcPerms @% "SR"));
@@ -1225,15 +1223,15 @@ Section InstBaseSpec.
         isLegal ty val := $$true;
         legalize ty val := val |};
       {|scrRegInfo := Build_RegInfo (getRegScrId mtdc) mtdcReg;
-        isLegal ty val := isZero (ZeroExtendTruncLsb 2 val);
-        legalize ty val := ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - 2) val, $$(wzero 2) >}) |};
+        isLegal ty val := isZero (TruncLsbTo 2 _ val);
+        legalize ty val := ({< TruncMsbTo (Xlen - 2) 2 val, $$(wzero 2) >}) |};
       {|scrRegInfo := Build_RegInfo (getRegScrId mscratchc) mScratchCReg;
         isLegal ty val := $$true;
         legalize ty val := val |};
       {|scrRegInfo := Build_RegInfo (getRegScrId mepcc) mepccReg;
-        isLegal ty val := isZero (ZeroExtendTruncLsb ZeroBits val);
+        isLegal ty val := isZero (TruncLsbTo ZeroBits _ val);
         legalize ty val :=
-          ZeroExtendTruncLsb Xlen ({< ZeroExtendTruncMsb (Xlen - ZeroBits) val, $$(wzero ZeroBits) >}) |}
+          ({< TruncMsbTo (Xlen - ZeroBits) ZeroBits val, $$(wzero ZeroBits) >}) |}
     ].
 
  Definition isValidScrs ty (inst : Inst @# ty) :=
@@ -1317,7 +1315,7 @@ Section InstBaseSpec.
                    fieldVal funct3Field funct3Val];
         immEncoder := if isCs1 then [] else [Build_ImmEncoder (fst rs1FixedField) imm5];
         spec ty pc inst cs1 cs2 scr csr :=
-          ( LETC val : Data <- if isCs1 then cs1 @% "val" else ZeroExtendTruncLsb Xlen (rs1Fixed inst);
+          ( LETC val : Data <- if isCs1 then cs1 @% "val" else ZeroExtendTo Xlen (rs1Fixed inst);
             LETC illegal <- (!isValidCsrs inst ||
                                Kor (map (fun csrInfo => isNotZero (#val .& $$(match csrMask csrInfo with
                                                                                     | Some v => wnot v

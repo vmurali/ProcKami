@@ -50,7 +50,7 @@ Section InBoundsCoreConfig.
   Definition SystemAccess := SystemAccessRf (@regsInit p) \/ SystemAccessPc pccInit.
 End InBoundsCoreConfig.
 
-Record SpecIsolation := {
+Record IsolationSpec := {
     cores: list CoreConfigParams;
     disjointNamesCores: NoDup (map (@procName) cores);
     disjointBoundsCores: forall x p, In p cores -> InBounds x p -> forall q,

@@ -76,15 +76,15 @@ Section BankedMem.
 
       Definition instReq: ActionT ty InstRet :=
         ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
-                       (ZeroExtendTruncMsb (Xlen - Nat.log2_up NumBanks) addr);
+                       (TruncMsbTo (Xlen - Nat.log2_up NumBanks) (Nat.log2_up NumBanks) addr);
           LET idxPlus1 <- #idx + $1;
-          LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
+          LET idxLsb <- TruncLsbTo (Nat.log2_up NumBanks) _ addr;
           LETA bytes <- instReqCallHelp #idx #idxPlus1 #idxLsb memBankInits [] 0;
           LET shuffledBytes <- ShuffleArray #bytes #idxLsb;
           Read justFenceI : Bool <- justFenceIReg;
           Write justFenceIReg : Bool <- $$false;
           Ret (STRUCT {
-                   "inst" ::= (ZeroExtendTruncLsb InstSz (pack #shuffledBytes));
+                   "inst" ::= (TruncLsbTo InstSz _ (pack #shuffledBytes));
                    "badLower16?" ::= Const ty false;
                    "error?" ::= Const ty false;
                    "fault?" ::= Const ty false;
@@ -101,7 +101,7 @@ Section BankedMem.
       Variable data: FullCapWithTag @# ty.
 
       Section CommonIdx.
-        Variable idx idxPlus1: Bit (Nat.log2_up NumMemBytes) @# ty.
+        Variable idx idxPlus1: Bit LgNumMemBytes @# ty.
         Variable idxLsb: Bit (Nat.log2_up NumBanks) @# ty.
         Variable bytes: Array NumBanks (Bit 8) @# ty.
 
@@ -110,7 +110,9 @@ Section BankedMem.
           match mbs return ActionT ty (Array (length exprs + length mbs) (Bit 8))with
           | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
           | m :: ms => ( LET inpPos <- $pos - idxLsb;
-                         LET actualIdx <- ITE (unpack Bool (ZeroExtendTruncMsb 1 #inpPos)) idxPlus1 idx;
+                         LET actualIdx <- ITE (unpack Bool (TruncMsbTo 1 (pred (Nat.log2_up NumBanks)) #inpPos))
+                                            idxPlus1
+                                            idx;
                          LET isWrite <- (ZeroExtend 1 #inpPos) < size;
                          If isStore
                          then ( If #isWrite
@@ -129,10 +131,10 @@ Section BankedMem.
         unfold NumBanks, FullCap, Cap, CapSz, Data; auto.
 
       Definition loadStoreReq: ActionT ty DataRet :=
-        ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
-                       (ZeroExtendTruncMsb (Xlen - Nat.log2_up NumBanks) addr);
+        ( LET idx <- ZeroExtendTruncLsb LgNumMemBytes
+                       (TruncMsbTo (Xlen - Nat.log2_up NumBanks) (Nat.log2_up NumBanks) addr);
           LET idxPlus1 <- #idx + $1;
-          LET idxLsb <- ZeroExtendTruncLsb (Nat.log2_up NumBanks) addr;
+          LET idxLsb <- TruncLsbTo (Nat.log2_up NumBanks) _ addr;
           LET capVal <- {< pack (data @% "cap"), (data @% "val") >};
           LET bytes <- unpack (Array NumBanks (Bit 8)) #capVal;
           LETA ldBytes <- memReqCallHelp #idx #idxPlus1 #idxLsb #bytes memBankInits 0 [];
