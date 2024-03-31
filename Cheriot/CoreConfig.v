@@ -5,13 +5,16 @@ Section Prefix.
   Context `{coreConfigParams: CoreConfigParams}.
   Instance memParamsInst: MemParams := memParams.
 
-  Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
+  Local Notation "@^ x" := ((procName ++ "_") ++ x)%string (at level 0).
   Local Open Scope kami_expr.
 
-  Definition specRules : list (forall ty, ActionT ty Void) :=
-    (fun ty => specInstBoundsExceptionRule ty scrList csrList) ::
-      (fun ty => specInstIllegalExceptionRule ty scrList csrList specInstEntries) ::
-      map (fun ie ty => specDecExecRule ty scrList csrList ie) specInstEntries.
+  Definition specRules : list RuleT :=
+    (@^"specTimerIncAndInterruptSetRule", specTimerIncAndInterruptSetRule) ::
+      (@^"specTimerInterruptTakeRule", specTimerInterruptTakeRule scrList csrList) ::
+      (@^"specInstBoundsExpcetionRule", specInstBoundsExceptionRule scrList csrList) ::
+      (@^"specInstIllegalExceptionRule", fun ty => specInstIllegalExceptionRule scrList csrList ty specInstEntries) ::
+      map (fun ie => (@^(append "specDecExecRule_" (instName ie)), fun ty => specDecExecRule scrList csrList ty ie))
+      specInstEntries.
 
   Definition specRegs : list RegInitT :=
     (@^pcCapReg, existT _ (SyntaxKind Cap) (Some (SyntaxConst (convTypeToConst pcCapInit)))) ::
@@ -44,6 +47,76 @@ Section Prefix.
           (@^mStatusReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::
           (@^mieReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::
           (@^mCauseReg, existT _ (SyntaxKind Data) None) ::
-          (@^mtValReg, existT _ (SyntaxKind Data) None) :: nil
+          (@^mtValReg, existT _ (SyntaxKind Data) None) ::
+          (@^mTimeReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::
+          (@^mTimeCmpReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::
+          (@^mtiReg, existT _ (SyntaxKind Bool) (Some (SyntaxConst true))) ::
+          nil
       else nil.
+
+  Definition specBaseMod: BaseModule := BaseMod specRegs specRules [].
+
+  Ltac conjunctionRepeatConstructors :=
+    match goal with
+    | |- ?A /\ ?B => constructor; conjunctionRepeatConstructors
+    | |- _ => idtac
+    end.
+
+  Local Ltac constructor_simpl :=
+    econstructor; eauto; simpl; unfold not; intros.
+
+  Ltac murali := match goal with
+                 | |- @WfBaseModule_new _ _ => unfold WfBaseModule_new
+                 | |- @WfMod_new _ _ => constructor_simpl
+                 | |- _ /\ _ => constructor_simpl
+                 | |- @WfActionT_new _ _ _ (convertLetExprSyntax_ActionT ?e) => apply WfLetExprSyntax_new
+                 | |- @WfActionT_new _ _ _ _ => constructor_simpl
+                 | |- NoDup _ => constructor_simpl
+                 | H: _ \/ _ |- _ => destruct H; subst; simpl
+                 | |- forall _, _ => intros
+                 | |- _ -> _ => intros 
+                 | H: In _ (getAllMethods _) |- _ => simpl in H;inversion H;subst;clear H;simpl
+                 | |- _ => unfold lookup; simpl; repeat rewrite strip_pref
+                 end; unfold lookup; simpl; repeat rewrite strip_pref; simpl.
+
+  (*
+  Theorem WfSpecDecRule: forall ie ty, WfActionT_new specRegs (specDecExecRule scrList csrList ty ie).
+  Proof.
+    cbv [specRegs specDecExecRule handleException]; intros.
+    murali.
+    unfold lookup; simpl; repeat rewrite strip_pref; simpl.
+    - 
+    cbv [lookup find fst snd].
+    rewrite ?strip_pref.
+    match goal with
+    | |- context [String.eqb ?P ?Q] => cbv [P Q String.eqb Ascii.eqb Bool.eqb]
+    end.
+    discharge_wf_new.
+    - murali.
+    - 
+    test.
+  Qed.
+
+    discharge_wf_new.
+  Theorem WfSpecBaseMod: WfBaseModule_new type specBaseMod.
+  Proof.
+    cbv [WfBaseModule_new getRegisters getRules getMethods specBaseMod specRules specRegs
+           specTimerIncAndInterruptSetRule
+           specTimerInterruptTakeRule specInstBoundsExceptionRule specInstIllegalExceptionRule specDecExecRule].
+    conjunctionRepeatConstructors.
+    - cbn [WfRules snd]; conjunctionRepeatConstructors.
+      + destruct hasTrap; discharge_wf_new.
+      + cbv [handleException]; destruct hasTrap.
+        * discharge_wf_new.
+      + 
+      + 
+    - constructor.
+    - constructor.
+    - destruct hasTrap; cbv [map fst];
+        apply (NoDup_map_inv (rmStringPrefix (String.length (procName ++ "_"))%string)); cbv [map];
+        rewrite ?rmAppend; discharge_wf_new.
+    - destruct hasTrap; cbv [map fst specInstEntries instName mkLdInst mkStInst mkBranchInst mkCsrEntry];
+        cbn [append]; discharge_wf_new.
+  Admitted.
+*)
 End Prefix.

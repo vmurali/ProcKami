@@ -9,7 +9,7 @@ Section MemSpec.
     Local Open Scope kami_expr.
     Local Open Scope kami_action.
 
-    Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
+    Local Notation "@^ x" := ((procName ++ "_") ++ x)%string (at level 0).
 
     Section LoadStore.
       Variable pred: Bool @# ty.

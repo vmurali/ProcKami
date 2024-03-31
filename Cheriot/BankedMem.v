@@ -3,7 +3,7 @@ Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
 Section BankedMem.
   Variable procName: string.
   Context `{memParams: MemParams}.
-  Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
+  Local Notation "@^ x" := ((procName ++ "_") ++ x)%string (at level 0).
 
   Definition InstRet := STRUCT_TYPE {
                             "inst" :: Inst;

@@ -6,8 +6,13 @@ Section Run.
   Context `{coreConfigParams: CoreConfigParams}.
   Instance memParamsInst: MemParams := memParams.
   
+  Variable scrs: list ScrReg.
+  Variable csrs: list CsrReg.
+  Variable funcEntries: list FuncEntry.
   Variable ty: Kind -> Type.
-  Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
+  Variable uncompressFn: CompInst @# ty -> Maybe Inst ## ty.
+  
+  Local Notation "@^ x" := ((procName ++ "_") ++ x)%string (at level 0).
 
   Definition CompressedOutput :=
     STRUCT_TYPE {
@@ -71,11 +76,6 @@ Section Run.
                 "scrTag" ::= inp @% "scrTag";
                 "scrException?" ::= inp @% "scrException?";
                 "wbCsr?" ::= inp @% "wbCsr?" } : CompressedOutput @# ty) ).
-
-  Variable uncompressFn: CompInst @# ty -> Maybe Inst ## ty.
-  Variable funcEntries: list FuncEntry.
-  Variable scrs: list ScrReg.
-  Variable csrs: list CsrReg.
 
   Definition FetchOut := STRUCT_TYPE {
                              "pc" :: FullCap;

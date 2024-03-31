@@ -317,3 +317,19 @@ Section InsertListIntoFinMap.
     then nth (i - start) ls (arr iFin)
     else arr iFin.
 End InsertListIntoFinMap.
+
+Section RmStringPrefix.
+  Fixpoint rmStringPrefix n (s: string) :=
+    match n with
+    | 0 => s
+    | S m => match s with
+             | String c s' => rmStringPrefix m s'
+             | EmptyString => EmptyString
+             end
+    end.
+
+  Theorem rmAppend (p s: string): rmStringPrefix (String.length p) (p ++ s)%string = s.
+  Proof.
+    induction p; auto.
+  Qed.
+End RmStringPrefix.

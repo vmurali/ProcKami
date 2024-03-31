@@ -6,18 +6,18 @@ Section Run.
   Context `{coreConfigParams: CoreConfigParams}.
   Instance memParamsInstance: MemParams := memParams.
 
+  Variable scrs: list ScrReg.
+  Variable csrs: list CsrReg.
+
   Variable ty: Kind -> Type.
 
   Local Open Scope kami_expr.
   Local Open Scope kami_action.
 
-  Variable scrs: list ScrReg.
-  Variable csrs: list CsrReg.
-
   Let scrRegInfos := map scrRegInfo scrs.
   Let csrRegInfos := map csrRegInfo csrs.
 
-  Local Notation "@^ x" := (procName ++ "_" ++ x)%string (at level 0).
+  Local Notation "@^ x" := ((procName ++ "_") ++ x)%string (at level 0).
 
   Definition handleException
     (pred isException baseException scrException pcCapException wbScr wbCsr changePcVal changePcCap: Bool @# ty)
