@@ -190,7 +190,7 @@ Local Open Scope kami_action.
 Definition readRegs prefix n (regs: list (RegInfo n)) ty (addr: Bit n @# ty) k : ActionT ty k :=
   redAction (@Kor _ k)
     (fun x => ( If (addr == Const ty (regAddr x))
-                then ( Read retVal : k <- (prefix ++ "_" ++ (regName x))%string;
+                then ( Read retVal : k <- ((prefix ++ "_") ++ (regName x))%string;
                        Ret #retVal )
                 else Ret (Const ty Default) as ret;
                 Ret #ret )) regs.
@@ -198,13 +198,13 @@ Definition readRegs prefix n (regs: list (RegInfo n)) ty (addr: Bit n @# ty) k :
 Definition writeRegsPred prefix n (regs: list (RegInfo n)) ty
   (pred: Bool @# ty) (addr: Bit n @# ty) k (val: k @# ty) :=
   fold_right (fun x rest => ( If (addr == Const ty (regAddr x))
-                              then (WriteIf pred Then (prefix ++ "_" ++ (regName x))%string : k <- val; Retv)
+                              then (WriteIf pred Then ((prefix ++ "_") ++ (regName x))%string : k <- val; Retv)
                               else Retv;
                               rest ) ) Retv regs.
 
 Definition writeRegs prefix n (regs: list (RegInfo n)) ty (addr: Bit n @# ty) k (val: k @# ty) :=
   fold_right (fun x rest => ( If (addr == Const ty (regAddr x))
-                              then ( Write (prefix ++ "_" ++ (regName x))%string : k <- val; Retv )
+                              then ( Write ((prefix ++ "_") ++ (regName x))%string : k <- val; Retv )
                               else Retv;
                               rest ) ) Retv regs.
 
@@ -333,3 +333,71 @@ Section RmStringPrefix.
     induction p; auto.
   Qed.
 End RmStringPrefix.
+
+Theorem string_dec_eqb s1 s2: String.eqb s1 s2 = getBool (string_dec s1 s2).
+Proof.
+  destruct (string_dec s1 s2).
+  - rewrite eqb_eq; auto.
+  - rewrite eqb_neq; auto.
+Qed.
+
+Section EvalProp.
+  Variable A: Type.
+  Variable R: A -> A -> bool.
+
+  Fixpoint NoDupEval (ls: list A) :=
+    match ls with
+    | nil => true
+    | x :: xs => andb (negb (existsb (R x) xs)) (NoDupEval xs)
+    end.
+
+  Section NoDupEvalCorrect.
+    Variable RIsDec: forall a1 a2, R a1 a2 = true <-> a1 = a2.
+
+    Lemma NoDupEvalCorrect1 ls: NoDupEval ls = true -> NoDup ls.
+    Proof.
+      induction ls; intros; constructor;
+        simpl in H;
+        rewrite andb_true_iff in H;
+        destruct H.
+      - intro.
+        rewrite <- eq_true_not_negb_iff in H.
+        rewrite existsb_exists in H.
+        assert (rhs: exists x, In x ls /\ (R a) x = true).
+        { exists a.
+          constructor; auto.
+          rewrite (RIsDec a a); auto.
+        }
+        apply H; auto.
+      - apply IHls; auto.
+    Qed.
+
+    Lemma NoDupEvalCorrect2 ls: NoDup ls -> NoDupEval ls = true.
+    Proof.
+      induction 1; auto.
+      simpl.
+      rewrite andb_true_iff.
+      constructor; [|auto].
+      rewrite <- eq_true_not_negb_iff.
+      rewrite existsb_exists.
+      intro.
+      destruct H1 as [ x0 [in1 r1]].
+      rewrite RIsDec in r1; subst.
+      apply H; auto.
+    Qed.
+
+    Theorem NoDupEvalCorrect ls: NoDup ls <-> NoDupEval ls = true.
+    Proof.
+      constructor.
+      - apply NoDupEvalCorrect2.
+      - apply NoDupEvalCorrect1.
+    Qed.
+  End NoDupEvalCorrect.
+  
+  Fixpoint ForallOrdPairsEval (ls: list A) :=
+    match ls with
+    | nil => true
+    | x :: xs => andb (forallb (R x) xs) (ForallOrdPairsEval xs)
+    end.
+End EvalProp.
+  

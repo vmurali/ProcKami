@@ -153,7 +153,7 @@ Record MemBankInit :=
     memArrayName: string;
     memRfString: string }.
 
-Definition prefixHex x n := (x ++ "_" ++ natToHexStr n)%string.
+Definition prefixHex x n := ((x ++ "_") ++ natToHexStr n)%string.
 
 Definition createMemRFParam (n: nat) : MemBankInit :=
   {|instRqName := prefixHex "instRq" n;

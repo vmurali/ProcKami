@@ -14,8 +14,8 @@ Section Run.
   Local Open Scope kami_expr.
   Local Open Scope kami_action.
 
-  Let scrRegInfos := map scrRegInfo scrs.
-  Let csrRegInfos := map csrRegInfo csrs.
+  Let scrRegInfos := if hasTrap then map scrRegInfo scrs else [].
+  Let csrRegInfos := map csrRegInfo (if hasTrap then csrs else filter (fun csrReg => negb (isSystemCsr csrReg)) csrs).
 
   Local Notation "@^ x" := ((procName ++ "_") ++ x)%string (at level 0).
 
@@ -144,9 +144,9 @@ Section Run.
       Read pcVal : Addr <- @^pcValReg;
       LETAE baseTop <- getCapBaseTop (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal });
       LET topBound <- ZeroExtend 1 #pcVal + $(InstSz/8) <= (#baseTop @% "top");
-      Read memArr : Array (NumMemBytes * NumBanks) (Bit 8) <- memArray;
+      Read memArr : Array (NumMemBytes * NumBanks) (Bit 8) <- @^memArray;
       LET inst <- pack (readArrayConstSize #pcVal #memArr (InstSz/8));
-      Read regs : Array NumRegs FullCapWithTag <- regsArray;
+      Read regs : Array NumRegs FullCapWithTag <- @^regsArray;
       LET illegal <- CABool And (map (fun ie => !(matchUniqId #inst (uniqId ie))) ies);
       if hasTrap
       then
@@ -162,9 +162,9 @@ Section Run.
       Read pcVal : Addr <- @^pcValReg;
       LETAE baseTop <- getCapBaseTop (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal });
       LET topBound <- ZeroExtend 1 #pcVal + $(InstSz/8) <= (#baseTop @% "top");
-      Read memArr : Array (NumMemBytes * NumBanks) (Bit 8) <- memArray;
+      Read memArr : Array (NumMemBytes * NumBanks) (Bit 8) <- @^memArray;
       LET inst <- pack (readArrayConstSize #pcVal #memArr (InstSz/8));
-      Read regs : Array NumRegs FullCapWithTag <- regsArray;
+      Read regs : Array NumRegs FullCapWithTag <- @^regsArray;
       let instProps := instProperties ie in
       LET cs1Idx <- if (weq (implicitReg instProps) (wzero _)) then (rs1 #inst) else $$(implicitReg instProps);
       LET cs2Idx <- rs2Fixed #inst;

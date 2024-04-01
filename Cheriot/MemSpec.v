@@ -23,7 +23,7 @@ Section MemSpec.
         unfold NumBanks, FullCap, Cap, CapSz, Data; auto.
 
       Definition loadReqSpec: ActionT ty FullCapWithTag :=
-        ( Read memArr : Array NumMemBytes (Bit 8) <- @^memArray;
+        ( Read memArr : Array (NumMemBytes * NumBanks) (Bit 8) <- @^memArray;
           LET ldBytes <- readArrayConstSize addr #memArr NumBanks;
           LET ldSignVal <- (IF signed
                             then TruncToDynamicSizeArraySigned #ldBytes size
@@ -39,7 +39,7 @@ Section MemSpec.
                    "val" ::= #ldVal @% "val" } : FullCapWithTag @# ty)).
 
       Definition storeReqSpec: ActionT ty Void :=
-        ( Read memArr : Array NumMemBytes (Bit 8) <- @^memArray;
+        ( Read memArr : Array (NumMemBytes * NumBanks) (Bit 8) <- @^memArray;
           LET idxLsb <- TruncLsbTo (Nat.log2_up NumBanks) _ addr;
           LET straddle <- ZeroExtend 1 #idxLsb + size <= $NumBanks;
           LET tagIdx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
@@ -55,7 +55,7 @@ Section MemSpec.
                                                                (#stBytes@[$$(natToWord (Nat.log2_up NumBanks) i)])
                                                                (newArr@[addr + $i])])
               (seq 0 NumBanks) #memArr;
-          WriteIf pred Then @^memArray: Array NumMemBytes (Bit 8) <- #stArr;
+          WriteIf pred Then @^memArray: Array (NumMemBytes * NumBanks) (Bit 8) <- #stArr;
           WriteIf pred Then @^tagArray: Array NumMemBytes Bool <- #updTagPlus1;
           Retv ).
     End LoadStore.

@@ -1443,23 +1443,6 @@ Section InstBaseSpec.
                   let z := eval cbn [app] in ltac:(unfoldInstEntries y) in exact z
             end).
 
-  Section EvalProp.
-    Variable A: Type.
-    Variable R: A -> A -> bool.
-
-    Fixpoint NoDupEval (ls: list A) :=
-      match ls with
-      | nil => true
-      | x :: xs => andb (negb (existsb (R x) xs)) (NoDupEval xs)
-      end.
-
-    Fixpoint ForallOrdPairsEval (ls: list A) :=
-      match ls with
-      | nil => true
-      | x :: xs => andb (forallb (R x) xs) (ForallOrdPairsEval xs)
-      end.
-  End EvalProp.
-  
   Theorem uniqAluIds:
     ForallOrdPairsEval isDifferingBoolList (map (fun y => uniqIdToOptBoolList (uniqId y)) specInstEntries) = true.
   Proof.
