@@ -144,8 +144,7 @@ Section Run.
       Read pcVal : Addr <- @^pcValReg;
       LETAE baseTop <- getCapBaseTop (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal });
       LET topBound <- ZeroExtend 1 #pcVal + $(InstSz/8) <= (#baseTop @% "top");
-      Read memArr : Array (NumMemBytes * NumBanks) (Bit 8) <- @^memArray;
-      LET inst <- pack (readArrayConstSize #pcVal #memArr (InstSz/8));
+      LETA inst <- instReqSpec procName #pcVal;
       Read regs : Array NumRegs FullCapWithTag <- @^regsArray;
       LET illegal <- CABool And (map (fun ie => !(matchUniqId #inst (uniqId ie))) ies);
       if hasTrap
@@ -162,8 +161,7 @@ Section Run.
       Read pcVal : Addr <- @^pcValReg;
       LETAE baseTop <- getCapBaseTop (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal });
       LET topBound <- ZeroExtend 1 #pcVal + $(InstSz/8) <= (#baseTop @% "top");
-      Read memArr : Array (NumMemBytes * NumBanks) (Bit 8) <- @^memArray;
-      LET inst <- pack (readArrayConstSize #pcVal #memArr (InstSz/8));
+      LETA inst <- instReqSpec procName #pcVal;
       Read regs : Array NumRegs FullCapWithTag <- @^regsArray;
       let instProps := instProperties ie in
       LET cs1Idx <- if (weq (implicitReg instProps) (wzero _)) then (rs1 #inst) else $$(implicitReg instProps);

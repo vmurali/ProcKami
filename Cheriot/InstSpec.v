@@ -470,8 +470,7 @@ Section InstBaseSpec.
           spec ty pc inst cs1 cs2 scr csr :=
             ( LETC cs1Cap <- cs1 @% "cap";
               LETC perms <- getCapPerms (cs1 @% "cap");
-              LETC newPerms <- unpack CapPerms (TruncLsbTo (size CapPerms) _
-                                                  ((ZeroExtendTo Xlen (pack #perms)) .& (cs2 @% "val")));
+              LETC newPerms <- unpack CapPerms ((TruncLsbTo (size CapPerms) _ (cs2 @% "val")) .& (pack #perms));
               LETC newCap <- (cs1 @% "cap") @%[ "p" <- encodePerms #newPerms ];
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- cs1 @% "tag" ]
@@ -802,8 +801,7 @@ Section InstBaseSpec.
               LETC tagEq <- (cs1 @% "tag") == (cs2 @% "tag");
               LETC perms <- getCapPerms (cs1 @% "cap");
               LETC perms2 <- getCapPerms (cs2 @% "cap");
-              LETC permsAnd <- unpack CapPerms (pack #perms .& pack #perms2);
-              LETC permsSub <- #permsAnd == #perms2;
+              LETC permsSub <- isSubsetPerms #perms #perms2;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdVal" <-
                             ZeroExtendTo Xlen (pack (#baseBound && #topBound && #tagEq && #permsSub)) ]));

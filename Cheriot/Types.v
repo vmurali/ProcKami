@@ -128,6 +128,7 @@ Definition waitForJustFenceIReg := "waitForJustFenceI".
 Definition tagRead := "tagRead".
 Definition tagWrite := "tagWrite".
 Definition tagArray := "tagArray".
+Definition tagRfString := "tagArrayFileArg".
 Definition regsRead1 := "regsRead1".
 Definition regsRead2 := "regsRead2".
 Definition regsWrite := "regsWrite".
@@ -171,9 +172,10 @@ Qed.
 
 Class MemParams := {
     LgNumMemBytes: nat;
+    LgNumMemBytesGt0: LgNumMemBytes > 0;
     (* NumMemBytes denotes the number of bytes in each bank. So total physical memory = NumMemBytes * NumBanks *)
     NumMemBytes := Nat.pow 2 LgNumMemBytes;
-    memInit: Fin.t (Nat.pow 2 LgNumMemBytes * 8) -> word 8 }.
+    memInit: Fin.t NumMemBytes -> type FullCapWithTag }.
 
 Class CoreConfigParams := {
     procName : string;
@@ -265,7 +267,8 @@ Definition LdOp := 0.
 Definition StOp := 1.
 Definition MemOpSz := 1.
 
-Definition MemSizeSz := (Nat.log2_up NumBanks) + 1.
+Definition LgNumBanks := Nat.log2_up NumBanks.
+Definition MemSizeSz := LgNumBanks + 1.
 Definition MemSize := Bit MemSizeSz.
 
 Definition MemOpInfo :=
@@ -317,7 +320,8 @@ Definition FullOutput :=
 
 Section ReadArray.
   Variable ty: Kind -> Type.
-  Variable addr: Addr @# ty.
+  Variable addrSz: nat.
+  Variable addr: Bit addrSz @# ty.
   Variable n: nat.
   Variable arr: Array n (Bit 8) @# ty.
   Local Open Scope kami_expr.

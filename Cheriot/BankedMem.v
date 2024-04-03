@@ -14,7 +14,7 @@ Section BankedMem.
 
   Definition DataRet := STRUCT_TYPE {
                             "data" :: FullCapWithTag;
-                            "lowestByte" :: Bit (Nat.log2_up NumBanks);
+                            "lowestByte" :: Bit LgNumBanks;
                             "dataError?" :: Bool;
                             "dataFault?" :: Bool;
                             "tagError?" :: Bool;
@@ -29,26 +29,52 @@ Section BankedMem.
       rfIdxNum := NumMemBytes;
       rfData := Bit 8;
       rfInit := RFFile isMemAscii isMemRfArg (memRfString (snd mb)) 0 NumMemBytes
-                  (fun i => memInit (Fin.depair i (fst mb))) |}.
+                  (fun i =>
+                     evalLetExpr (LETC bytes <- unpack (Array NumBanks (Bit 8)) (pack (rmTag ###(memInit i)));
+                                  RetE (ReadArrayConst ###bytes (fst mb)))%kami_expr) |}.
 
   Definition memFiles := map createRegFile
                            (match lengthMemBankInits in _ = Y return list (Fin.t Y * MemBankInit) with
                             | eq_refl => finTag memBankInits
                             end).
 
+  Lemma Nat_pow2_pred n: n > 0 -> Nat.pow 2 (pred n) * 2 = Nat.pow 2 n.
+  Proof.
+    destruct n; intros.
+    - abstract lia.
+    - abstract (unfold pred; rewrite Nat.pow_succ_r'; lia).
+  Qed.
+
+  Theorem NumMemBytesEven: Nat.pow 2 (pred LgNumMemBytes) * 2 = NumMemBytes.
+  Proof.
+    apply Nat_pow2_pred.
+    apply LgNumMemBytesGt0.
+  Qed.
+    
   (* On normal stores (i.e. stores of data, not stores of caps),
      we may do two writes of false into consecutive tags;
      therefore we have two-way banked booleans for tagFile *)
-  Definition tagFile (n : nat) :=
+
+  Local Open Scope kami_expr.
+  Definition tagFile (b : bool) :=
+    let str := if b then "1" else "0" in
     {|rfIsWrMask := false;
       rfNum := 1;
-      rfDataArray := (@^tagArray ++ natToBinStr n)%string;
-      rfRead := Async [(@^tagRead ++ natToBinStr n)%string];
-      rfWrite := (@^tagWrite ++ natToBinStr n)%string;
-      rfIdxNum := NumMemBytes/2;
+      rfDataArray := (@^tagArray ++ str)%string;
+      rfRead := Async [(@^tagRead ++ str)%string];
+      rfWrite := (@^tagWrite ++ str)%string;
+      rfIdxNum := Nat.pow 2 (pred LgNumMemBytes);
       rfData := Bool;
-      rfInit := RFNonFile _ (Some (ConstBool false)) |}.
-
+      rfInit :=
+        RFFile isMemAscii isMemRfArg tagRfString 0 NumMemBytes
+          (fun i : Fin.t (Nat.pow 2 (pred LgNumMemBytes)) =>
+             evalExpr
+               (###(memInit
+                      (Fin.cast
+                         (Fin.depair i (if b then Fin.FS Fin.F1 else Fin.F1: Fin.t 2)) NumMemBytesEven)) @% "tag"))
+    |}.
+  Local Close Scope kami_expr.
+  
   Section ty.
     Variable ty: Kind -> Type.
     Local Open Scope kami_expr.
@@ -59,7 +85,7 @@ Section BankedMem.
       
       Section CommonIdx.
         Variable idx idxPlus1: Bit (Nat.log2_up NumMemBytes) @# ty.
-        Variable idxLsb: Bit (Nat.log2_up NumBanks) @# ty.
+        Variable idxLsb: Bit LgNumBanks @# ty.
 
         Local Fixpoint instReqCallHelp (mbs: list MemBankInit)
           (exprs: list (Bit 8 @# ty)) (pos: nat) : ActionT ty (Array (length exprs + length mbs) (Bit 8)). refine
@@ -76,9 +102,9 @@ Section BankedMem.
 
       Definition instReq: ActionT ty InstRet :=
         ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
-                       (TruncMsbTo (Xlen - Nat.log2_up NumBanks) (Nat.log2_up NumBanks) addr);
+                       (TruncMsbTo (Xlen - LgNumBanks) LgNumBanks addr);
           LET idxPlus1 <- #idx + $1;
-          LET idxLsb <- TruncLsbTo (Nat.log2_up NumBanks) _ addr;
+          LET idxLsb <- TruncLsbTo LgNumBanks _ addr;
           LETA bytes <- instReqCallHelp #idx #idxPlus1 #idxLsb memBankInits [] 0;
           LET shuffledBytes <- ShuffleArray #bytes #idxLsb;
           Read justFenceI : Bool <- justFenceIReg;
@@ -102,7 +128,7 @@ Section BankedMem.
 
       Section CommonIdx.
         Variable idx idxPlus1: Bit LgNumMemBytes @# ty.
-        Variable idxLsb: Bit (Nat.log2_up NumBanks) @# ty.
+        Variable idxLsb: Bit LgNumBanks @# ty.
         Variable bytes: Array NumBanks (Bit 8) @# ty.
 
         Local Fixpoint memReqCallHelp (mbs: list MemBankInit) (pos: nat)
@@ -110,7 +136,7 @@ Section BankedMem.
           match mbs return ActionT ty (Array (length exprs + length mbs) (Bit 8))with
           | [] => Ret (BuildArray (nth_Fin' exprs (@Nat.add_0_r _)))
           | m :: ms => ( LET inpPos <- $pos - idxLsb;
-                         LET actualIdx <- ITE (unpack Bool (TruncMsbTo 1 (pred (Nat.log2_up NumBanks)) #inpPos))
+                         LET actualIdx <- ITE (unpack Bool (TruncMsbTo 1 (pred LgNumBanks) #inpPos))
                                             idxPlus1
                                             idx;
                          LET isWrite <- (ZeroExtend 1 #inpPos) < size;
@@ -132,9 +158,9 @@ Section BankedMem.
 
       Definition loadStoreReq: ActionT ty DataRet :=
         ( LET idx <- ZeroExtendTruncLsb LgNumMemBytes
-                       (TruncMsbTo (Xlen - Nat.log2_up NumBanks) (Nat.log2_up NumBanks) addr);
+                       (TruncMsbTo (Xlen - LgNumBanks) LgNumBanks addr);
           LET idxPlus1 <- #idx + $1;
-          LET idxLsb <- TruncLsbTo (Nat.log2_up NumBanks) _ addr;
+          LET idxLsb <- TruncLsbTo LgNumBanks _ addr;
           LET capVal <- {< pack (data @% "cap"), (data @% "val") >};
           LET bytes <- unpack (Array NumBanks (Bit 8)) #capVal;
           LETA ldBytes <- memReqCallHelp #idx #idxPlus1 #idxLsb #bytes memBankInits 0 [];
@@ -143,8 +169,8 @@ Section BankedMem.
                             then TruncToDynamicSizeArraySigned #shuffledLdBytes size
                             else TruncToDynamicSizeArrayUnsigned #shuffledLdBytes size);
           LET ldVal <- unpack FullCap (pack #ldSignVal);
-          LET straddle <- ZeroExtend 1 #idxLsb + size <= $NumBanks;
-          LET tagIdxBaseMsb <- ZeroExtendTruncMsb (LgNumMemBytes-1) #idx;
+          LET straddle <- ZeroExtend 1 #idxLsb + size > $NumBanks;
+          LET tagIdxBaseMsb <- ZeroExtendTruncMsb (pred LgNumMemBytes) #idx;
           LET tagIdx : Maybe _ <- Valid #tagIdxBaseMsb;
           LET tagIdxPlus1 : Maybe _ <- (STRUCT { "valid" ::= #straddle;
                                                  "data" ::= (#tagIdxBaseMsb + $1)}: Maybe _ @# ty);

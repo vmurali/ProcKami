@@ -11,6 +11,17 @@ Section MemSpec.
 
     Local Notation "@^ x" := ((procName ++ "_") ++ x)%string (at level 0).
 
+    Section Inst.
+      Variable addr: Addr @# ty.
+
+      Definition instReqSpec: ActionT ty Inst :=
+        ( Read memArr: Array NumMemBytes FullCapWithTag <- @^memArray;
+          LET instFullCap <- rmTag (#memArr@[ TruncMsbTo (AddrSz - LgNumBanks) LgNumBanks addr]);
+          LET isUpper <- unpack Bool
+                           (TruncMsbTo 1 (LgNumBanks - 1) (TruncLsbTo LgNumBanks (AddrSz - LgNumBanks) addr));
+          Ret (ITE #isUpper (pack (#instFullCap @% "cap")) (#instFullCap @% "val")) ).
+    End Inst.
+
     Section LoadStore.
       Variable pred: Bool @# ty.
       Variable addr: Addr @# ty.
@@ -19,44 +30,57 @@ Section MemSpec.
       Variable signed: Bool @# ty.
       Variable data: FullCapWithTag @# ty.
       
-      Local Ltac dischargeDiv8 :=
-        unfold NumBanks, FullCap, Cap, CapSz, Data; auto.
-
       Definition loadReqSpec: ActionT ty FullCapWithTag :=
-        ( Read memArr : Array (NumMemBytes * NumBanks) (Bit 8) <- @^memArray;
-          LET ldBytes <- readArrayConstSize addr #memArr NumBanks;
+        ( Read memArr: Array NumMemBytes FullCapWithTag <- @^memArray;
+          LET rowIdx <- TruncMsbTo (AddrSz - LgNumBanks) LgNumBanks addr;
+          LET row0: FullCapWithTag <- #memArr@[#rowIdx];
+          LET row1: FullCapWithTag <- #memArr@[#rowIdx + $1];
+          LET packedRows: Bit (Syntax.size (Array (2*NumBanks) (Bit 8))) <-
+                            ({< pack (rmTag #row0), pack (rmTag #row1) >});
+          LET twoRowBytes <- unpack (Array (2*NumBanks) (Bit 8)) #packedRows;
+          LET offset <- TruncLsbTo LgNumBanks (AddrSz - LgNumBanks) addr;
+          LET ldBytes <- readArrayConstSize #offset #twoRowBytes NumBanks;
           LET ldSignVal <- (IF signed
                             then TruncToDynamicSizeArraySigned #ldBytes size
                             else TruncToDynamicSizeArrayUnsigned #ldBytes size);
-          LET ldVal <- unpack FullCap (pack #ldSignVal);
-          Read tags: Array NumMemBytes Bool <- @^tagArray;
-          LET tagIdx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
-                          (TruncMsbTo (Xlen - Nat.log2_up NumBanks) (Nat.log2_up NumBanks) addr);
-          LET tag <- ITE isCap (#tags@[#tagIdx]) $$false;
-          Ret (STRUCT {
-                   "tag" ::= #tag;
-                   "cap" ::= #ldVal @% "cap";
-                   "val" ::= #ldVal @% "val" } : FullCapWithTag @# ty)).
+          LET retVal <- (IF isCap
+                         then #row0
+                         else (STRUCT { "tag" ::= $$false;
+                                        "cap" ::= Const ty (getDefaultConst Cap);
+                                        "val" ::= TruncLsbTo Xlen Xlen (pack #ldSignVal) }));
+          Ret #retVal ).
 
       Definition storeReqSpec: ActionT ty Void :=
-        ( Read memArr : Array (NumMemBytes * NumBanks) (Bit 8) <- @^memArray;
-          LET idxLsb <- TruncLsbTo (Nat.log2_up NumBanks) _ addr;
-          LET straddle <- ZeroExtend 1 #idxLsb + size <= $NumBanks;
-          LET tagIdx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
-                          (TruncMsbTo (Xlen - Nat.log2_up NumBanks) (Nat.log2_up NumBanks) addr);
-          Read tags: Array NumMemBytes Bool <- @^tagArray;
-          LET updTag <- #tags@[ #tagIdx <- ITE isCap (data @% "tag") $$false];
+        ( Read memArr: Array NumMemBytes FullCapWithTag <- @^memArray;
+          LET rowIdx <- TruncMsbTo (AddrSz - LgNumBanks) LgNumBanks addr;
+          LET row0: FullCapWithTag <- #memArr@[#rowIdx];
+          LET row1: FullCapWithTag <- #memArr@[#rowIdx + $1];
+          LET packedRows: Bit (Syntax.size (Array (2*NumBanks) (Bit 8))) <-
+                            ({< pack (rmTag #row0), pack (rmTag #row1) >});
+          LET twoRowBytes <- unpack (Array (2*NumBanks) (Bit 8)) #packedRows;
+          LET idxLsb <- TruncLsbTo LgNumBanks _ addr;
+          LET straddle <- ZeroExtend 1 #idxLsb + size > $NumBanks;
           (* #straddle implies !#isCap *)
-          LET updTagPlus1 <- #updTag@[ #tagIdx + $1 <- ITE #straddle $$false (#updTag@[#tagIdx + $1])];
+          LET updTagPlus1 <- ITE #straddle $$false (#row1 @% "tag");
           LET stCapVal <- {< pack (data @% "cap"), (data @% "val") >};
           LET stBytes <- unpack (Array NumBanks (Bit 8)) #stCapVal;
-          LET stArr <-
-            fold_left (fun newArr i => newArr @[addr + $i <- ITE ($i < size)
-                                                               (#stBytes@[$$(natToWord (Nat.log2_up NumBanks) i)])
-                                                               (newArr@[addr + $i])])
-              (seq 0 NumBanks) #memArr;
-          WriteIf pred Then @^memArray: Array (NumMemBytes * NumBanks) (Bit 8) <- #stArr;
-          WriteIf pred Then @^tagArray: Array NumMemBytes Bool <- #updTagPlus1;
+          LET offset <- TruncLsbTo LgNumBanks (AddrSz - LgNumBanks) addr;          
+          LET stRows <-
+            fold_left (fun newArr i => newArr @[#offset + $i <- ITE ($i < size)
+                                                                  (#stBytes@[$$(natToWord LgNumBanks i)])
+                                                                  (newArr@[#offset + $i])])
+              (seq 0 NumBanks) #twoRowBytes;
+          LET stRowsFullCap <- unpack (Pair FullCap FullCap) (pack #stRows);
+          LET stRow0 <- STRUCT { "tag" ::= $$false;
+                                 "cap" ::= #stRowsFullCap @% "fst" @% "cap";
+                                 "val" ::= #stRowsFullCap @% "fst" @% "val" };
+          LET stRow1 <- STRUCT { "tag" ::= #updTagPlus1;
+                                 "cap" ::= #stRowsFullCap @% "snd" @% "cap";
+                                 "val" ::= #stRowsFullCap @% "snd" @% "val" };
+          WriteIf pred Then @^memArray: Array NumMemBytes FullCapWithTag <-
+                                          (IF isCap
+                                           then #memArr@[#rowIdx <- data]
+                                           else #memArr@[#rowIdx <- #stRow0]@[#rowIdx + $1 <- #stRow1]);
           Retv ).
     End LoadStore.
   End ty.

@@ -3,55 +3,50 @@ Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.Core
 
 Section InBoundsTy.
   Variable ty: Kind -> Type.
-  Variable x : Addr @# ty.
-  Variable cap: FullCapWithTag @# ty.
-
   Local Open Scope kami_expr.
 
-  Definition inBounds :=
-    ( LETE inRangeVal <- getCapBaseTop (rmTag cap);
-      RetE (cap @% "tag" && (x >= #inRangeVal @% "base") && (ZeroExtend 1 x < #inRangeVal @% "top"))).
+  Section InBounds.
+    Variable x: Addr @# ty.
+    Variable cap: FullCap @# ty.
 
-  Definition systemAccess :=
-    ( LETC perms <- getCapPerms (cap @% "cap");
-      RetE (cap @% "tag" && #perms @% "SR") ).
+    Definition InBoundsAddr :=
+      ( LETE inRangeVal <- getCapBaseTop cap;
+        RetE ((x >= #inRangeVal @% "base") && (ZeroExtend 1 x < #inRangeVal @% "top"))).
+  End InBounds.
+
+  Section Subset.
+    (* c1 is a subset of c2 *)
+    Variable c1: FullCapWithTag @# ty.
+    Variable c2: FullCap @# ty.
+
+    Definition SubsetCap :=
+      ( LETE range1 <- getCapBaseTop (rmTag c1);
+        LETE range2 <- getCapBaseTop c2;
+        LETC perms1 <- getCapPerms (c1 @% "cap");
+        LETC perms2 <- getCapPerms (c2 @% "cap");
+        LETC permsSub <- isSubsetPerms #perms1 #perms2;
+        RetE (#permsSub && (#range1 @% "base" >= #range2 @% "base") && (#range1 @% "top" <= #range2 @% "top"))).
+  End Subset.
 End InBoundsTy.
 
-Section InBoundsInits.
-  Variable x: word AddrSz.
-  Variable rfInit: Fin.t NumRegs -> type FullCapWithTag.
-  Variable pccInit: type FullCapWithTag.
-
+Section Dominating.
   Local Open Scope kami_expr.
 
-  Definition InBoundsRf :=
-    exists i, evalLetExpr (inBounds (Const _ x) (Const _ (convTypeToConst (rfInit i)))) = true.
+  Definition DominatingCaps (l: list (type FullCap)) n (arr: type (Array n FullCapWithTag)) :=
+    forall addr: type Addr,
+      existsb (fun dc =>
+                 evalLetExpr (LETC testCap <- ###arr@[###addr];
+                              LETE isSubsetCap <- SubsetCap ###testCap ###dc;
+                              RetE (!(###testCap @% "tag") || ###isSubsetCap))) l = true.
 
-  Definition InBoundsPc :=
-    evalLetExpr (inBounds (Const _ x) (Const _ (convTypeToConst pccInit))) = true.
+  Definition DominatingCapsOverlap (l1 l2: list (type FullCap)) :=
+    exists (addr: type Addr), (existsb (fun c => evalLetExpr (InBoundsAddr ###addr ###c)) l1) = true /\
+                                (existsb (fun c => evalLetExpr (InBoundsAddr ###addr ###c)) l2) = true.
+End Dominating.
 
-  Definition SystemAccessRf :=
-    exists i, evalLetExpr (systemAccess (Const _ (convTypeToConst (rfInit i)))) = true.
-
-  Definition SystemAccessPc :=
-    evalLetExpr (systemAccess (Const _ (convTypeToConst pccInit))) = true.
-End InBoundsInits.
-
-Section InBoundsCoreConfig.
-  Variable x: word AddrSz.
-  Variable p: CoreConfigParams.
-
-  Let pccInit := evalExpr (STRUCT {"tag" ::= Const _ true ;
-                                    "cap" ::= Const _ (convTypeToConst (@pcCapInit p)) ;
-                                    "val" ::= Const _ (wcombine (@pcValInit p) (wzero 2)) })%kami_expr.
-  
-  Definition InBounds := InBoundsRf x (@regsInit p) \/ InBoundsPc x pccInit.
-
-  Definition SystemAccess := SystemAccessRf (@regsInit p) \/ SystemAccessPc pccInit.
-End InBoundsCoreConfig.
-
+(*
 Record IsolationSpec := {
-    cores: list CoreConfigParams;
+    cores: list (CoreConfigParams * list (type FullCap));
     disjointNamesCores: NoDup (map (@procName) cores);
     disjointBoundsCores: forall x p, In p cores -> InBounds x p -> forall q,
                                          In q cores -> InBounds x q -> @procName p = @procName q;
@@ -66,3 +61,4 @@ Record IsolationSpec := {
         evalExpr (Var type (SyntaxKind (Array _ (Bit 8)))(@memInit (@memParams p)) @[Const _ x])%kami_expr;
     trapCoreHasTrap: @hasTrap trapCore = true;
   }.
+*)

@@ -148,6 +148,13 @@ Definition CapPerms :=
       "LG" :: Bool; (* Permit Store into Global of loaded cap *)
       "GL" :: Bool }. (* Global *)
 
+Section SubsetPerms.
+  Variable ty: Kind -> Type.
+  Local Open Scope kami_expr.
+  Definition isSubsetPerms ty (p1 p2: CapPerms @# ty) (* p1 is a subset of p2 *) :=
+    (pack p1 .& pack p2) == pack p1.
+End SubsetPerms.
+
 Definition FullCapWithTag := STRUCT_TYPE { "tag" :: Bool ;
                                            "cap" :: Cap ;
                                            "val" :: Data }.
