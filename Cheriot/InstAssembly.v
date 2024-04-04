@@ -18,6 +18,7 @@ Definition getInstructionRel (inst: Instruction) (curr: Z) (immRel: bool) :=
   end.
 
 Inductive Prog :=
+| ProgSkip
 | ProgInst (inst: Instruction) (immRel: bool)
 | ProgSeq (p1 p2: Prog)
 | ProgDeclLabel (cont: Z -> Prog)
@@ -26,6 +27,7 @@ Inductive Prog :=
 | ProgAlign (size: Z).
 
 Inductive ResolvedProg :=
+| ResolvedProgSkip
 | ResolvedProgInst (inst: Instruction) (immRel: bool)
 | ResolvedProgSeq (p1 p2: ResolvedProg)
 | ResolvedProgData (size: Z) (val: list (word 8))
@@ -69,7 +71,7 @@ Section z.
     let pow2Width := Z.pow 2 (Z.of_nat width) in
     isNonNegZ z && Z.ltb z pow2Width.
 
-  Local Definition zStart0Bits (start: nat) := Z.eqb (Z.modulo (Z.pow 2 (Z.of_nat start)) z) 0%Z.
+  Local Definition zStart0Bits (start: nat) := Z.eqb (Z.modulo z (Z.pow 2 (Z.of_nat start))) 0%Z.
 
   Local Definition zWithinWidthStart (start width: nat) (signed: bool) :=
     zStart0Bits start && if signed
@@ -97,6 +99,7 @@ Definition getNextAlignDiff (sz curr: Z) :=
 
 Fixpoint getAddrMap (prog: Prog) (currLabelAddrMap: Z * Z * (Z -> Z)): Z * Z * (Z -> Z) :=
   match prog with
+  | ProgSkip => currLabelAddrMap
   | ProgInst inst rel => let '(curr, label, addrMap) := currLabelAddrMap in
                          (curr + instSize inst, label, addrMap)%Z
   | ProgSeq p1 p2 => getAddrMap p2 (getAddrMap p1 currLabelAddrMap)
@@ -116,6 +119,7 @@ Section setLabel.
   Variable addrMap: Z -> Z.
   Fixpoint setLabel (prog: Prog) (label: Z): ResolvedProg * Z :=
     match prog with
+    | ProgSkip => (ResolvedProgSkip, label)
     | ProgInst inst rel => (ResolvedProgInst inst rel, label)
     | ProgSeq p1 p2 => let '(p1', l2) := setLabel p1 label in
                        let '(p2', l) := setLabel p2 l2 in
@@ -129,6 +133,7 @@ End setLabel.
 
 Fixpoint getInstBytesResolved (prog: ResolvedProg) (curr: Z) (idx: nat): (((list (word 8) * Z) + (Instruction * bool))%type * nat) :=
   match prog with
+  | ResolvedProgSkip => (inl ([], curr), S idx)
   | ResolvedProgInst inst immRel =>
       match instEncoder (getInstructionRel inst curr immRel) with
       | Some instBytes => (inl (instBytes, curr + Z.of_nat (length instBytes))%Z, S idx)

@@ -109,7 +109,6 @@ Definition isInstNotCompressed ty sz (bitString : Bit sz @# ty) := isNotZero (Ze
 
 Definition isInstCompressed ty sz (bitString : Bit sz @# ty) := isZero (ZeroExtendTruncLsb 2 bitString).
 
-Definition IeInit := false.
 Definition MeieInit := false.
 Definition MtieInit := false.
 Definition MsieInit := false.
@@ -163,12 +162,7 @@ Definition createMemRFParam (n: nat) : MemBankInit :=
     memArrayName := prefixHex memArray n;
     memRfString := prefixHex "memArrayFileArg" n |}.
 
-Definition memBankInits := map createMemRFParam (zeroToN 8).
-
-Theorem lengthMemBankInits: length memBankInits = NumBanks.
-Proof.
-  reflexivity.
-Qed.
+Definition memBankInits := map createMemRFParam (seq 0 8).
 
 Class MemParams := {
     LgNumMemBytes: nat;

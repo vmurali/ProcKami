@@ -33,10 +33,7 @@ Section BankedMem.
                      evalLetExpr (LETC bytes <- unpack (Array NumBanks (Bit 8)) (pack (rmTag ###(memInit i)));
                                   RetE (ReadArrayConst ###bytes (fst mb)))%kami_expr) |}.
 
-  Definition memFiles := map createRegFile
-                           (match lengthMemBankInits in _ = Y return list (Fin.t Y * MemBankInit) with
-                            | eq_refl => finTag memBankInits
-                            end).
+  Definition memFiles := map createRegFile (finTag memBankInits).
 
   Lemma Nat_pow2_pred n: n > 0 -> Nat.pow 2 (pred n) * 2 = Nat.pow 2 n.
   Proof.
@@ -50,7 +47,7 @@ Section BankedMem.
     apply Nat_pow2_pred.
     apply LgNumMemBytesGt0.
   Qed.
-    
+
   (* On normal stores (i.e. stores of data, not stores of caps),
      we may do two writes of false into consecutive tags;
      therefore we have two-way banked booleans for tagFile *)

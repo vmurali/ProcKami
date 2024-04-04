@@ -1280,7 +1280,7 @@ Section InstBaseSpec.
          |} ] 
    |}.
 
-  Definition MStatusInit := if IeInit then Xlen 'h"8" else wzero Xlen.
+  Definition MStatusInit := Xlen 'h"80".
   Definition MIEInit : word Xlen := evalExpr (ZeroExtend (Xlen - 12)
                                                 ({<if MeieInit then Const type (4'h"8") else $0,
                                                     if MtieInit then Const type (4'h"8") else $0,
