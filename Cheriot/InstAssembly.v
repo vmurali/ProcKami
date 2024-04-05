@@ -216,7 +216,10 @@ Notation "'and' pd , ps1 , ps2" := (BuildInst "And" ps1 ps2 pd csr0 0%Z false) (
 Notation "'sll' pd , ps1 , ps2" := (BuildInst "SLL" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
 Notation "'srl' pd , ps1 , ps2" := (BuildInst "SRL" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
 Notation "'sra' pd , ps1 , ps2" := (BuildInst "SRA" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
-Notation "'lui' pd , ps1 , ps2" := (BuildInst "LUI" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'lui' pd , pimm" := (BuildInst "LUI" x0 x0 pd csr0 (Z.shiftr pimm 12%Z) false) (at level 65, only parsing): cheriot_assembly_scope.
+
+Notation "'%hi(' pimm )" := (Z.shiftr pimm%Z 12%Z) (at level 64): cheriot_assembly_scope.
+Notation "'%lo(' pimm )" := (Z.modulo pimm%Z (Z.pow 2 12)) (at level 64): cheriot_assembly_scope.
 
 Notation "'auicgp' pd , pimm" := (BuildInst "AUICGP" x0 x0 pd 0%Z pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
 Notation "'auipcc' pd , pimm" := (BuildInst "AUIPCC" x0 x0 pd 0%Z pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.

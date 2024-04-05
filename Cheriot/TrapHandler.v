@@ -1,9 +1,8 @@
 Require Import Kami.AllNotations ProcKami.Cheriot.InstAssembly ProcKami.Cheriot.Types.
 
-(* Doesn't contain reset code *)
 Section TrapHandler.
   Variable TimerQuantum: word Imm12Sz.
-  Variable NumProcesses: word (Imm12Sz - RegIdSz - 3).
+  Variable NumProcesses: word Imm12Sz.
 
   (* MTDC points to trap_handler_data, whose layout is as follows:
    * Cap to Timer (8 bytes)
@@ -43,7 +42,7 @@ Section TrapHandler.
       cspecialr tmp, mepcc ;;
       csc 0#[curr], tmp (* Store mepcc in slot for 0 register of current context *) ).
 
-  Definition mtdcTotalSize := (24 + ((wordVal _ NumProcesses) * ((Z.of_nat NumRegs) * 8)))%Z.
+  Definition MtdcTotalSize := (24 + ((wordVal _ NumProcesses) * ((Z.of_nat NumRegs) * 8)))%Z.
 
   (* mtdcAddr will contain mtdc cap in the end, curr contains current context in the beginning,
      curr will contain next context cap in the end *)
@@ -53,7 +52,9 @@ Section TrapHandler.
     (pf3: isSameRegScr mtdcAddr tmp = false) :=
     ( cspecialr mtdcAddr, mtdc ;;
       cincaddrimm curr, curr, ((Z.of_nat NumRegs) * 8) ;;
-      cincaddrimm tmp, mtdcAddr, mtdcTotalSize ;;
+      lui tmp, %hi(MtdcTotalSize) ;;
+      addi tmp, tmp, %lo(MtdcTotalSize) ;;
+      cincaddr tmp, mtdcAddr, tmp ;;
       LOCAL LSkip;
       blt curr, tmp, LSkip ;;
       cincaddrimm curr, mtdcAddr, 24 ;;
