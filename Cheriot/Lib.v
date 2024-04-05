@@ -279,24 +279,35 @@ End SigTriple.
 Module SigTripleOrder := NatOrder SigTriple.
 Module SigTripleSort := Sort SigTripleOrder.
 
-Section WordCombiner.
-  Variable initPos initSz: nat.
-  Variable init: word initSz.
-  Fixpoint wordCombiner (ls: list {x: nat * nat & word (snd x)}) :=
-    match ls return word (fold_right (fun new sum => sum + snd (projT1 new)) initSz ls) with
-    | nil => init
-    | x :: xs => wcombine (wordCombiner xs) (projT2 x)
-    end.
-End WordCombiner.
+
+Definition wordToListBool n (w: word n) := map (fun i => Z.testbit (wordVal _ w) (Z.of_nat i)) (seq 0 n).
+
+Fixpoint listBoolToString (bs: list bool) :=
+  match bs with
+  | nil => EmptyString
+  | b :: bs' => String (if b then "1"%char else "0"%char) (listBoolToString bs')
+  end.
+
+Fixpoint combineWords n (ls: list (word n)): word (length ls * n) :=
+  match ls return word (length ls * n) with
+  | nil => WO
+  | x :: xs => wconcat (combineWords xs) x
+  end.
+
+Definition printWordAsBits n (ws: list (word n)) := string_rev (listBoolToString (wordToListBool (combineWords ws))).
+
+Fixpoint wordCombiner (ls: list {x: nat * nat & word (snd x)}) :=
+  match ls return word (fold_right (fun new sum => sum + snd (projT1 new)) 0 ls) with
+  | nil => WO
+  | x :: xs => wcombine (wordCombiner xs) (projT2 x)
+  end.
 
 Section BitsCombiner.
   Variable ty: Kind -> Type.
-  Variable initPos initSz: nat.
-  Variable init: Bit initSz @# ty.
 
   Fixpoint bitsCombiner (ls: list {x: nat * nat & Bit (snd x) @# ty}) :=
-    match ls return Bit (fold_right (fun new sum => snd (projT1 new) + sum) initSz ls) @# ty with
-    | nil => init
+    match ls return Bit (fold_right (fun new sum => snd (projT1 new) + sum) 0 ls) @# ty with
+    | nil => Const ty WO
     | x :: xs => BinBit (Concat _ _) (bitsCombiner xs) (projT2 x)
     end.
 End BitsCombiner.

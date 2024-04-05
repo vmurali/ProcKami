@@ -93,16 +93,4 @@ Section TrapHandler.
     ( saveCurrentContext curr tmp pf2 ;;
       advanceContext mtdcAddr curr tmp pf1 pf2 pf3 ;;
       loadContextSetTimeCmpMRet mtdcAddr curr tmp pf1 pf2 pf3 ).
-
-  (*
-  Definition sizeTrapHandler := match getInstBytes (addi c1, c2, TimerQuantumZ) with
-                                | inl mc => mc
-                                | _ => nil
-                                end.
-
-  Eval compute in sizeTrapHandler.
-  Goal sizeTrapHandler = (4 * 82)%nat.
-    reflexivity.
-  Qed.
-   *)
 End TrapHandler.

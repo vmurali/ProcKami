@@ -37,7 +37,8 @@ Definition findInstEntry name : option InstEntrySpec :=
   find (fun x => String.eqb name (instName x)) specInstEntries.
 
 Ltac findInstEntryLtac name :=
-  let x := eval cbv [findInstEntry find String.eqb Ascii.eqb Bool.eqb instName specInstEntries mkBranchInst mkLdInst mkStInst
+  let x := eval cbv [findInstEntry find String.eqb Ascii.eqb Bool.eqb instName
+                       specInstEntries mkBranchInst mkLdInst mkStInst
              scrList isValidScrs legalizeScrs csrList isValidCsrs mkCsrEntry]
   in (findInstEntry name)
     in match x with
@@ -56,42 +57,13 @@ Definition splitInst (w: word InstSz): list (word 8) :=
 Definition splitCompInst (w: word CompInstSz): list (word 8) :=
   [truncLsb w; truncMsb w].
 
-Definition isNonNegZ (z : Z) := match z with
-                                | Z.neg _ => false
-                                | _ => true
-                                end.
-
-Section z.
-  Variable z: Z.
-  Local Definition zWithinWidthSigned (width: nat) :=
-    let pow2PredWidth := Z.pow 2 (Z.of_nat (width - 1)) in
-    Z.geb z (- pow2PredWidth)%Z && Z.ltb z pow2PredWidth.
-
-  Local Definition zWithinWidthUnsigned (width: nat) :=
-    let pow2Width := Z.pow 2 (Z.of_nat width) in
-    isNonNegZ z && Z.ltb z pow2Width.
-
-  Local Definition zStart0Bits (start: nat) := Z.eqb (Z.modulo z (Z.pow 2 (Z.of_nat start))) 0%Z.
-
-  Local Definition zWithinWidthStart (start width: nat) (signed: bool) :=
-    zStart0Bits start && if signed
-                         then zWithinWidthSigned width
-                         else zWithinWidthUnsigned width.
-End z.
-
-Definition instEncoder (i: Instruction) : option (list (word 8)) :=
+Definition instEncoder (i: Instruction) : list (word 8) :=
   let '(Build_Instruction ie cs1I cs2I cdI csrI immI) := i in
-  if zWithinWidthStart immI (immStart ie) (immEnd ie) (signExt (instProperties ie))
-  then Some (splitInst (encodeInst ie (getRegScrId cs1I) (getRegScrId cs2I)
-                          (getRegScrId cdI) (getCsrId csrI) (ZToWord _ immI)))
-  else None.
+  splitInst (encodeInst ie (getRegScrId cs1I) (getRegScrId cs2I) (getRegScrId cdI) (getCsrId csrI) (ZToWord _ immI)).
 
 Definition startAlign := 2%Z.
 
-Definition instSize (inst: Instruction) := match instEncoder inst with
-                                           | Some xs => Z.of_nat (length xs)
-                                           | None => 0%Z
-                                           end.
+Definition instSize (inst: Instruction) := Z.of_nat (length (instEncoder inst)).
 
 Definition getNextAlignDiff (sz curr: Z) :=
   let realCurr := Z.modulo (Z.pow 2 startAlign + curr) sz in
@@ -131,35 +103,77 @@ Section setLabel.
     end.
 End setLabel.
 
-Fixpoint getInstBytesResolved (prog: ResolvedProg) (curr: Z) (idx: nat): (((list (word 8) * Z) + (Instruction * bool))%type * nat) :=
+Fixpoint getInstBytesResolved (prog: ResolvedProg) (curr: Z): (list (word 8) * Z) :=
   match prog with
-  | ResolvedProgSkip => (inl ([], curr), S idx)
+  | ResolvedProgSkip => ([], curr)
   | ResolvedProgInst inst immRel =>
-      match instEncoder (getInstructionRel inst curr immRel) with
-      | Some instBytes => (inl (instBytes, curr + Z.of_nat (length instBytes))%Z, S idx)
-      | None => (inr (inst, immRel), idx)
-      end
-  | ResolvedProgSeq p1 p2 => match getInstBytesResolved p1 curr idx with
-                             | (inl (p1', curr2), i2) => match getInstBytesResolved p2 curr2 i2 with
-                                                         | (inl (p2', c), i) => (inl (p1' ++ p2', c), i)
-                                                         | (inr errProg, i) => (inr errProg, i)
-                                                         end
-                             | (inr errProg, i) => (inr errProg, i)
-                             end
-  | ResolvedProgData size vals => (inl (firstn (Z.to_nat size) vals, curr + size)%Z, S idx)
+      let instBytes := instEncoder (getInstructionRel inst curr immRel) in
+      (instBytes, (curr + Z.of_nat (length instBytes))%Z)
+  | ResolvedProgSeq p1 p2 => let '(p1', curr2) := getInstBytesResolved p1 curr in
+                             let '(p2', c) := getInstBytesResolved p2 curr2 in
+                             (p1' ++ p2', c)
+  | ResolvedProgData size vals => (firstn (Z.to_nat size) vals, (curr + size)%Z)
   | ResolvedProgAlign size =>
       let len := getNextAlignDiff size curr in
-      (inl (repeat (wzero 8) (Z.to_nat len), curr + len)%Z, S idx)
+      (repeat (wzero 8) (Z.to_nat len), (curr + len)%Z)
   end.
 
 (* Bytes of instruction or the first error with assembly instruction, whether it's relative or not and a line number *)
-Definition getInstBytes (prog: Prog): ((list (word 8)) + (Instruction * bool * nat))%type :=
+Definition getInstBytes (prog: Prog): (list (word 8))%type :=
   let '(_, _, addrMap) := getAddrMap prog (0%Z, 0%Z, fun i => (-1)%Z) in
   let '(resolved, _) := setLabel addrMap prog 0%Z in
-  match getInstBytesResolved resolved 0%Z 0 with
-  | (inl (xs, _), _) => inl xs
-  | (inr instR, line) => inr (instR, line)
+  let '(xs, _) := getInstBytesResolved resolved 0%Z in
+  xs.
+
+Definition isNonNegZ (z : Z) := match z with
+                                | Z.neg _ => false
+                                | _ => true
+                                end.
+
+Section z.
+  Variable z: Z.
+  Local Definition zWithinWidthSigned (width: nat) :=
+    let pow2PredWidth := Z.pow 2 (Z.of_nat (width - 1)) in
+    Z.geb z (- pow2PredWidth)%Z && Z.ltb z pow2PredWidth.
+
+  Local Definition zWithinWidthUnsigned (width: nat) :=
+    let pow2Width := Z.pow 2 (Z.of_nat width) in
+    isNonNegZ z && Z.ltb z pow2Width.
+
+  Local Definition zStart0Bits (start: nat) := Z.eqb (Z.modulo z (Z.pow 2 (Z.of_nat start))) 0%Z.
+
+  Local Definition zWithinWidthStart (start width: nat) (signed: bool) :=
+    zStart0Bits start && if signed
+                         then zWithinWidthSigned width
+                         else zWithinWidthUnsigned width.
+End z.
+
+Definition isImmValid (i: Instruction) :=
+  let '(Build_Instruction ie cs1I cs2I cdI csrI immI) := i in
+  zWithinWidthStart immI (immStart ie) (immEnd ie) (signExt (instProperties ie)).
+
+(* TODO: Use length instBytes when compressed is supported *)
+Fixpoint getInstBytesErrorResolved (prog: ResolvedProg) (curr: Z) (idx: nat):
+  (Z * nat * list (Instruction * bool * Z * nat)) :=
+  match prog with
+  | ResolvedProgSkip => (curr, S idx, [])
+  | ResolvedProgInst inst immRel =>
+      ((curr + 4)%Z, S idx,
+        if isImmValid (getInstructionRel inst curr immRel) then [] else [(inst, immRel, curr, idx)])
+  | ResolvedProgSeq p1 p2 => let '(curr2, i2, errs1) := getInstBytesErrorResolved p1 curr idx in
+                             let '(c, i, errs2) := getInstBytesErrorResolved p2 curr2 i2 in
+                             (c, i, errs1 ++ errs2)
+  | ResolvedProgData size vals => ((curr + size)%Z, S idx, [])
+  | ResolvedProgAlign size =>
+      let len := getNextAlignDiff size curr in
+      ((curr + len)%Z, S idx, [])
   end.
+
+Definition getInstBytesError (prog: Prog): list (Instruction * bool * Z * nat) :=
+  let '(_, _, addrMap) := getAddrMap prog (0%Z, 0%Z, fun i => (-1)%Z) in
+  let '(resolved, _) := setLabel addrMap prog 0%Z in
+  let '(_, _, errs) := getInstBytesErrorResolved resolved 0%Z 0 in
+  errs.
 
 Declare Scope cheriot_assembly_scope.
 Delimit Scope cheriot_assembly_scope with cheriot_assembly.

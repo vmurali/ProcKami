@@ -356,15 +356,16 @@ Section InstEntry.
       end.
 
     Definition encodeFullInstList :=
-      uniqId i ++
-        map (fun ie => existT _ (instPos ie, _) (encodeImmField (immPos ie))) (immEncoder i) ++
-        (if hasCs1 (instProperties i) then [existT _ rs1FixedField cs1] else []) ++
-        (if hasCs2 (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
-        (if hasCd (instProperties i) then [existT _ rdFixedField cd] else []) ++
-        (if hasScr (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
-        (if hasCsr (instProperties i) then [existT _ immField csr] else []).
+      fieldVal (0, 2) (2'b"11") ::
+        (uniqId i ++
+           map (fun ie => existT _ (instPos ie, _) (encodeImmField (immPos ie))) (immEncoder i) ++
+           (if hasCs1 (instProperties i) then [existT _ rs1FixedField cs1] else []) ++
+           (if hasCs2 (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
+           (if hasCd (instProperties i) then [existT _ rdFixedField cd] else []) ++
+           (if hasScr (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
+           (if hasCsr (instProperties i) then [existT _ immField csr] else [])).
 
-    Definition encodeInst := @truncLsb InstSz _ ((wordCombiner (2'b"11") (SigWordSort.sort encodeFullInstList))).
+    Definition encodeInst := @truncLsb InstSz _ ((wordCombiner (SigWordSort.sort encodeFullInstList))).
   End Encoder.
 
   Section Decoder.
@@ -388,7 +389,7 @@ Section InstEntry.
       match decodePartialImmList with
       | nil => wzero Xlen
       | existT (start, _) _ :: _ =>
-          let res := wordCombiner (wzero start) decodePartialImmList in
+          let res := wordCombiner (fieldVal (0, start) (wzero start) :: decodePartialImmList) in
           wconcat
             (if (andb (signExt (instProperties i)) (weqb (get_msb res) WO~1))
              then wones _
@@ -424,7 +425,8 @@ Section InstEntry.
       match decExprs with
       | nil => Const ty (wzero Xlen)
       | (existT (start, _) _) :: _ =>
-          let res := bitsCombiner (Const ty (wzero start)) decExprs in
+          let res :=
+            bitsCombiner (existT (fun y => Bit (snd y) @# ty) (0, start) (Const ty (wzero start)) :: decExprs) in
           if signExt (instProperties i)
           then SignExtendTruncLsb Xlen res
           else ZeroExtendTruncLsb Xlen res

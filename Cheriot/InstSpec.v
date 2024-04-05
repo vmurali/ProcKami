@@ -1400,16 +1400,10 @@ Section InstBaseSpec.
     | _, _ => false
     end.
 
-  Fixpoint wordToOptBoolList n (w: word n) :=
-    match n with
-    | 0 => nil
-    | S m => Some (Z.eqb (wordVal 1 (@truncLsb 1 _ w)) 1) :: wordToOptBoolList (@truncMsb m _ w)
-    end.
-
   Local Fixpoint sortedUIdToOptBoolList (curr: nat) (sortedUId: UniqId) :=
     match sortedUId with
     | existT (pos, width) w :: xs =>
-        repeat None (pos - curr) ++ wordToOptBoolList w ++ sortedUIdToOptBoolList (pos + width) xs
+        repeat None (pos - curr) ++ map Some (wordToListBool w) ++ sortedUIdToOptBoolList (pos + width) xs
     | nil => nil
     end.
 
@@ -1433,7 +1427,7 @@ Section InstBaseSpec.
     ltac:(let x := 
             eval cbv [filterInsts specFuncUnits concat map mkFuncEntry insts instsFull localFuncInputFull fold_left
                         fold_right localFuncInput uniqIdToOptBoolList sortedUIdToOptBoolList
-                        wordToOptBoolList isDifferingBoolList] in specFuncUnits in
+                        wordToListBool isDifferingBoolList] in specFuncUnits in
             match x with
             | [ {| insts := ?ins |} ] =>
                 let y := eval cbn [Xlen orb andb Extension_eqb Nat.eqb existsb supportedExts] in
