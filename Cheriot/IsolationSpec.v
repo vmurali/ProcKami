@@ -78,6 +78,7 @@ Section IsolationSpec.
           evalExpr (Var type (SyntaxKind (Array _ FullCapWithTag))(@memInit (@memParams (fst c))) @[###x]);
       trapCoreHasTrap: @hasTrap trapCore = true;
     }.
+End IsolationSpec.
 
 (*
 - Initialize memory with trap handler (at mtcc) and trap data (at mtdc)
