@@ -69,12 +69,10 @@ Section ValidInits.
                   RetE ((###perms @% "EX") && (###perms @% "SR") && !###sealed && ###aligned
                         && (###baseBound && ###topBound))) = true.
 
-  Definition MtdcValid (mtdcCap: type Cap) (mtdcVal: type Addr) numProcesses :=
+  Definition MtdcValid (mtdcCap: type Cap) (mtdcVal: type Addr) mtdcSize :=
     evalLetExpr ( LETE baseTop <- getCapBaseTop (STRUCT {"cap" ::= ###mtdcCap; "val" ::= ###mtdcVal});
                   LETC baseBound <- ###mtdcVal >= (###baseTop @% "base");
-                  LETC topBound <- (ZeroExtend 1 ###mtdcVal +
-                                      Const type (ZToWord _ (16 + (Z.of_nat (numProcesses*NumBanks*NumRegs))))
-                                    <= (###baseTop @% "top"));
+                  LETC topBound <- (ZeroExtend 1 ###mtdcVal + $mtdcSize <= (###baseTop @% "top"));
                   RetE (###baseBound && ###topBound)) = true.
 End ValidInits.
 
@@ -173,18 +171,21 @@ Class MemParams := {
 
 Class CoreConfigParams := {
     procName : string;
-    numProcesses: nat;
-    hasTrap: bool;
     memParams: MemParams;
     regsInit: Fin.t 32 -> type FullCapWithTag;
     pcCapInit: type Cap;
     pcValInit: word 30;
     pccValidThm: PccValid pcCapInit;
-    mtccValInit: word 30;
+    hasTrap: bool;
+    mtccCap: type Cap;
+    mtccVal: word 30;
     mtccSize: nat;
-    mtccValidThm: MtccValid ExecRootCap (wcombine mtccValInit (wzero 2)) mtccSize;
-    mtdcValInit: word 30;
-    mtdcValidThm: MtdcValid DataRootCap (wcombine mtdcValInit (wzero 2)) numProcesses }.
+    mtccValidThm: MtccValid mtccCap (wcombine mtccVal (wzero 2)) mtccSize;
+    mtdcCap: type Cap;
+    mtdcVal: word 30;
+    mtdcSize: nat;
+    mtdcValidThm: MtdcValid DataRootCap (wcombine mtdcVal (wzero 2)) mtdcSize;
+    mScratchCCap: type Cap }.
 
 Record InstProperties :=
   { hasCs1           : bool ;

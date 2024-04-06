@@ -1,8 +1,8 @@
 Require Import Kami.AllNotations ProcKami.Cheriot.InstAssembly ProcKami.Cheriot.Types.
 
 Section TrapHandler.
-  Variable TimerQuantum: word Imm12Sz.
-  Variable NumProcesses: word Imm12Sz.
+  Variable TimerQuantum: word 12.
+  Variable NumProcesses: word 12.
 
   (* MTDC points to trap_handler_data, whose layout is as follows:
    * Cap to Timer (8 bytes)

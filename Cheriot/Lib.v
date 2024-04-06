@@ -412,3 +412,75 @@ Section EvalProp.
     end.
 End EvalProp.
   
+Section NoDupSplit.
+  Variable n: nat.
+  Lemma NotInSplit x:
+    forall ls,
+      Forall (fun y => rmStringPrefix n x <> rmStringPrefix n y \/ substring 0 n x <> substring 0 n y) ls ->
+      ~ In x ls.
+  Proof.
+    induction ls; simpl; auto; intros.
+    remember (a :: ls) as sth1.
+    destruct H.
+    - discriminate.
+    - inversion Heqsth1; subst; clear Heqsth1.
+      specialize (IHls H0).
+      intro.
+      destruct H1; [|tauto].
+      subst.
+      destruct H; tauto.
+  Qed.
+
+  Theorem NoDupSplit:
+    forall (ls: list string),
+      (ForallOrdPairs (fun x y => rmStringPrefix n x <> rmStringPrefix n y \/
+                                    substring 0 n x <> substring 0 n y) ls) ->
+      NoDup ls.
+  Proof.
+    induction ls; simpl; auto; intros.
+    - constructor.
+    - remember (a :: ls) as sth3.
+      destruct H; [constructor|].
+      inversion Heqsth3; subst; clear Heqsth3.
+      specialize (IHls H0).
+      constructor; [|assumption].
+      apply NotInSplit.
+      assumption.
+  Qed.
+
+  Lemma NotInSplit_comp x:
+    forall ls,
+      Forall (fun y => rmStringPrefix n x <> rmStringPrefix n y \/
+                         String.eqb (substring 0 n x) (substring 0 n y) = false) ls ->
+      ~ In x ls.
+  Proof.
+    induction ls; simpl; auto; intros.
+    remember (a :: ls) as sth1.
+    destruct H.
+    - discriminate.
+    - inversion Heqsth1; subst; clear Heqsth1.
+      specialize (IHls H0).
+      intro.
+      destruct H1; [|tauto].
+      subst.
+      rewrite String.eqb_neq in H.
+      destruct H; tauto.
+  Qed.
+
+  Theorem NoDupSplit_comp:
+    forall (ls: list string),
+      (ForallOrdPairs (fun x y => rmStringPrefix n x <> rmStringPrefix n y \/
+                                    String.eqb (substring 0 n x) (substring 0 n y) = false) ls) ->
+      NoDup ls.
+  Proof.
+    induction ls; simpl; auto; intros.
+    - constructor.
+    - remember (a :: ls) as sth3.
+      destruct H; [constructor|].
+      inversion Heqsth3; subst; clear Heqsth3.
+      specialize (IHls H0).
+      constructor; [|assumption].
+      apply NotInSplit_comp.
+      assumption.
+  Qed.
+End NoDupSplit.

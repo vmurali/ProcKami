@@ -31,21 +31,21 @@ Section Prefix.
             (Some (SyntaxConst
                      (convTypeToConst
                         (evalExpr (STRUCT { "tag" ::= Const type true;
-                                            "cap" ::= ExecRootCapExpr type;
-                                            "val" ::= Const _ (wcombine mtccValInit (wzero 2))})))))) ::
+                                            "cap" ::= Const _ (convTypeToConst mtccCap);
+                                            "val" ::= Const _ (wcombine mtccVal (wzero 2))})))))) ::
           (@^mtdcReg,
             existT _ (SyntaxKind FullCapWithTag)
               (Some (SyntaxConst
                        (convTypeToConst
                           (evalExpr (STRUCT { "tag" ::= Const type true;
-                                              "cap" ::= DataRootCapExpr type;
-                                              "val" ::= Const _ (wcombine mtdcValInit (wzero 2))})))))) ::
+                                              "cap" ::= Const _ (convTypeToConst mtdcCap);
+                                              "val" ::= Const _ (wcombine mtdcVal (wzero 2))})))))) ::
           (@^mScratchCReg,
             existT _ (SyntaxKind FullCapWithTag)
               (Some (SyntaxConst
                        (convTypeToConst
                           (evalExpr (STRUCT { "tag" ::= Const type true;
-                                              "cap" ::= SealRootCapExpr type;
+                                              "cap" ::= Const _ (convTypeToConst mScratchCCap);
                                               "val" ::= Const _ (wzero Xlen)})))))) ::
           (@^mepccReg, existT _ (SyntaxKind FullCapWithTag) (Some (SyntaxConst (getDefaultConst FullCapWithTag)))) ::
           (@^mStatusReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::
