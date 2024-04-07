@@ -8,7 +8,7 @@ Notation "'IfE' cexpr 'then' tact 'else' fact 'as' name ; cont " :=
 
 Section Run.
   Context `{coreConfigParams: CoreConfigParams}.
-  Instance memParamsInstance: MemParams := memParams.
+  Instance memParamsInst: MemParams := memParams.
 
   Variable scrs: list ScrReg.
   Variable csrs: list CsrReg.
