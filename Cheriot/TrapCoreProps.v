@@ -22,6 +22,27 @@ Section Props.
               evalExpr (###f@[###start + $i]) = evalExpr (###g@[Const type (natToWord m i)]).
 End Props.
 
+Section ValidInits.
+  Local Open Scope kami_expr.
+  Definition MtccValid (mtccCap: type Cap) (mtccVal: type Addr) mtccSize :=
+    evalLetExpr ( LETC perms <- getCapPerms ###mtccCap;
+                  LETC sealed <- isCapSealed ###mtccCap;
+                  LETC aligned <- isZero (UniBit (TruncLsb 2 _) ###mtccVal);
+                  LETE baseTop <- getCapBaseTop (STRUCT {"cap" ::= ###mtccCap; "val" ::= ###mtccVal});
+                  LETC baseBound <- ###mtccVal >= (###baseTop @% "base");
+                  LETC mtccSizeConst <- Const type (ZToWord _ mtccSize);
+                  LETC topBound <- (ZeroExtend 1 ###mtccVal + ###mtccSizeConst <= (###baseTop @% "top"));
+                  RetE ((###perms @% "EX") && (###perms @% "SR") && !###sealed && ###aligned
+                        && (###baseBound && ###topBound))) = true.
+
+  Definition MtdcValid (mtdcCap: type Cap) (mtdcVal: type Addr) mtdcSize :=
+    evalLetExpr ( LETE baseTop <- getCapBaseTop (STRUCT {"cap" ::= ###mtdcCap; "val" ::= ###mtdcVal});
+                  LETC baseBound <- ###mtdcVal >= (###baseTop @% "base");
+                  LETC mtdcSizeConst <- Const type (ZToWord _ mtdcSize);
+                  LETC topBound <- (ZeroExtend 1 ###mtdcVal + ###mtdcSizeConst <= (###baseTop @% "top"));
+                  RetE (###baseBound && ###topBound)) = true.
+End ValidInits.
+
 Section TrapCoreSpec.
   Context `{coreConfigParams: CoreConfigParams}.
   Instance memParamsInst: MemParams := @memParams coreConfigParams.
@@ -62,6 +83,8 @@ Section TrapCoreSpec.
     }.
 End TrapCoreSpec.
 
- (*
- Initialize memory with trap handler (at mtcc) and trap data (at mtdc)
- *)
+(*
+- Fix curr vs mtdc
+- Move MtccValid and MtdcValid here and fix it
+- Initialize memory with trap handler (at mtcc) and trap data (at mtdc)
+*)

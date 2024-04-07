@@ -1,6 +1,6 @@
 Require Import Kami.AllNotations.
 Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.CoreConfig.
-Require Import ProcKami.Cheriot.InstAssembly ProcKami.Cheriot.TrapHandler.
+Require Import ProcKami.Cheriot.InstAssembly ProcKami.Cheriot.TrapHandler ProcKami.Cheriot.TrapCoreProps.
 
 Section InBoundsPermsTy.
   Variable ty: Kind -> Type.
@@ -99,37 +99,14 @@ Section IsolationSpec.
         In c cores -> In dc (snd c) -> evalLetExpr (InBoundsAddr (###x) (###dc)) = true ->
         evalExpr (MemVar (@memInit (@memParams trapCore)) @[###x]) =
           evalExpr (MemVar (@memInit (@memParams (fst c))) @[###x]);
-      trapCoreHasTrap: @hasTrap trapCore = true;
-      mtccValXlen := wcombine (@mtccVal trapCore) (wzero 2) : type Addr;
-      mtccValidThm: MtccValid (@mtccCap trapCore) mtccValXlen trapHandlerSize;
+
+      trapCoreProps: @TrapCoreSpec trapCore;
+      
       mtdcValXlen := wcombine (@mtdcVal trapCore) (wzero 3) : type Addr;
-      mtdcValidThm: MtdcValid (@mtdcCap trapCore) mtdcValXlen (MtdcTotalSize numCoresWord);
-      mtccFullCap := evalExpr (STRUCT { "cap" ::= ###(@mtccCap trapCore);
-                                        "val" ::= ###mtccValXlen });
+      curr := (MemVar (@memInit (@memParams trapCore))) @[###mtdcValXlen + $16];
       mtdcFullCap := evalExpr (STRUCT { "cap" ::= ###(@mtdcCap trapCore);
                                         "val" ::= ###mtdcValXlen });
-      curr := (MemVar (@memInit (@memParams trapCore))) @[###mtdcValXlen + $16];
-      currTagged: evalExpr (curr @% "tag") = true;
-      currCapIsMtdcCap: evalExpr (curr @% "cap") = @mtdcCap trapCore;
-      currAddr: exists n, (n < wordVal _ numCoresWord)%Z /\
-                            evalExpr (curr @% "val") =
-                              wadd mtdcValXlen (ZToWord Xlen (24 + (n * (Z.of_nat NumRegs * 8))));
-      currReadWriteMc: evalExpr (hasRead (rmTag curr @% "cap") && hasWrite (rmTag curr @% "cap") &&
-                                   hasMC (rmTag curr @% "cap")) = true;
       mtdcDominatesCurr: DominatingCapsSingle [mtdcFullCap] (evalExpr (rmTag curr));
-      mTimeCap: type FullCap;
-      mTimeCmpCap: type FullCap;
-      mTimeCapEq: mTimeCap = (evalExpr (rmTag ((MemVar (@memInit (@memParams trapCore))) @[###mtdcValXlen])));
-      mTimeCmpCapEq: mTimeCmpCap =
-                       (evalExpr (rmTag ((MemVar (@memInit (@memParams trapCore))) @[###mtdcValXlen + $8])));
-      mTimeSize: CurrPlusSizeInBoundsProp mTimeCap 8;
-      mTimeCmpSize: CurrPlusSizeInBoundsProp mTimeCmpCap 4;
-      mTimeRead: evalExpr (hasRead (###mTimeCap @% "cap")) = true;
-      mTimeCmpReadWrite: evalExpr (hasRead (###mTimeCap @% "cap") && hasWrite (###mTimeCmpCap @% "cap")) = true;
-      mtdcCapReadWriteMc: evalExpr (hasRead ###(@mtdcCap trapCore) && hasWrite ###(@mtdcCap trapCore) &&
-                                      hasMC ###(@mtdcCap trapCore)) = true;
-      disjointCaps: ForallOrdPairs DominatingCapsNoOverlap
-                      ([mtccFullCap] :: [mtdcFullCap] :: [mTimeCap] :: [mTimeCmpCap] :: map snd cores)
     }.
 End IsolationSpec.
 

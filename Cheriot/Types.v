@@ -53,30 +53,9 @@ End Roots.
 Definition rmTag ty (cap: FullCapWithTag @# ty) : FullCap @# ty :=
   (STRUCT { "cap" ::= cap @% "cap"; "val" ::= cap @% "val" })%kami_expr.
 
-Section ValidInits.
-  Local Open Scope kami_expr.
-  Definition PccValid (pcCap: type Cap) :=
-    evalLetExpr ( LETC perms <- getCapPerms ###pcCap;
-                  RetE (###perms @% "EX" && !(isCapSealed ###pcCap))) = true.
-
-  Definition MtccValid (mtccCap: type Cap) (mtccVal: type Addr) mtccSize :=
-    evalLetExpr ( LETC perms <- getCapPerms ###mtccCap;
-                  LETC sealed <- isCapSealed ###mtccCap;
-                  LETC aligned <- isZero (UniBit (TruncLsb 2 _) ###mtccVal);
-                  LETE baseTop <- getCapBaseTop (STRUCT {"cap" ::= ###mtccCap; "val" ::= ###mtccVal});
-                  LETC baseBound <- ###mtccVal >= (###baseTop @% "base");
-                  LETC mtccSizeConst <- Const type (ZToWord _ mtccSize);
-                  LETC topBound <- (ZeroExtend 1 ###mtccVal + ###mtccSizeConst <= (###baseTop @% "top"));
-                  RetE ((###perms @% "EX") && (###perms @% "SR") && !###sealed && ###aligned
-                        && (###baseBound && ###topBound))) = true.
-
-  Definition MtdcValid (mtdcCap: type Cap) (mtdcVal: type Addr) mtdcSize :=
-    evalLetExpr ( LETE baseTop <- getCapBaseTop (STRUCT {"cap" ::= ###mtdcCap; "val" ::= ###mtdcVal});
-                  LETC baseBound <- ###mtdcVal >= (###baseTop @% "base");
-                  LETC mtdcSizeConst <- Const type (ZToWord _ mtdcSize);
-                  LETC topBound <- (ZeroExtend 1 ###mtdcVal + ###mtdcSizeConst <= (###baseTop @% "top"));
-                  RetE (###baseBound && ###topBound)) = true.
-End ValidInits.
+Definition PccValid (pcCap: type Cap) :=
+  evalLetExpr ( LETC perms <- getCapPerms ###pcCap;
+                RetE (###perms @% "EX" && !(isCapSealed ###pcCap)))%kami_expr = true.
 
 Theorem Extension_eq_dec: forall (e1 e2: Extension), {e1 = e2} + {e1 <> e2}.
 Proof.
