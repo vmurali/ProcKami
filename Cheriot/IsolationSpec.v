@@ -43,14 +43,17 @@ Section InBoundsPermsTy.
       LETC baseBound : Bool <- #range @% "base" >= cap @% "val";
       LETC topBound : Bool <- (ZeroExtend 1 (cap @% "val") + $sz) <= #range @% "top";
       RetE (#baseBound && #topBound )).
-
 End InBoundsPermsTy.
 
-Definition CurrPlusSizeInBoundsProp (cap: type FullCap) sz :=
-  evalLetExpr (CurrPlusSizeInBounds ###cap sz)%kami_expr = true.
-
-Section Dominating.
+Section Props.
   Local Open Scope kami_expr.
+
+  Definition SubArrayMatch k n (f: type (Array (Nat.pow 2 n) k)) m (g: type (Array (Nat.pow 2 m) k))
+    (start: type (Bit n)) :=
+    forall i, (0 <= i)%nat -> (i < Nat.pow 2 m)%nat ->
+              evalExpr (###f@[###start + $i]) = evalExpr (###g@[Const type (natToWord m i)]).
+  
+  Definition CurrPlusSizeInBoundsProp (cap: type FullCap) sz := evalLetExpr (CurrPlusSizeInBounds ###cap sz) = true.
 
   Definition DominatingCaps (l: list (type FullCap)) n (arr: type (Array n FullCapWithTag)) :=
     forall sz (idx: type (Bit sz)),
@@ -65,7 +68,7 @@ Section Dominating.
   Definition DominatingCapsOverlap (l1 l2: list (type FullCap)) :=
     exists (addr: type Addr), (existsb (fun c => evalLetExpr (InBoundsPermsAddr ###addr ###c)) l1) = true /\
                                 (existsb (fun c => evalLetExpr (InBoundsPermsAddr ###addr ###c)) l2) = true.
-End Dominating.
+End Props.
 
 Definition DominatingCapsNoOverlap (l1 l2: list (type FullCap)) := ~ (DominatingCapsOverlap l1 l2).
 
