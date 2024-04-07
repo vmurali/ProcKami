@@ -2,6 +2,10 @@ Require Import Kami.AllNotations.
 Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
 Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.MemSpec.
 
+Notation "'IfE' cexpr 'then' tact 'else' fact 'as' name ; cont " :=
+  (IfElseE cexpr%kami_expr tact fact (fun name => cont))
+    (at level 14, right associativity) : kami_expr_scope.
+
 Section Run.
   Context `{coreConfigParams: CoreConfigParams}.
   Instance memParamsInstance: MemParams := memParams.
@@ -19,11 +23,25 @@ Section Run.
 
   Local Notation "@^ x" := ((procName ++ "_") ++ x)%string (at level 0).
 
-  Definition handleException
-    (pred isException baseException scrException pcCapException wbScr wbCsr changePcVal changePcCap: Bool @# ty)
-    (newPcVal: Addr @# ty) (newPcCap: Cap @# ty) (newScr: FullCapWithTag @# ty) (newCsr: Data @# ty)
-    (scrIdx: ScrId @# ty) (csrIdx: Bit CsrIdSz @# ty) (exceptionCause exceptionVal: Data @# ty)
-    (exceptionIdx: Bit RegFixedIdSz @# ty) : ActionT ty Void :=
+  Definition ExceptionStruct :=
+    STRUCT_TYPE { "mtiReset?" :: Bool;
+                  "pcVal" :: Addr;
+                  "changePcCap?" :: Bool;
+                  "pcCap" :: Cap;
+                  "exception?" :: Bool;
+                  "exceptionCause" :: Data;
+                  "exceptionValue" :: Data;
+                  "baseException?" :: Bool;
+                  "wbScr?" :: Bool;
+                  "scr" :: FullCapWithTag;
+                  "scrException?" :: Bool;
+                  "wbCsr?" :: Bool;
+                  "csrVal" :: Data;
+                  "scrId" :: ScrId;
+                  "csrId" :: Bit CsrIdSz;
+                  "exceptionIdx" :: Bit RegFixedIdSz }.
+
+  Definition handleException (inp: ExceptionStruct @# ty) :=
     ( Read pcVal : Addr <- @^pcValReg;
       Read pcCap : Cap <- @^pcCapReg;
       LET pcc : FullCapWithTag <- STRUCT { "tag" ::= $$true;
@@ -35,69 +53,64 @@ Section Run.
                               Ret #mtcc )
                           else Ret #pcc ;
 
-      WriteIf pred Then
-        @^pcValReg : Addr <- (IF isException
-                              then #exceptionPc @% "val"
-                              else ITE changePcVal newPcVal #pcVal);
-      WriteIf pred Then
-        @^pcCapReg : Cap <- (IF isException
-                             then #exceptionPc @% "cap"
-                             else ITE changePcCap newPcCap #pcCap);
+      Write @^pcValReg : Addr <- (IF inp @% "exception?"
+                                  then #exceptionPc @% "val"
+                                  else inp @% "pcVal");
+      Write @^pcCapReg : Cap <- (IF inp @% "exception?"
+                                 then #exceptionPc @% "cap"
+                                 else ITE (inp @% "changePcCap?") (inp @% "pcCap") #pcCap);
 
       if hasTrap
       then
-        ( Read mepccVal : FullCapWithTag <- @^mepccReg;
-          WriteIf pred Then
-            @^mepccReg : FullCapWithTag <- (IF isException
-                                            then #pcc
-                                            else (IF scrIdx == $$(getRegScrId mepcc)
-                                                  then newScr
-                                                  else #mepccVal));
+        ( WriteIf (inp @% "mtiReset?") Then @^mtiReg : Bool <- $$false;
+          Read mepccVal : FullCapWithTag <- @^mepccReg;
+          Write @^mepccReg : FullCapWithTag <- (IF inp @% "exception?"
+                                                then #pcc
+                                                else (IF inp @% "scrId" == $$(getRegScrId mepcc)
+                                                      then inp @% "scr"
+                                                      else #mepccVal));
 
           Read mStatusVal : Data <- @^mStatusReg;
           LET mStatusArr <- unpack (Array Xlen Bool) #mStatusVal;
           LET newMStatusVal <- pack (UpdateArrayConst (UpdateArrayConst #mStatusArr (@natToFin 3 _) ($$false))
                                        (@natToFin 7 _) (#mStatusArr ![3]));
-          WriteIf pred Then
-            @^mStatusReg : Data <- (IF isException
-                                    then #newMStatusVal
-                                    else (IF csrIdx == $$(getCsrId mstatus)
-                                          then newCsr
-                                          else #mStatusVal));
+          Write @^mStatusReg : Data <- (IF inp @% "exception?"
+                                        then #newMStatusVal
+                                        else (IF inp @% "csrId" == $$(getCsrId mstatus)
+                                              then inp @% "csrVal"
+                                              else #mStatusVal));
 
           Read mCauseVal : Data <- @^mCauseReg;
-          WriteIf pred Then
-            @^mCauseReg : Data <- (IF isException
-                                   then ITE baseException exceptionCause $CapException
-                                   else (IF wbScr && csrIdx == $$(getCsrId mcause)
-                                         then newCsr
-                                         else #mCauseVal));
+          Write @^mCauseReg : Data <- (IF inp @% "exception?"
+                                       then ITE (inp @% "baseException?") (inp @% "exceptionCause") $CapException
+                                       else (IF (inp @% "wbScr?") && (inp @% "csrId") == $$(getCsrId mcause)
+                                             then inp @% "csrVal"
+                                             else #mCauseVal));
           
           Read mtValVal : Data <- @^mtValReg;
-          WriteIf pred Then
-            @^mtValReg : Data <- (IF isException
-                                  then ITE baseException
-                                         exceptionVal
-                                         (ZeroExtendTo Xlen
-                                            (pack (STRUCT { "S" ::= scrException;
-                                                            "capIdx" ::= exceptionIdx;
-                                                            "cause" ::= TruncLsbTo RegFixedIdSz _
-                                                                          exceptionCause })))
-                                  else (IF wbCsr && csrIdx == $$(getCsrId mtval)
-                                        then newCsr
-                                        else #mtValVal));
+          Write @^mtValReg : Data <- (IF inp @% "exception?"
+                                      then ITE (inp @% "baseException?")
+                                             (inp @% "exceptionValue")
+                                             (ZeroExtendTo Xlen
+                                                (pack (STRUCT { "S" ::= inp @% "scrException?";
+                                                                "capIdx" ::= inp @% "exceptionIdx";
+                                                                "cause" ::= TruncLsbTo RegFixedIdSz _
+                                                                              (inp @% "exceptionCause") })))
+                                      else (IF (inp @% "wbCsr?") && (inp @% "csrId") == $$(getCsrId mtval)
+                                            then inp @% "csrVal"
+                                            else #mtValVal));
           
           
           LETA _ <- writeRegsPred procName scrRegInfos
-                      (pred && !isException && wbScr && (scrIdx != $$(getRegScrId mepcc)))
-                      scrIdx newScr;
+                      (!(inp @% "exception?") && ((inp @% "wbScr?") && (inp @% "scrId") != $$(getRegScrId mepcc)))
+                      (inp @% "scrId") (inp @% "scr");
 
           LETA _ <- writeRegsPred procName csrRegInfos
-                      (pred && !isException && wbCsr &&
-                         (csrIdx != $$(getCsrId mstatus)) &&
-                         (csrIdx != $$(getCsrId mcause)) &&
-                         (csrIdx != $$(getCsrId mtval)))
-                      csrIdx newCsr;
+                      (!(inp @% "exception?") && (inp @% "wbCsr?") &&
+                         (inp @% "csrId" != $$(getCsrId mstatus)) &&
+                         (inp @% "csrId" != $$(getCsrId mcause)) &&
+                         (inp @% "csrId" != $$(getCsrId mtval)))
+                      (inp @% "csrId") (inp @% "csrVal");
 
           Retv
         )
@@ -114,92 +127,113 @@ Section Run.
         Retv )
       else Retv ).
 
-  Definition specTimerInterruptTakeRule :=
-    ( if hasTrap
-      then
-        ( Read mti : Bool <- @^mtiReg;
-          Write @^mtiReg : Bool <- $$false;
-          handleException ($$true) #mti ($$true) ($$false) ($$false) ($$false) ($$false) ($$false) ($$false)
-            ($0) ($$(getDefaultConst Cap)) ($$(getDefaultConst FullCapWithTag)) ($0)
-            ($0) ($0) ({<$$WO~1, $$(natToWord (Xlen-1) TimerInterrupt)>}) ($0)
-            ($0) )
-      else Retv ).
-  
-  Definition specInstBoundsExceptionRule :=
-    ( Read pcCap : Cap <- @^pcCapReg;
-      Read pcVal : Addr <- @^pcValReg;
-      LETAE baseTop <- getCapBaseTop (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal });
-      LET topBound <- ZeroExtend 1 #pcVal + $(InstSz/8) <= (#baseTop @% "top");
-      if hasTrap
-      then
-        ( Read mti : Bool <- @^mtiReg;
-          handleException (!#mti) (!#topBound) ($$false) ($$false) ($$true) ($$false) ($$false) ($$false) ($$false)
-            ($0) ($$(getDefaultConst Cap)) ($$(getDefaultConst FullCapWithTag)) ($0)
-            ($0) ($0) ($CapBoundsViolation) ($0)
-            ($0) )
-      else Retv ).
+  Section ies.
+    Variable ies: list InstEntrySpec.
 
-  Definition specInstIllegalExceptionRule (ies: list InstEntrySpec) :=
-    ( Read pcCap : Cap <- @^pcCapReg;
-      Read pcVal : Addr <- @^pcValReg;
-      LETAE baseTop <- getCapBaseTop (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal });
-      LET topBound <- ZeroExtend 1 #pcVal + $(InstSz/8) <= (#baseTop @% "top");
-      LETA inst <- instReqSpec procName #pcVal;
-      Read regs : Array NumRegs FullCapWithTag <- @^regsArray;
-      LET illegal <- CABool And (map (fun ie => !(matchUniqId #inst (uniqId ie))) ies);
-      if hasTrap
-      then
-        ( Read mti : Bool <- @^mtiReg;
-          handleException (!#mti && #topBound) #illegal ($$true) ($$false) ($$true) ($$false) ($$false) ($$false) ($$false)
-            ($0) ($$(getDefaultConst Cap)) ($$(getDefaultConst FullCapWithTag)) ($0)
-            ($0) ($0) ($InstIllegal) (ZeroExtendTo Xlen #inst)
-            ($0) )
-      else Retv ).
+    Section DecExec.
+      Variable pcc: FullCap @# ty.
+      Variable inst: Inst @# ty.
+      Variable cs1 cs2 scr: FullCapWithTag @# ty.
+      Variable csr: Data @# ty.
+
+      Definition decExecOutput: FullOutput ## ty :=
+        fold_right (fun ie out => (IfE matchUniqId inst (uniqId ie)
+                                   then spec ie pcc inst cs1 cs2 scr csr
+                                   else out as retOut; RetE #retOut))
+          (RetE ((Const ty (getDefaultConst FullOutput))
+                   @%[ "exception?" <- $$true ]
+                   @%[ "exceptionCause" <- Const ty (natToWord Xlen InstIllegal) ]
+                   @%[ "exceptionValue" <- (ZeroExtendTo Xlen inst) ]
+                   @%[ "baseException?" <- $$true ])) ies.
+    End DecExec.
+
+    Section Index.
+      Variable inst: Inst @# ty.
+      Variable n: nat.
+      Variable idx: Inst @# ty -> Bit n @# ty.
+      Variable fn: InstProperties -> word n.
+
+      Definition getIndex: Bit n @# ty :=
+        fold_right (fun ie out => (IF matchUniqId inst (uniqId ie)
+                                   then (if (weq (fn (instProperties ie)) (wzero n))
+                                         then idx inst
+                                         else $$(fn (instProperties ie)))
+                                   else out))
+          ($0) ies.
+    End Index.
   
-  Definition specDecExecRule (ie: InstEntrySpec) :=
-    ( Read pcCap : Cap <- @^pcCapReg;
-      Read pcVal : Addr <- @^pcValReg;
-      LETAE baseTop <- getCapBaseTop (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal });
-      LET topBound <- ZeroExtend 1 #pcVal + $(InstSz/8) <= (#baseTop @% "top");
-      LETA inst <- instReqSpec procName #pcVal;
-      Read regs : Array NumRegs FullCapWithTag <- @^regsArray;
-      let instProps := instProperties ie in
-      LET cs1Idx <- if (weq (implicitReg instProps) (wzero _)) then (rs1 #inst) else $$(implicitReg instProps);
-      LET cs2Idx <- rs2Fixed #inst;
-      LET scrIdx <- if (weq (implicitScr instProps) (wzero _))
-                    then (rs2Fixed #inst) else $$(implicitScr instProps);
-      LET csrIdx <- if (weq (implicitCsr instProps) (wzero _)) then (imm #inst) else $$(implicitCsr instProps);
-      LET cs1 <- #regs@[#cs1Idx];
-      LET cs2 <- #regs@[TruncLsbTo RegIdSz _ #cs2Idx];
-      LETA scr <- readRegs procName scrRegInfos #scrIdx FullCapWithTag;
-      LETA csr <- readRegs procName csrRegInfos #csrIdx Data;
-      LETAE out <- spec ie (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal }) #inst #cs1 #cs2 #scr #csr;
-      LETA ld <- loadReqSpec procName (#out @% "pcMemAddr") (#out @% "memSize") (#out @% "memCap?")
-                   (#out @% "ldSigned?");
-      LET cd <- ITE (#out @% "mem?" && !(#out @% "store?"))
-                  (STRUCT { "tag" ::= #ld @% "tag";
-                            "cap" ::= #ld @% "cap";
-                            "val" ::= #ld @% "val" })
-                  (STRUCT { "tag" ::= #out @% "cdTag";
-                            "cap" ::= #out @% "cdCap";
-                            "val" ::= #out @% "cdVal"});
-      LET cdIdx <- rd #inst;
-      LET instMatch <- matchUniqId #inst (uniqId ie);
-      
-      LETA mti <- if hasTrap
-                  then ( Read mti : Bool <- @^mtiReg;
-                         Ret #mti )
-                  else Ret $$false;
-      LET updRegs <- #regs @[ #cdIdx <- ITE (!#mti && #topBound && #instMatch && (!(#out @% "exception?")) &&
-                                               (#out @% "wb?") && isNotZero(#cdIdx))
-                                          #cd (#regs@[#cdIdx])];
-      handleException (!#mti && #topBound && #instMatch) (#out @% "exception?") (#out @% "baseException?")
-        (#out @% "scrException?") (#out @% "pcCapException?") (#out @% "wbScr?") (#out @% "wbCsr?")
-        ($$true) (#out @% "changePcCap?")
-        (ITE (#out @% "taken?") (#out @% "pcMemAddr") (#pcVal + $(InstSz/8))) (#out @% "pcCap")
-        (STRUCT { "tag" ::= #out @% "scrTag";
-                  "cap" ::= #out @% "scrCap";
-                  "val" ::= #out @% "scrVal" }) (#out @% "csrVal")
-        #cs2Idx #csrIdx (#out @% "exceptionCause") (#out @% "exceptionValue")
-        (ITE (#out @% "pcCapException?") $0 (ZeroExtendTo RegFixedIdSz #cs1Idx)) ).
+    Definition specDecExecRule :=
+      ( Read pcCap : Cap <- @^pcCapReg;
+        Read pcVal : Addr <- @^pcValReg;
+        LETAE baseTop <- getCapBaseTop (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal });
+        LET topBound <- ZeroExtend 1 #pcVal + $(InstSz/8) <= (#baseTop @% "top");
+        LETA inst <- instReqSpec procName #pcVal;
+        Read regs : Array NumRegs FullCapWithTag <- @^regsArray;
+        LET cs1Idx <- getIndex #inst (@rs1 _) implicitReg;
+        LET cs2Idx <- rs2Fixed #inst;
+        LET scrIdx <- getIndex #inst (@rs2Fixed _) implicitScr;
+        LET csrIdx <- getIndex #inst (@imm _) implicitCsr;
+        LET cs1 <- #regs@[#cs1Idx];
+        LET cs2 <- #regs@[TruncLsbTo RegIdSz _ #cs2Idx];
+        LETA scr <- readRegs procName scrRegInfos #scrIdx FullCapWithTag;
+        LETA csr <- readRegs procName csrRegInfos #csrIdx Data;
+
+        LET pcc : FullCap <- STRUCT { "cap" ::= #pcCap;
+                                      "val" ::= #pcVal};
+        
+        LETA mti <- if hasTrap
+                    then ( Read mti : Bool <- @^mtiReg;
+                           Ret #mti )
+                    else Ret $$false;
+        LETAE out : FullOutput <-
+                      (IfE #mti
+                       then RetE ((Const ty (getDefaultConst FullOutput))
+                                    @%[ "exception?" <- $$true]
+                                    @%[ "exceptionCause" <- {<$$WO~1, $$(natToWord (Xlen-1) TimerInterrupt)>}])
+                       else (IfE !#topBound
+                             then RetE ((Const ty (getDefaultConst FullOutput))
+                                          @%[ "exception?" <- $$true]
+                                          @%[ "exceptionCause" <- Const ty (natToWord Xlen CapBoundsViolation)])
+                             else decExecOutput #pcc #inst #cs1 #cs2 #scr #csr as out;
+                             RetE (Var ty (SyntaxKind FullOutput) out))
+                        as out; RetE (Var ty (SyntaxKind FullOutput) out));
+        
+        LETA ld <- loadReqSpec procName (#out @% "pcMemAddr") (#out @% "memSize") (#out @% "memCap?")
+                     (#out @% "ldSigned?");
+        LET cd <- ITE (#out @% "mem?" && !(#out @% "store?"))
+                    (STRUCT { "tag" ::= #ld @% "tag";
+                              "cap" ::= #ld @% "cap";
+                              "val" ::= #ld @% "val" } : FullCapWithTag @# ty)
+                    (STRUCT { "tag" ::= #out @% "cdTag";
+                              "cap" ::= #out @% "cdCap";
+                              "val" ::= #out @% "cdVal"} : FullCapWithTag @# ty);
+        LET cdIdx <- rd #inst;
+        
+        LET updRegs <- (#regs @[ #cdIdx <- ITE (!(#out @% "exception?") && (#out @% "wb?") && isNotZero(#cdIdx))
+                                             #cd (#regs@[#cdIdx])]);
+        Write @^regsArray : Array NumRegs FullCapWithTag <- #updRegs;
+
+        LETA _ <- storeReqSpec procName (!(#out @% "exception?") && (#out @% "mem?") && (#out @% "store?"))
+                    (#out @% "pcMemAddr") (#out @% "memSize") (#out @% "memCap?") #cd;
+
+        LET exceptionStruct: ExceptionStruct <-
+          (STRUCT {
+               "mtiReset?" ::= #mti;
+               "pcVal" ::= ITE (#out @% "taken?") (#out @% "pcMemAddr") (#pcVal + $(InstSz/8));
+               "changePcCap?" ::= #out @% "changePcCap?";
+               "pcCap" ::= #out @% "pcCap";
+               "exception?" ::= #out @% "exception?";
+               "exceptionCause" ::= #out @% "exceptionCause";
+               "exceptionValue" ::= #out @% "exceptionValue";
+               "baseException?" ::= #out @% "baseException?";
+               "wbScr?" ::= #out @% "wbScr?";
+               "scr" ::= STRUCT { "tag" ::= #out @% "scrTag"; "cap" ::= #out @% "scrCap"; "val" ::= #out @% "scrVal"};
+               "scrException?" ::= #out @% "scrException?";
+               "wbCsr?" ::= #out @% "wbScr?";
+               "csrVal" ::= #out @% "csrVal";
+               "scrId" ::= #cs2Idx;
+               "csrId" ::= #csrIdx;
+               "exceptionIdx" ::= ITE (#out @% "pcCapException?") $0 (ZeroExtendTo RegFixedIdSz #cs1Idx) });
+        handleException #exceptionStruct).
+  End ies.
 End Run.

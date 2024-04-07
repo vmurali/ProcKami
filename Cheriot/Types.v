@@ -65,14 +65,16 @@ Section ValidInits.
                   LETC aligned <- isZero (UniBit (TruncLsb 2 _) ###mtccVal);
                   LETE baseTop <- getCapBaseTop (STRUCT {"cap" ::= ###mtccCap; "val" ::= ###mtccVal});
                   LETC baseBound <- ###mtccVal >= (###baseTop @% "base");
-                  LETC topBound <- (ZeroExtend 1 ###mtccVal + $mtccSize <= (###baseTop @% "top"));
+                  LETC mtccSizeConst <- Const type (ZToWord _ mtccSize);
+                  LETC topBound <- (ZeroExtend 1 ###mtccVal + ###mtccSizeConst <= (###baseTop @% "top"));
                   RetE ((###perms @% "EX") && (###perms @% "SR") && !###sealed && ###aligned
                         && (###baseBound && ###topBound))) = true.
 
   Definition MtdcValid (mtdcCap: type Cap) (mtdcVal: type Addr) mtdcSize :=
     evalLetExpr ( LETE baseTop <- getCapBaseTop (STRUCT {"cap" ::= ###mtdcCap; "val" ::= ###mtdcVal});
                   LETC baseBound <- ###mtdcVal >= (###baseTop @% "base");
-                  LETC topBound <- (ZeroExtend 1 ###mtdcVal + $mtdcSize <= (###baseTop @% "top"));
+                  LETC mtdcSizeConst <- Const type (ZToWord _ mtdcSize);
+                  LETC topBound <- (ZeroExtend 1 ###mtdcVal + ###mtdcSizeConst <= (###baseTop @% "top"));
                   RetE (###baseBound && ###topBound)) = true.
 End ValidInits.
 
@@ -172,19 +174,15 @@ Class MemParams := {
 Class CoreConfigParams := {
     procName : string;
     memParams: MemParams;
-    regsInit: Fin.t 32 -> type FullCapWithTag;
+    regsInit: Fin.t NumRegs -> type FullCapWithTag;
     pcCapInit: type Cap;
-    pcValInit: word 30;
+    pcValInit: word (Xlen - 2);
     pccValidThm: PccValid pcCapInit;
     hasTrap: bool;
     mtccCap: type Cap;
-    mtccVal: word 30;
-    mtccSize: nat;
-    mtccValidThm: MtccValid mtccCap (wcombine mtccVal (wzero 2)) mtccSize;
+    mtccVal: word (Xlen - 2);
     mtdcCap: type Cap;
-    mtdcVal: word 30;
-    mtdcSize: nat;
-    mtdcValidThm: MtdcValid DataRootCap (wcombine mtdcVal (wzero 2)) mtdcSize;
+    mtdcVal: word (Xlen - 3);
     mScratchCCap: type Cap }.
 
 Record InstProperties :=

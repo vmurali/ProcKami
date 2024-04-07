@@ -1,5 +1,6 @@
 Require Import Kami.AllNotations.
 Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.CoreConfig.
+Require Import ProcKami.Cheriot.InstAssembly ProcKami.Cheriot.TrapHandler.
 
 Section InBoundsPermsTy.
   Variable ty: Kind -> Type.
@@ -54,6 +55,7 @@ End Dominating.
 
 Section IsolationSpec.
   Local Open Scope kami_expr.
+
   Record IsolationSpec := {
       cores: list (CoreConfigParams * list (type FullCap));
       numCoresWord: word Imm12Sz;
@@ -77,13 +79,20 @@ Section IsolationSpec.
         evalExpr (Var type (SyntaxKind (Array _ FullCapWithTag))(@memInit (@memParams trapCore)) @[###x]) =
           evalExpr (Var type (SyntaxKind (Array _ FullCapWithTag))(@memInit (@memParams (fst c))) @[###x]);
       trapCoreHasTrap: @hasTrap trapCore = true;
+      mtccValidThm: MtccValid (@mtccCap trapCore) (wcombine (@mtccVal trapCore) (wzero 2)) trapHandlerSize;
+      mtdcValidThm: MtdcValid (@mtdcCap trapCore) (wcombine (@mtdcVal trapCore) (wzero 3))
+                      (MtdcTotalSize numCoresWord)
     }.
 End IsolationSpec.
 
 (*
-- Initialize memory with trap handler (at mtcc) and trap data (at mtdc)
-- Make sure mtcc can hold size of trapHandler code
-- Make sure mtdc can hold 24 + NumRegs*8*(wordVal _ numCoresWord)
+- Dominating caps are all disjoint
 - mtcc and mtdc are disjoint from any of the dominating caps
 - mtcc and mtdc are disjoint from each other
+- curr is dominated by mtdc
+- mtimeAddr is disjoint from others, including mtcc, mtdc and mtimeCmpAddr
+- mtimeCmpAddr is disjoint from others, including mtcc, mtdc and mtimeCmpAddr
+- mtimeAddr can hold 8 bytes
+- mtimeCmpAddr can hold 4 bytes
+- Initialize memory with trap handler (at mtcc) and trap data (at mtdc)
  *)

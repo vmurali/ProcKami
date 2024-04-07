@@ -12,11 +12,7 @@ Section Prefix.
 
   Definition specRules : list RuleT :=
     (@^"specTimerIncAndInterruptSetRule", specTimerIncAndInterruptSetRule) ::
-      (@^"specTimerInterruptTakeRule", specTimerInterruptTakeRule scrList csrList) ::
-      (@^"specInstBoundsExceptionRule", specInstBoundsExceptionRule scrList csrList) ::
-      (@^"specInstIllegalExceptionRule", fun ty => specInstIllegalExceptionRule scrList csrList ty specInstEntries) ::
-      map (fun ie => (@^(append "specDecExecRule_" (instName ie)), fun ty => specDecExecRule scrList csrList ty ie))
-      specInstEntries.
+      (@^"specDecExecRule", fun ty => specDecExecRule scrList csrList ty specInstEntries) :: nil.
 
   Definition specRegs : list RegInitT :=
     (@^pcCapReg, existT _ (SyntaxKind Cap) (Some (SyntaxConst (convTypeToConst pcCapInit)))) ::
@@ -39,7 +35,7 @@ Section Prefix.
                        (convTypeToConst
                           (evalExpr (STRUCT { "tag" ::= Const type true;
                                               "cap" ::= Const _ (convTypeToConst mtdcCap);
-                                              "val" ::= Const _ (wcombine mtdcVal (wzero 2))})))))) ::
+                                              "val" ::= Const _ (wcombine mtdcVal (wzero 3))})))))) ::
           (@^mScratchCReg,
             existT _ (SyntaxKind FullCapWithTag)
               (Some (SyntaxConst
@@ -60,35 +56,16 @@ Section Prefix.
 
   Definition specBaseMod: BaseModule := BaseMod specRegs specRules [].
 
-  Theorem WfSpecDecExecRule: forall ie ty, WfActionT specRegs (specDecExecRule scrList csrList ty ie).
+  Theorem WfSpecDecExecRule: forall ty, WfActionT specRegs (specDecExecRule scrList csrList ty specInstEntries).
   Proof.
-    cbv [specRegs specDecExecRule handleException]; intros.
+    cbv [specRegs specDecExecRule handleException MemSpec.storeReqSpec MemSpec.instReqSpec MemSpec.loadReqSpec];
+      intros.
     destruct hasTrap; repeat dischargeWfActionT.
   Qed.
 
   Theorem WfSpecTimerIncAndInterruptSetRule: forall ty, WfActionT specRegs (specTimerIncAndInterruptSetRule ty).
   Proof.
     cbv [specRegs specTimerIncAndInterruptSetRule handleException]; intros.
-    destruct hasTrap; repeat dischargeWfActionT.
-  Qed.
-
-  Theorem WfSpecTimerInterruptTakeRule: forall ty, WfActionT specRegs (specTimerInterruptTakeRule scrList csrList ty).
-  Proof.
-    cbv [specRegs specTimerInterruptTakeRule handleException]; intros.
-    destruct hasTrap; repeat dischargeWfActionT.
-  Qed.
-
-  Theorem WfSpecInstBoundsExceptionRule:
-    forall ty, WfActionT specRegs (specInstBoundsExceptionRule scrList csrList ty).
-  Proof.
-    cbv [specRegs specInstBoundsExceptionRule handleException]; intros.
-    destruct hasTrap; repeat dischargeWfActionT.
-  Qed.
-
-  Theorem WfSpecInstIllegalExceptionRule:
-    forall ty, WfActionT specRegs (specInstIllegalExceptionRule scrList csrList ty specInstEntries).
-  Proof.
-    cbv [specRegs specInstIllegalExceptionRule handleException]; intros.
     destruct hasTrap; repeat dischargeWfActionT.
   Qed.
 
@@ -99,7 +76,6 @@ Section Prefix.
   Theorem NoDupSpecRules: NoDup (map fst specRules).
   Proof.
     cbn [specRules map fst].
-    rewrite map_map.
     instEntriesNoDup.
   Qed.
   
@@ -107,18 +83,16 @@ Section Prefix.
   Proof.
     cbv [WfBaseModule getRegisters getRules getMethods specBaseMod].
     repeatConj.
-    - cbv [specRules]; cbn [In]; let rule := fresh "rule" in intro rule; rewrite in_map_iff; intros.
+    - cbv [specRules]; cbn [In]; let rule := fresh "rule" in intro rule; intros.
       repeat match goal with
              | H: _ \/ _ |- _ => destruct H
              | H: _ /\ _ |- _ => destruct H
              | H: exists x, _ |- _ => destruct H
              | H: _ = rule |- _ => rewrite <- H; clear H rule;
                                    cbn [snd]
+             | H: False |- _ => exfalso; assumption
              end.
       + apply WfSpecTimerIncAndInterruptSetRule.
-      + apply WfSpecTimerInterruptTakeRule.
-      + apply WfSpecInstBoundsExceptionRule.
-      + apply WfSpecInstIllegalExceptionRule.
       + apply WfSpecDecExecRule.
     - cbv [In].
       intros; tauto.

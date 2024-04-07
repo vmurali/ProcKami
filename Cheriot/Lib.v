@@ -410,6 +410,39 @@ Section EvalProp.
     | nil => true
     | x :: xs => andb (forallb (R x) xs) (ForallOrdPairsEval xs)
     end.
+
+  Lemma ForallOrdPairsEvalCorrect1 ls: ForallOrdPairsEval ls = true -> ForallOrdPairs (fun x y => R x y = true) ls.
+  Proof.
+    induction ls; simpl; intros; auto.
+    - constructor.
+    - apply andb_prop in H.
+      constructor.
+      + rewrite Forall_forall.
+        apply forallb_forall.
+        tauto.
+      + apply IHls.
+        tauto.
+  Qed.
+
+  Lemma ForallOrdPairsEvalCorrect2 ls: ForallOrdPairs (fun x y => R x y = true) ls -> ForallOrdPairsEval ls = true.
+  Proof.
+    induction ls; simpl; intros; auto.
+    apply andb_true_intro.
+    remember (a :: ls) as ls'.
+    destruct H.
+    - inversion Heqls'.
+    - inversion Heqls'; subst; clear Heqls'.
+      rewrite forallb_forall.
+      rewrite <- Forall_forall.
+      tauto.
+  Qed.
+
+  Theorem ForallOrdPairsEvalCorrect ls: ForallOrdPairs (fun x y => R x y = true) ls <-> ForallOrdPairsEval ls = true.
+  Proof.
+    split.
+    - apply ForallOrdPairsEvalCorrect2.
+    - apply ForallOrdPairsEvalCorrect1.
+  Qed.
 End EvalProp.
   
 Section NoDupSplit.

@@ -94,4 +94,9 @@ Section TrapHandler.
     ( saveCurrentContext curr tmp pf2 ;;
       advanceContext mtdcAddr curr tmp pf1 pf2 pf3 ;;
       loadContextSetTimeCmpMRet mtdcAddr curr tmp pf1 pf2 pf3 ).
+
+  Definition trapHandlerInst := trapHandler c1 c2 c3 eq_refl eq_refl eq_refl.
+
+  Definition trapHandlerSize := ltac:(let x := eval cbv in
+                                      (Z.of_nat (length (getInstBytes trapHandlerInst))) in exact x).
 End TrapHandler.
