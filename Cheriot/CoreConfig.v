@@ -58,9 +58,13 @@ Section Prefix.
 
   Theorem WfSpecDecExecRule: forall ty, WfActionT specRegs (specDecExecRule scrList csrList ty specInstEntries).
   Proof.
-    cbv [specRegs specDecExecRule handleException MemSpec.storeReqSpec MemSpec.instReqSpec MemSpec.loadReqSpec];
+    cbv [specRegs specDecExecRule handleException MemSpec.storeReqSpec MemSpec.instReqSpec MemSpec.loadReqSpec
+           readRegs writeRegsPred];
       intros.
-    destruct hasTrap; repeat dischargeWfActionT.
+    destruct hasTrap;
+      cbn [redAction fold_right Lib.redActionHelp scrList csrList scrRegInfo csrRegInfo
+             map filter isSystemCsr negb regName];
+      repeat dischargeWfActionT_specific.
   Qed.
 
   Theorem WfSpecTimerIncAndInterruptSetRule: forall ty, WfActionT specRegs (specTimerIncAndInterruptSetRule ty).

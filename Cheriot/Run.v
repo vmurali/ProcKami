@@ -483,32 +483,30 @@ Section Run.
           then callWriteRegFile @^regsWrite #cdIdx (#out @% "data")
           else Retv;
 
-          LET exceptionStruct :
-            ExceptionStruct <-
-              (STRUCT { "mtiReset?" ::= #mti;
-                        "pcVal" ::= ITE (#out @% "taken?")
-                                      (#out @% "addrOrScrOrCsrVal")
-                                      (#pcVal + if compressed
-                                                then ITE (isInstNotCompressed #inst) $(InstSz/8) $(CompInstSz/8)
-                                                else $(InstSz/8));
-                        "changePcCap?" ::= #out @% "changePcCap?";
-                        "pcCap" ::= #out @% "pcOrScrCapOrMemOp";
-                        "exception?" ::= #matchException;
-                        "exceptionCause" ::= #out @% "data" @% "val";
-                        "exceptionValue" ::= pack (#out @% "data" @% "cap");
-                        "baseException?" ::= #out @% "baseException?";
-                        "wbScr?" ::= #out @% "wbScr?";
-                        "scr" ::= STRUCT { "tag" ::= #out @% "scrTag";
-                                           "cap" ::= #out @% "pcOrScrCapOrMemOp";
-                                           "val" ::= #out @% "addrOrScrOrCsrVal" };
-                        "scrException?" ::= #out @% "scrException?";
-                        "wbCsr?" ::= #out @% "wbCsr?";
-                        "csrVal" ::= #out @% "addrOrScrOrCsrVal";
-                        "scrId" ::=  #scrIdx;
-                        "csrId" ::= #csrIdx;
-                        "exceptionIdx" ::= ITE (#out @% "pcCapException?") $0 (ZeroExtendTo RegFixedIdSz #cs1Idx) });
-
-          handleException scrs csrs #exceptionStruct)
+          handleException scrs csrs
+            ((*mtiReset :=*) #mti)
+            ((*newPcVal :=*) (ITE (#out @% "taken?")
+                                 (#out @% "addrOrScrOrCsrVal")
+                                 (#pcVal + if compressed
+                                           then ITE (isInstNotCompressed #inst) $(InstSz/8) $(CompInstSz/8)
+                                           else $(InstSz/8))))
+            ((*changePcCap :=*) #out @% "changePcCap?")
+            ((*newPcCap :=*) #out @% "pcOrScrCapOrMemOp")
+            ((*exception :=*) #matchException)
+            ((*exceptionCause :=*) #out @% "data" @% "val")
+            ((*exceptionValue :=*) pack (#out @% "data" @% "cap"))
+            ((*baseException :=*) #out @% "baseException?")
+            ((*wbScr :=*) #out @% "wbScr?")
+            ((*scr :=*) (STRUCT { "tag" ::= #out @% "scrTag";
+                                  "cap" ::= #out @% "pcOrScrCapOrMemOp";
+                                  "val" ::= #out @% "addrOrScrOrCsrVal" }))
+            ((*scrException :=*) #out @% "scrException?")
+            ((*wbCsr :=*) #out @% "wbCsr?")
+            ((*csrVal :=*) #out @% "addrOrScrOrCsrVal")
+            ((*scrIdx :=*)  #scrIdx)
+            ((*csrId :=*) #csrIdx)
+            ((*exceptionIdx :=*) ITE (#out @% "pcCapException?") $0 (ZeroExtendTo RegFixedIdSz #cs1Idx))
+        )
       else Retv;
       Retv ).
 
