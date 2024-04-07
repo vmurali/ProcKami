@@ -1,6 +1,6 @@
 Require Import Kami.AllNotations.
 Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.CoreConfig.
-Require Import ProcKami.Cheriot.InstAssembly ProcKami.Cheriot.TrapHandler ProcKami.Cheriot.TrapCoreProps.
+Require Import ProcKami.Cheriot.InstAssembly ProcKami.Cheriot.TrapHandler.
 
 Section InBoundsPermsTy.
   Variable ty: Kind -> Type.
@@ -33,27 +33,10 @@ Section InBoundsPermsTy.
         LETC permsSub <- isSubsetPerms #perms1 #perms2;
         RetE (#permsSub && (#range1 @% "base" >= #range2 @% "base") && (#range1 @% "top" <= #range2 @% "top"))).
   End Subset.
-
-  Definition hasRead (cap: Cap @# ty): Bool @# ty := getCapPerms cap @% "LD".
-  Definition hasWrite (cap: Cap @# ty): Bool @# ty := getCapPerms cap @% "SD".
-  Definition hasMC (cap: Cap @# ty): Bool @# ty := getCapPerms cap @% "MC".
-
-  Definition CurrPlusSizeInBounds (cap: FullCap @# ty) sz : Bool ## ty :=
-    ( LETE range : _ <- getCapBaseTop cap;
-      LETC baseBound : Bool <- #range @% "base" >= cap @% "val";
-      LETC topBound : Bool <- (ZeroExtend 1 (cap @% "val") + $sz) <= #range @% "top";
-      RetE (#baseBound && #topBound )).
 End InBoundsPermsTy.
 
 Section Props.
   Local Open Scope kami_expr.
-
-  Definition SubArrayMatch k n (f: type (Array (Nat.pow 2 n) k)) m (g: type (Array (Nat.pow 2 m) k))
-    (start: type (Bit n)) :=
-    forall i, (0 <= i)%nat -> (i < Nat.pow 2 m)%nat ->
-              evalExpr (###f@[###start + $i]) = evalExpr (###g@[Const type (natToWord m i)]).
-  
-  Definition CurrPlusSizeInBoundsProp (cap: type FullCap) sz := evalLetExpr (CurrPlusSizeInBounds ###cap sz) = true.
 
   Definition DominatingCaps (l: list (type FullCap)) n (arr: type (Array n FullCapWithTag)) :=
     forall sz (idx: type (Bit sz)),
@@ -68,9 +51,77 @@ Section Props.
   Definition DominatingCapsOverlap (l1 l2: list (type FullCap)) :=
     exists (addr: type Addr), (existsb (fun c => evalLetExpr (InBoundsPermsAddr ###addr ###c)) l1) = true /\
                                 (existsb (fun c => evalLetExpr (InBoundsPermsAddr ###addr ###c)) l2) = true.
+
+  Definition DominatingCapsNoOverlap (l1 l2: list (type FullCap)) := not (DominatingCapsOverlap l1 l2).
+
+  Definition hasRead (cap: type Cap) := evalExpr ((getCapPerms ###cap) @% "LD") = true.
+  Definition hasWrite (cap: type Cap) := evalExpr ((getCapPerms ###cap) @% "SD") = true.
+  Definition hasMC (cap: type Cap) := evalExpr ((getCapPerms ###cap) @% "MC") = true.
+
+  Definition AddrPlusSizeInBounds (cap: type Cap) (addr: type Addr) sz :=
+    evalLetExpr ( LETE range : _ <- getCapBaseTop (STRUCT {"cap" ::= ###cap; "val" ::= ###addr});
+                  LETC baseBound <- (###range @% "base") <= ###addr;
+                  LETC topBound <- (ZeroExtend 1 ###addr + (Const type (ZToWord _ sz))) <= (###range @% "top");
+                  RetE (###baseBound && ###topBound )) = true.
+
+  Definition SubArrayMatch k n (f: type (Array (Nat.pow 2 n) k)) m (g: type (Array (Nat.pow 2 m) k))
+    (start: type (Bit n)) :=
+    forall i, (0 <= i)%nat -> (i < Nat.pow 2 m)%nat ->
+              evalExpr (###f@[###start + $i]) = evalExpr (###g@[Const type (natToWord m i)]).
+
+  Definition MtccValid (mtccCap: type Cap) (mtccVal: type Addr) mtccSize :=
+    evalLetExpr ( LETC perms <- getCapPerms ###mtccCap;
+                  LETC sealed <- isCapSealed ###mtccCap;
+                  LETC aligned <- isZero (UniBit (TruncLsb 2 _) ###mtccVal);
+                  LETE baseTop <- getCapBaseTop (STRUCT {"cap" ::= ###mtccCap; "val" ::= ###mtccVal});
+                  LETC baseBound <- ###mtccVal >= (###baseTop @% "base");
+                  LETC mtccSizeConst <- Const type (ZToWord _ mtccSize);
+                  LETC topBound <- (ZeroExtend 1 ###mtccVal + ###mtccSizeConst <= (###baseTop @% "top"));
+                  RetE ((###perms @% "EX") && (###perms @% "SR") && !###sealed && ###aligned
+                        && (###baseBound && ###topBound))) = true.
 End Props.
 
-Definition DominatingCapsNoOverlap (l1 l2: list (type FullCap)) := ~ (DominatingCapsOverlap l1 l2).
+Section TrapCoreSpec.
+  Context `{coreConfigParams: CoreConfigParams}.
+  Instance memParamsInst: MemParams := @memParams coreConfigParams.
+  Variable numCoresWord: word Imm12Sz.
+  Local Open Scope kami_expr.
+
+  Local Notation MemVar x := (Var type (SyntaxKind (Array _ FullCapWithTag)) x).
+
+  Record TrapCoreSpec := {
+      trapCoreHasTrap: hasTrap = true;
+      mtccValXlen := wcombine mtccVal (wzero 2) : type Addr;
+      mtccValidThm: MtccValid mtccCap mtccValXlen trapHandlerSize;
+      mtdcValXlen := wcombine mtdcVal (wzero 3) : type Addr;
+      mtdcValidThm: AddrPlusSizeInBounds mtdcCap mtdcValXlen (MtdcTotalSize numCoresWord);
+      mtccFullCap := evalExpr (STRUCT { "cap" ::= ###mtccCap;
+                                        "val" ::= ###mtccValXlen });
+      mtdcFullCap := evalExpr (STRUCT { "cap" ::= ###mtdcCap;
+                                        "val" ::= ###mtdcValXlen });
+      curr := (MemVar memInit) @[###mtdcValXlen + $16];
+      currTagged: evalExpr (curr @% "tag") = true;
+      currCapIsMtdcCap: evalExpr (curr @% "cap") = mtdcCap;
+      currAddr: exists n, (n < wordVal _ numCoresWord)%Z /\
+                            evalExpr (curr @% "val") =
+                              wadd mtdcValXlen (ZToWord Xlen (24 + (n * (Z.of_nat NumRegs * 8))));
+      currReadWriteMc: hasRead (evalExpr (curr @% "cap")) /\ hasWrite (evalExpr (curr @% "cap")) /\
+                         hasMC (evalExpr (curr @% "cap"));
+      mTimeCap: type FullCapWithTag;
+      mTimeCmpCap: type FullCapWithTag;
+      mTimeCapEq: mTimeCap = (evalExpr ((MemVar memInit) @[###mtdcValXlen]));
+      mTimeCmpCapEq: mTimeCmpCap = (evalExpr ((MemVar memInit) @[###mtdcValXlen + $8]));
+      mTimeTag: evalExpr (###mTimeCap @% "tag") = true;
+      mTimeCmpTag: evalExpr (###mTimeCmpCap @% "tag") = true;
+      mTimeSize: AddrPlusSizeInBounds (evalExpr (###mTimeCap @% "cap")) (evalExpr (###mTimeCap @% "val")) 8;
+      mTimeCmpSize: AddrPlusSizeInBounds (evalExpr (###mTimeCmpCap @% "cap")) (evalExpr (###mTimeCmpCap @% "val")) 4;
+      mTimeRead: hasRead (evalExpr (###mTimeCap @% "cap"));
+      mTimeCmpReadWrite: hasRead (evalExpr (###mTimeCmpCap @% "cap")) /\
+                           hasWrite (evalExpr (###mTimeCmpCap @% "cap"));
+      mtdcCapReadWriteMc: hasRead mtdcCap /\ hasWrite mtdcCap /\ hasMC mtdcCap;
+      mtdcDominatesCurr: DominatingCapsSingle [mtdcFullCap] (evalExpr (rmTag curr))
+    }.
+End TrapCoreSpec.
 
 Section IsolationSpec.
   Local Open Scope kami_expr.
@@ -100,34 +151,13 @@ Section IsolationSpec.
         evalExpr (MemVar (@memInit (@memParams trapCore)) @[###x]) =
           evalExpr (MemVar (@memInit (@memParams (fst c))) @[###x]);
 
-      trapCoreProps: @TrapCoreSpec trapCore;
-      
-      mtdcValXlen := wcombine (@mtdcVal trapCore) (wzero 3) : type Addr;
-      curr := (MemVar (@memInit (@memParams trapCore))) @[###mtdcValXlen + $16];
-      mtdcFullCap := evalExpr (STRUCT { "cap" ::= ###(@mtdcCap trapCore);
-                                        "val" ::= ###mtdcValXlen });
-      mtdcDominatesCurr: DominatingCapsSingle [mtdcFullCap] (evalExpr (rmTag curr));
+      trapCoreProps: @TrapCoreSpec trapCore numCoresWord;
     }.
 End IsolationSpec.
 
-Theorem test1 A (P: A -> Prop) : ~ (exists a, P a) -> (forall a, ~ P a).
-Proof.
-  intros.
-  intro.
-  assert (exists a, P a) by (exists a; auto).
-  tauto.
-Qed.
-
-Theorem test2 A (P: A -> Prop) : (forall a, ~ P a) -> ~ (exists a, P a).
-Proof.
-  intros.
-  intro.
-  destruct H0.
-  specialize (H x).
-  tauto.
-Qed.
-  
-
-  (*
- Initialize memory with trap handler (at mtcc) and trap data (at mtdc)
- *)
+(*
+- Take care of sealed
+- Fix curr vs mtdc
+- Fix MtccValid
+- Initialize memory with trap handler (at mtcc) and trap data (at mtdc)
+*)

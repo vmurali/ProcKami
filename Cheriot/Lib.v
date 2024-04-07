@@ -517,3 +517,22 @@ Section NoDupSplit.
       assumption.
   Qed.
 End NoDupSplit.
+
+Section ExistsForall.
+  Theorem notExists_forallNot A (P: A -> Prop) : ~ (exists a, P a) -> (forall a, ~ P a).
+  Proof.
+    intros.
+    intro.
+    assert (exists a, P a) by (exists a; auto).
+    tauto.
+  Qed.
+
+  Theorem forallNot_notExists A (P: A -> Prop) : (forall a, ~ P a) -> ~ (exists a, P a).
+  Proof.
+    intros.
+    intro.
+    destruct H0.
+    specialize (H x).
+    tauto.
+  Qed.
+End ExistsForall.
