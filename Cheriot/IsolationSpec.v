@@ -54,9 +54,20 @@ Section Props.
 
   Definition DominatingCapsNoOverlap (l1 l2: list (type FullCap)) := not (DominatingCapsOverlap l1 l2).
 
-  Definition hasRead (cap: type Cap) := evalExpr ((getCapPerms ###cap) @% "LD") = true.
-  Definition hasWrite (cap: type Cap) := evalExpr ((getCapPerms ###cap) @% "SD") = true.
-  Definition hasMC (cap: type Cap) := evalExpr ((getCapPerms ###cap) @% "MC") = true.
+  Definition hasPerms (cap: type Cap) (perms: type CapPerms) :=
+    evalLetExpr ( LETC capPerms <- getCapPerms ###cap;
+                  RetE ( (ITE (###perms @% "U0") (###capPerms @% "U0") (Const type true)) &&
+                           (ITE (###perms @% "SE") (###capPerms @% "SE") (Const type true)) &&
+                           (ITE (###perms @% "US") (###capPerms @% "US") (Const type true)) &&
+                           (ITE (###perms @% "EX") (###capPerms @% "EX") (Const type true)) &&
+                           (ITE (###perms @% "SR") (###capPerms @% "SR") (Const type true)) &&
+                           (ITE (###perms @% "MC") (###capPerms @% "MC") (Const type true)) &&
+                           (ITE (###perms @% "LD") (###capPerms @% "LD") (Const type true)) &&
+                           (ITE (###perms @% "SL") (###capPerms @% "SL") (Const type true)) &&
+                           (ITE (###perms @% "LM") (###capPerms @% "LM") (Const type true)) &&
+                           (ITE (###perms @% "SD") (###capPerms @% "SD") (Const type true)) &&
+                           (ITE (###perms @% "LG") (###capPerms @% "LG") (Const type true)) &&
+                           (ITE (###perms @% "GL") (###capPerms @% "GL") (Const type true)))) = true.
 
   Definition AddrPlusSizeInBounds (cap: type Cap) (addr: type Addr) sz :=
     evalLetExpr ( LETE range : _ <- getCapBaseTop (STRUCT {"cap" ::= ###cap; "val" ::= ###addr});
@@ -68,17 +79,6 @@ Section Props.
     (start: type (Bit n)) :=
     forall i, (0 <= i)%nat -> (i < Nat.pow 2 m)%nat ->
               evalExpr (###f@[###start + $i]) = evalExpr (###g@[Const type (natToWord m i)]).
-
-  Definition MtccValid (mtccCap: type Cap) (mtccVal: type Addr) mtccSize :=
-    evalLetExpr ( LETC perms <- getCapPerms ###mtccCap;
-                  LETC sealed <- isCapSealed ###mtccCap;
-                  LETC aligned <- isZero (UniBit (TruncLsb 2 _) ###mtccVal);
-                  LETE baseTop <- getCapBaseTop (STRUCT {"cap" ::= ###mtccCap; "val" ::= ###mtccVal});
-                  LETC baseBound <- ###mtccVal >= (###baseTop @% "base");
-                  LETC mtccSizeConst <- Const type (ZToWord _ mtccSize);
-                  LETC topBound <- (ZeroExtend 1 ###mtccVal + ###mtccSizeConst <= (###baseTop @% "top"));
-                  RetE ((###perms @% "EX") && (###perms @% "SR") && !###sealed && ###aligned
-                        && (###baseBound && ###topBound))) = true.
 End Props.
 
 Section TrapCoreSpec.
@@ -92,34 +92,75 @@ Section TrapCoreSpec.
   Record TrapCoreSpec := {
       trapCoreHasTrap: hasTrap = true;
       mtccValXlen := wcombine mtccVal (wzero 2) : type Addr;
-      mtccValidThm: MtccValid mtccCap mtccValXlen trapHandlerSize;
+      mtccValidBounds: AddrPlusSizeInBounds mtccCap mtccValXlen trapHandlerSize;
+      mtccValidPerms: hasPerms mtccCap (evalExpr (STRUCT { "U0" ::= Const type false;
+                                                           "SE" ::= Const type false;
+                                                           "US" ::= Const type false;
+                                                           "EX" ::= Const type true;
+                                                           "SR" ::= Const type true;
+                                                           "MC" ::= Const type false;
+                                                           "LD" ::= Const type false;
+                                                           "SL" ::= Const type false;
+                                                           "LM" ::= Const type false;
+                                                           "SD" ::= Const type false;
+                                                           "LG" ::= Const type false;
+                                                           "GL" ::= Const type false }));
+      mtccNotSealed: evalExpr (isCapSealed ###mtccCap) = false;
+                                            
       mtdcValXlen := wcombine mtdcVal (wzero 3) : type Addr;
-      mtdcValidThm: AddrPlusSizeInBounds mtdcCap mtdcValXlen (MtdcTotalSize numCoresWord);
-      mtccFullCap := evalExpr (STRUCT { "cap" ::= ###mtccCap;
-                                        "val" ::= ###mtccValXlen });
-      mtdcFullCap := evalExpr (STRUCT { "cap" ::= ###mtdcCap;
-                                        "val" ::= ###mtdcValXlen });
+      mtdcValidBounds: AddrPlusSizeInBounds mtdcCap mtdcValXlen (MtdcTotalSize numCoresWord);
       curr := (MemVar memInit) @[###mtdcValXlen + $16];
       currTagged: evalExpr (curr @% "tag") = true;
       currCapIsMtdcCap: evalExpr (curr @% "cap") = mtdcCap;
-      currAddr: exists n, (n < wordVal _ numCoresWord)%Z /\
-                            evalExpr (curr @% "val") =
-                              wadd mtdcValXlen (ZToWord Xlen (24 + (n * (Z.of_nat NumRegs * 8))));
-      currReadWriteMc: hasRead (evalExpr (curr @% "cap")) /\ hasWrite (evalExpr (curr @% "cap")) /\
-                         hasMC (evalExpr (curr @% "cap"));
-      mTimeCap: type FullCapWithTag;
-      mTimeCmpCap: type FullCapWithTag;
-      mTimeCapEq: mTimeCap = (evalExpr ((MemVar memInit) @[###mtdcValXlen]));
-      mTimeCmpCapEq: mTimeCmpCap = (evalExpr ((MemVar memInit) @[###mtdcValXlen + $8]));
-      mTimeTag: evalExpr (###mTimeCap @% "tag") = true;
-      mTimeCmpTag: evalExpr (###mTimeCmpCap @% "tag") = true;
-      mTimeSize: AddrPlusSizeInBounds (evalExpr (###mTimeCap @% "cap")) (evalExpr (###mTimeCap @% "val")) 8;
-      mTimeCmpSize: AddrPlusSizeInBounds (evalExpr (###mTimeCmpCap @% "cap")) (evalExpr (###mTimeCmpCap @% "val")) 4;
-      mTimeRead: hasRead (evalExpr (###mTimeCap @% "cap"));
-      mTimeCmpReadWrite: hasRead (evalExpr (###mTimeCmpCap @% "cap")) /\
-                           hasWrite (evalExpr (###mTimeCmpCap @% "cap"));
-      mtdcCapReadWriteMc: hasRead mtdcCap /\ hasWrite mtdcCap /\ hasMC mtdcCap;
-      mtdcDominatesCurr: DominatingCapsSingle [mtdcFullCap] (evalExpr (rmTag curr))
+      currAddr: exists n, wltu n numCoresWord = true /\
+                            evalExpr (curr @% "val") = wadd mtdcValXlen (ZToWord _ (MtdcTotalSize n));
+      currValidBounds: hasPerms mtdcCap (evalExpr (STRUCT { "U0" ::= Const type false;
+                                                            "SE" ::= Const type false;
+                                                            "US" ::= Const type false;
+                                                            "EX" ::= Const type false;
+                                                            "SR" ::= Const type false;
+                                                            "MC" ::= Const type true;
+                                                            "LD" ::= Const type true;
+                                                            "SL" ::= Const type true;
+                                                            "LM" ::= Const type true;
+                                                            "SD" ::= Const type true;
+                                                            "LG" ::= Const type true;
+                                                            "GL" ::= Const type true }));
+      currNotSealed: evalExpr (isCapSealed ###mtdcCap) = false;
+      mTimeCap := (MemVar memInit) @[###mtdcValXlen];
+      mTimeCmpCap := (MemVar memInit) @[###mtdcValXlen + $8];
+      mTimeTag: evalExpr (mTimeCap @% "tag") = true;
+      mTimeCmpTag: evalExpr (mTimeCmpCap @% "tag") = true;
+      mTimeSize: AddrPlusSizeInBounds (evalExpr (mTimeCap @% "cap")) (evalExpr (mTimeCap @% "val")) 8;
+      mTimeCmpSize: AddrPlusSizeInBounds (evalExpr (mTimeCmpCap @% "cap")) (evalExpr (mTimeCmpCap @% "val")) 4;
+      mTimeValidPerms: hasPerms (evalExpr (mTimeCap @% "cap"))
+                         (evalExpr (STRUCT { "U0" ::= Const type false;
+                                             "SE" ::= Const type false;
+                                             "US" ::= Const type false;
+                                             "EX" ::= Const type false;
+                                             "SR" ::= Const type false;
+                                             "MC" ::= Const type false;
+                                             "LD" ::= Const type true;
+                                             "SL" ::= Const type false;
+                                             "LM" ::= Const type false;
+                                             "SD" ::= Const type false;
+                                             "LG" ::= Const type false;
+                                             "GL" ::= Const type false }));
+      mTimeNotSealed: evalExpr (isCapSealed (mTimeCap @% "cap")) = false;
+      mTimeCmpValidPerms: hasPerms (evalExpr (mTimeCmpCap @% "cap"))
+                            (evalExpr (STRUCT { "U0" ::= Const type false;
+                                                "SE" ::= Const type false;
+                                                "US" ::= Const type false;
+                                                "EX" ::= Const type false;
+                                                "SR" ::= Const type false;
+                                                "MC" ::= Const type false;
+                                                "LD" ::= Const type true;
+                                                "SL" ::= Const type false;
+                                                "LM" ::= Const type false;
+                                                "SD" ::= Const type true;
+                                                "LG" ::= Const type false;
+                                                "GL" ::= Const type false }));
+      mTimeCmpNotSealed: evalExpr (isCapSealed (mTimeCmpCap @% "cap")) = false;
     }.
 End TrapCoreSpec.
 
@@ -156,8 +197,5 @@ Section IsolationSpec.
 End IsolationSpec.
 
 (*
-- Take care of sealed
-- Fix curr vs mtdc
-- Fix MtccValid
 - Initialize memory with trap handler (at mtcc) and trap data (at mtdc)
 *)
