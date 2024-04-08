@@ -16,7 +16,7 @@ Section Prefix.
 
   Definition specRegs : list RegInitT :=
     (@^pcCapReg, existT _ (SyntaxKind Cap) (Some (SyntaxConst (convTypeToConst pcCapInit)))) ::
-      (@^pcValReg, existT _ (SyntaxKind Addr) (Some (SyntaxConst (wcombine pcValInit (wzero 2))))) ::
+      (@^pcValReg, existT _ (SyntaxKind Addr) (Some (SyntaxConst pcValInit))) ::
       (@^regsArray, existT _ _ (Some (SyntaxConst (@convTypeToConst (Array NumRegs FullCapWithTag) regsInit)))) ::
       (@^memArray, existT _ _ (Some (SyntaxConst (@convTypeToConst (Array NumMemBytes FullCapWithTag)
                                                     memInit)))) ::
@@ -28,14 +28,14 @@ Section Prefix.
                      (convTypeToConst
                         (evalExpr (STRUCT { "tag" ::= Const type true;
                                             "cap" ::= Const _ (convTypeToConst mtccCap);
-                                            "val" ::= Const _ (wcombine mtccVal (wzero 2))})))))) ::
+                                            "val" ::= Const _ mtccVal})))))) ::
           (@^mtdcReg,
             existT _ (SyntaxKind FullCapWithTag)
               (Some (SyntaxConst
                        (convTypeToConst
                           (evalExpr (STRUCT { "tag" ::= Const type true;
                                               "cap" ::= Const _ (convTypeToConst mtdcCap);
-                                              "val" ::= Const _ (wcombine mtdcVal (wzero 3))})))))) ::
+                                              "val" ::= Const _ mtccVal})))))) ::
           (@^mScratchCReg,
             existT _ (SyntaxKind FullCapWithTag)
               (Some (SyntaxConst

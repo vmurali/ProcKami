@@ -155,13 +155,16 @@ Class CoreConfigParams := {
     memParams: MemParams;
     regsInit: Fin.t NumRegs -> type FullCapWithTag;
     pcCapInit: type Cap;
-    pcValInit: word (Xlen - 2);
+    pcValReducedInit: word (Xlen - 2);
+    pcValInit := wcombine pcValReducedInit (wzero 2) : type Addr;
     pccValidThm: PccValid pcCapInit;
     hasTrap: bool;
     mtccCap: type Cap;
-    mtccVal: word (Xlen - 2);
+    mtccValReduced: word (Xlen - 2);
+    mtccVal := wcombine mtccValReduced (wzero 2) : type Addr;
     mtdcCap: type Cap;
-    mtdcVal: word (Xlen - 3);
+    mtdcValReduced: word (Xlen - 3);
+    mtdcVal := wcombine mtdcValReduced (wzero 3) : type Addr;
     mScratchCCap: type Cap }.
 
 Record InstProperties :=

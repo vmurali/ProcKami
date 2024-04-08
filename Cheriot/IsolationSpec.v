@@ -47,11 +47,11 @@ Section Props.
   Definition DominatingCapsSingle (l: list (type FullCap)) (cap: type FullCap) :=
     existsb (fun dc => evalLetExpr (SubsetCap ###cap ###dc)) l = true.
     
-  Definition DominatingCapsOverlap (l1 l2: list (type FullCap)) :=
-    exists (addr: type Addr), (existsb (fun c => evalLetExpr (InBoundsPermsAddr ###addr ###c)) l1) = true /\
-                                (existsb (fun c => evalLetExpr (InBoundsPermsAddr ###addr ###c)) l2) = true.
+  Definition CapsOverlap (l1 l2: list (type FullCap)) :=
+    exists (addr: type Addr), (existsb (fun c => evalLetExpr (InBoundsAddr ###addr ###c)) l1) = true /\
+                                (existsb (fun c => evalLetExpr (InBoundsAddr ###addr ###c)) l2) = true.
 
-  Definition DominatingCapsNoOverlap (l1 l2: list (type FullCap)) := not (DominatingCapsOverlap l1 l2).
+  Definition CapsNoOverlap (l1 l2: list (type FullCap)) := not (CapsOverlap l1 l2).
 
   Definition hasPerms (cap: type Cap) (perms: type CapPerms) :=
     evalLetExpr ( LETC capPerms <- getCapPerms ###cap;
@@ -80,8 +80,7 @@ Section TrapCoreSpec.
   Record TrapCoreSpec := {
       trapCoreHasTrap: hasTrap = true;
 
-      mtccValXlen := wcombine mtccVal (wzero 2) : type Addr;
-      mtccValidBounds: AddrPlusSizeInBounds mtccCap mtccValXlen trapHandlerSize;
+      mtccValidBounds: AddrPlusSizeInBounds mtccCap mtccVal trapHandlerSize;
       mtccValidPerms: hasPerms mtccCap (evalExpr (STRUCT { "U0" ::= Const type false;
                                                            "SE" ::= Const type false;
                                                            "US" ::= Const type false;
@@ -96,14 +95,13 @@ Section TrapCoreSpec.
                                                            "GL" ::= Const type false }));
       mtccNotSealed: evalExpr (isCapSealed ###mtccCap) = false;
                                             
-      mtdcValXlen := wcombine mtdcVal (wzero 3) : type Addr;
-      mtdcValidBounds: AddrPlusSizeInBounds mtdcCap mtdcValXlen (MtdcTotalSize numCoresWord);
+      mtdcValidBounds: AddrPlusSizeInBounds mtdcCap mtdcVal (MtdcTotalSize numCoresWord);
 
-      curr := (MemVar memInit) @[###mtdcValXlen + $16];
+      curr := (MemVar memInit) @[###mtdcVal + $16];
       currTagged: evalExpr (curr @% "tag") = true;
       currCapIsMtdcCap: evalExpr (curr @% "cap") = mtdcCap;
       currAddr: exists n, wltu n numCoresWord = true /\
-                            evalExpr (curr @% "val") = wadd mtdcValXlen (ZToWord _ (MtdcTotalSize n));
+                            evalExpr (curr @% "val") = wadd mtdcVal (ZToWord _ (MtdcTotalSize n));
       currValidBounds: hasPerms mtdcCap (evalExpr (STRUCT { "U0" ::= Const type false;
                                                             "SE" ::= Const type false;
                                                             "US" ::= Const type false;
@@ -118,7 +116,7 @@ Section TrapCoreSpec.
                                                             "GL" ::= Const type true }));
       currNotSealed: evalExpr (isCapSealed ###mtdcCap) = false;
       
-      mTimeCap := (MemVar memInit) @[###mtdcValXlen];
+      mTimeCap := (MemVar memInit) @[###mtdcVal];
       mTimeTag: evalExpr (mTimeCap @% "tag") = true;
       mTimeSize: AddrPlusSizeInBounds (evalExpr (mTimeCap @% "cap")) (evalExpr (mTimeCap @% "val")) 8;
       mTimeValidPerms: hasPerms (evalExpr (mTimeCap @% "cap"))
@@ -136,7 +134,7 @@ Section TrapCoreSpec.
                                              "GL" ::= Const type false }));
       mTimeNotSealed: evalExpr (isCapSealed (mTimeCap @% "cap")) = false;
 
-      mTimeCmpCap := (MemVar memInit) @[###mtdcValXlen + $8];
+      mTimeCmpCap := (MemVar memInit) @[###mtdcVal + $8];
       mTimeCmpTag: evalExpr (mTimeCmpCap @% "tag") = true;
       mTimeCmpSize: AddrPlusSizeInBounds (evalExpr (mTimeCmpCap @% "cap")) (evalExpr (mTimeCmpCap @% "val")) 4;
       mTimeCmpValidPerms: hasPerms (evalExpr (mTimeCmpCap @% "cap"))
@@ -174,8 +172,9 @@ Section IsolationSpec.
         In c cores ->
         DominatingCapsSingle (snd c)
           (evalExpr (STRUCT { "cap" ::= Const _ (convTypeToConst (@pcCapInit (fst c)));
-                              "val" ::= Const _ (wcombine (@pcValInit (fst c)) (wzero 2))}));
+                              "val" ::= Const _ (@pcValInit (fst c))}));
       coreNoTrap: forall c, In c cores -> @hasTrap (fst c) = false;
+      
       trapCore: CoreConfigParams;
       trapCoreMemSize: forall c, In c cores ->
                                  @LgNumMemBytes (@memParams (fst c)) = @LgNumMemBytes (@memParams trapCore);
@@ -185,6 +184,14 @@ Section IsolationSpec.
           evalExpr (MemVar (@memInit (@memParams (fst c))) @[###x]);
 
       trapCoreProps: @TrapCoreSpec trapCore numCoresWord;
+
+      noOverlapCaps: ForallOrdPairs CapsNoOverlap
+                       ([evalExpr (STRUCT { "cap" ::= ###(@mtccCap trapCore);
+                                            "val" ::= ###(@mtccVal trapCore) })] ::
+                          [evalExpr (STRUCT { "cap" ::= ###(@mtdcCap trapCore);
+                                              "val" ::= ###(@mtdcVal trapCore) })] ::
+                          [evalExpr (rmTag (mTimeCap trapCoreProps))] ::
+                          [evalExpr (rmTag (mTimeCmpCap trapCoreProps))] :: map snd cores)
     }.
 End IsolationSpec.
 
