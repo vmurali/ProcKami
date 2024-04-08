@@ -40,10 +40,9 @@ Section Props.
 
   Definition DominatingCaps (l: list (type FullCap)) n (arr: type (Array n FullCapWithTag)) :=
     forall sz (idx: type (Bit sz)),
-      existsb (fun dc =>
-                 evalLetExpr (LETC testCap <- ###arr@[###idx];
-                              LETE isSubsetCap <- SubsetCap (rmTag ###testCap) ###dc;
-                              RetE (!(###testCap @% "tag") || ###isSubsetCap))) l = true.
+      existsb (fun dc => evalLetExpr (LETC testCap <- ###arr@[###idx];
+                                      LETE isSubsetCap <- SubsetCap (rmTag ###testCap) ###dc;
+                                      RetE (!(###testCap @% "tag") || ###isSubsetCap))) l = true.
 
   Definition DominatingCapsSingle (l: list (type FullCap)) (cap: type FullCap) :=
     existsb (fun dc => evalLetExpr (SubsetCap ###cap ###dc)) l = true.
@@ -56,18 +55,7 @@ Section Props.
 
   Definition hasPerms (cap: type Cap) (perms: type CapPerms) :=
     evalLetExpr ( LETC capPerms <- getCapPerms ###cap;
-                  RetE ( (ITE (###perms @% "U0") (###capPerms @% "U0") (Const type true)) &&
-                           (ITE (###perms @% "SE") (###capPerms @% "SE") (Const type true)) &&
-                           (ITE (###perms @% "US") (###capPerms @% "US") (Const type true)) &&
-                           (ITE (###perms @% "EX") (###capPerms @% "EX") (Const type true)) &&
-                           (ITE (###perms @% "SR") (###capPerms @% "SR") (Const type true)) &&
-                           (ITE (###perms @% "MC") (###capPerms @% "MC") (Const type true)) &&
-                           (ITE (###perms @% "LD") (###capPerms @% "LD") (Const type true)) &&
-                           (ITE (###perms @% "SL") (###capPerms @% "SL") (Const type true)) &&
-                           (ITE (###perms @% "LM") (###capPerms @% "LM") (Const type true)) &&
-                           (ITE (###perms @% "SD") (###capPerms @% "SD") (Const type true)) &&
-                           (ITE (###perms @% "LG") (###capPerms @% "LG") (Const type true)) &&
-                           (ITE (###perms @% "GL") (###capPerms @% "GL") (Const type true)))) = true.
+                  RetE (isSubsetPerms ###perms ###capPerms)) = true.
 
   Definition AddrPlusSizeInBounds (cap: type Cap) (addr: type Addr) sz :=
     evalLetExpr ( LETE range : _ <- getCapBaseTop (STRUCT {"cap" ::= ###cap; "val" ::= ###addr});
