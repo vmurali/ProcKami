@@ -91,6 +91,7 @@ Section TrapCoreSpec.
 
   Record TrapCoreSpec := {
       trapCoreHasTrap: hasTrap = true;
+
       mtccValXlen := wcombine mtccVal (wzero 2) : type Addr;
       mtccValidBounds: AddrPlusSizeInBounds mtccCap mtccValXlen trapHandlerSize;
       mtccValidPerms: hasPerms mtccCap (evalExpr (STRUCT { "U0" ::= Const type false;
@@ -109,6 +110,7 @@ Section TrapCoreSpec.
                                             
       mtdcValXlen := wcombine mtdcVal (wzero 3) : type Addr;
       mtdcValidBounds: AddrPlusSizeInBounds mtdcCap mtdcValXlen (MtdcTotalSize numCoresWord);
+
       curr := (MemVar memInit) @[###mtdcValXlen + $16];
       currTagged: evalExpr (curr @% "tag") = true;
       currCapIsMtdcCap: evalExpr (curr @% "cap") = mtdcCap;
@@ -127,12 +129,10 @@ Section TrapCoreSpec.
                                                             "LG" ::= Const type true;
                                                             "GL" ::= Const type true }));
       currNotSealed: evalExpr (isCapSealed ###mtdcCap) = false;
+      
       mTimeCap := (MemVar memInit) @[###mtdcValXlen];
-      mTimeCmpCap := (MemVar memInit) @[###mtdcValXlen + $8];
       mTimeTag: evalExpr (mTimeCap @% "tag") = true;
-      mTimeCmpTag: evalExpr (mTimeCmpCap @% "tag") = true;
       mTimeSize: AddrPlusSizeInBounds (evalExpr (mTimeCap @% "cap")) (evalExpr (mTimeCap @% "val")) 8;
-      mTimeCmpSize: AddrPlusSizeInBounds (evalExpr (mTimeCmpCap @% "cap")) (evalExpr (mTimeCmpCap @% "val")) 4;
       mTimeValidPerms: hasPerms (evalExpr (mTimeCap @% "cap"))
                          (evalExpr (STRUCT { "U0" ::= Const type false;
                                              "SE" ::= Const type false;
@@ -147,6 +147,10 @@ Section TrapCoreSpec.
                                              "LG" ::= Const type false;
                                              "GL" ::= Const type false }));
       mTimeNotSealed: evalExpr (isCapSealed (mTimeCap @% "cap")) = false;
+
+      mTimeCmpCap := (MemVar memInit) @[###mtdcValXlen + $8];
+      mTimeCmpTag: evalExpr (mTimeCmpCap @% "tag") = true;
+      mTimeCmpSize: AddrPlusSizeInBounds (evalExpr (mTimeCmpCap @% "cap")) (evalExpr (mTimeCmpCap @% "val")) 4;
       mTimeCmpValidPerms: hasPerms (evalExpr (mTimeCmpCap @% "cap"))
                             (evalExpr (STRUCT { "U0" ::= Const type false;
                                                 "SE" ::= Const type false;
