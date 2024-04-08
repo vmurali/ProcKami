@@ -148,12 +148,12 @@ Class MemParams := {
     LgNumMemBytesGt0: LgNumMemBytes > 0;
     (* NumMemBytes denotes the number of bytes in each bank. So total physical memory = NumMemBytes * NumBanks *)
     NumMemBytes := Nat.pow 2 LgNumMemBytes;
-    memInit: Fin.t NumMemBytes -> type FullCapWithTag }.
+    memInit: type (Array NumMemBytes FullCapWithTag) }.
 
 Class CoreConfigParams := {
     procName : string;
     memParams: MemParams;
-    regsInit: Fin.t NumRegs -> type FullCapWithTag;
+    regsInit: type (Array NumRegs FullCapWithTag);
     pcCapInit: type Cap;
     pcValReducedInit: word (Xlen - 2);
     pcValInit := wcombine pcValReducedInit (wzero 2) : type Addr;

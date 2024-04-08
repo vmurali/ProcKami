@@ -191,10 +191,21 @@ Section IsolationSpec.
                           [evalExpr (STRUCT { "cap" ::= ###(@mtdcCap trapCore);
                                               "val" ::= ###(@mtdcVal trapCore) })] ::
                           [evalExpr (rmTag (mTimeCap trapCoreProps))] ::
-                          [evalExpr (rmTag (mTimeCmpCap trapCoreProps))] :: map snd cores)
+                          [evalExpr (rmTag (mTimeCmpCap trapCoreProps))] :: map snd cores);
+
+      contexts := map (fun '(c, _) => fun i => match i with
+                                               | Fin.F1 _ => evalExpr (STRUCT { "tag" ::= Const type true;
+                                                                                "cap" ::= ###(@pcCapInit c);
+                                                                                "val" ::= ###(@pcValInit c) })
+                                               | _ => regsInit i
+                                               end) cores;
+
+      contextsInMtdc: forall i: Fin.t (length contexts),
+        SubArrayMatch (@memInit (@memParams trapCore)) RegIdSz (nth_Fin contexts i)
+          (natToWord _ (FinFun.Fin2Restrict.f2n i))
     }.
 End IsolationSpec.
 
 (*
-- Initialize memory with trap handler (at mtcc) and trap data (at mtdc)
+- Initialize memory with trap handler (at mtcc)
 *)

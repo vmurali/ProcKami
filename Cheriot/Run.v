@@ -281,7 +281,7 @@ Section Run.
       rfIdxNum := Nat.pow 2 RegIdSz;
       rfData := FullCapWithTag;
       rfInit := RFFile isRegsAscii isRegsRfArg regsRfString 0 (Nat.pow 2 RegIdSz)
-                  (fun i => convTypeToConst (regsInit i)) |}.
+                  (fun i => @convTypeToConst FullCapWithTag (regsInit i)) |}.
 
   Definition DecodeOut := STRUCT_TYPE {
                               "pc" :: FullCap;

@@ -30,7 +30,8 @@ Section BankedMem.
       rfData := Bit 8;
       rfInit := RFFile isMemAscii isMemRfArg (memRfString (snd mb)) 0 NumMemBytes
                   (fun i =>
-                     evalLetExpr (LETC bytes <- unpack (Array NumBanks (Bit 8)) (pack (rmTag ###(memInit i)));
+                     evalLetExpr (LETC bytes <- unpack (Array NumBanks (Bit 8))
+                                                  (pack (rmTag (Var type (SyntaxKind FullCapWithTag) (memInit i))));
                                   RetE (ReadArrayConst ###bytes (fst mb)))%kami_expr) |}.
 
   Definition memFiles := map createRegFile (finTag memBankInits).
@@ -66,9 +67,10 @@ Section BankedMem.
         RFFile isMemAscii isMemRfArg tagRfString 0 NumMemBytes
           (fun i : Fin.t (Nat.pow 2 (pred LgNumMemBytes)) =>
              evalExpr
-               (###(memInit
-                      (Fin.cast
-                         (Fin.depair i (if b then Fin.FS Fin.F1 else Fin.F1: Fin.t 2)) NumMemBytesEven)) @% "tag"))
+               (Var type (SyntaxKind FullCapWithTag)
+                  (memInit
+                     (Fin.cast
+                        (Fin.depair i (if b then Fin.FS Fin.F1 else Fin.F1: Fin.t 2)) NumMemBytesEven)) @% "tag"))
     |}.
   Local Close Scope kami_expr.
   
@@ -81,7 +83,7 @@ Section BankedMem.
       Variable addr: Addr @# ty.
       
       Section CommonIdx.
-        Variable idx idxPlus1: Bit (Nat.log2_up NumMemBytes) @# ty.
+        Variable idx idxPlus1: Bit LgNumMemBytes @# ty.
         Variable idxLsb: Bit LgNumBanks @# ty.
 
         Local Fixpoint instReqCallHelp (mbs: list MemBankInit)
@@ -98,7 +100,7 @@ Section BankedMem.
       End CommonIdx.
 
       Definition instReq: ActionT ty InstRet :=
-        ( LET idx <- ZeroExtendTruncLsb (Nat.log2_up NumMemBytes)
+        ( LET idx <- ZeroExtendTruncLsb LgNumMemBytes
                        (TruncMsbTo (Xlen - LgNumBanks) LgNumBanks addr);
           LET idxPlus1 <- #idx + $1;
           LET idxLsb <- TruncLsbTo LgNumBanks _ addr;
