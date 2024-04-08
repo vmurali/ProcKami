@@ -17,7 +17,7 @@ Section InBoundsPermsTy.
     Definition InBoundsPermsAddr :=
       ( LETC perms <- getCapPerms (cap @% "cap");
         LETE inBounds <- InBoundsAddr;
-        RetE ((#perms @% "LD" || #perms @% "SD") && #inBounds)).
+        RetE ((#perms @% "EX" || #perms @% "LD" || #perms @% "SD") && #inBounds)).
   End InBoundsPerms.
 
   Section Subset.
@@ -65,7 +65,7 @@ Section Props.
 
   Definition SubArrayMatch k n (f: type (Array (Nat.pow 2 n) k)) m (g: type (Array (Nat.pow 2 m) k))
     (start: type (Bit n)) :=
-    forall i, (0 <= i)%nat -> (i < Nat.pow 2 m)%nat ->
+    forall i, (i < Nat.pow 2 m)%nat ->
               evalExpr (###f@[###start + $i]) = evalExpr (###g@[Const type (natToWord m i)]).
 End Props.
 
