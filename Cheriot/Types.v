@@ -327,7 +327,7 @@ Section InstEntry.
 
   Section Encoder.
     Variable i: InstEntry.
-    Variable cs1 cs2 cd: word (snd rs1FixedField).
+    Variable cs1 cs2 cd scr: word (snd rs1FixedField).
     Variable csr: word (snd immField).
     Variable immV: word Xlen.
     Fixpoint encodeImmField (imms: list (nat * nat)) :=
@@ -343,7 +343,7 @@ Section InstEntry.
            (if hasCs1 (instProperties i) then [existT _ rs1FixedField cs1] else []) ++
            (if hasCs2 (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
            (if hasCd (instProperties i) then [existT _ rdFixedField cd] else []) ++
-           (if hasScr (instProperties i) then [existT _ rs2FixedField cs2] else []) ++
+           (if hasScr (instProperties i) then [existT _ rs2FixedField scr] else []) ++
            (if hasCsr (instProperties i) then [existT _ immField csr] else [])).
 
     Definition encodeInst := @truncLsb InstSz _ ((wordCombiner (SigWordSort.sort encodeFullInstList))).

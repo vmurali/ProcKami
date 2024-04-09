@@ -64,7 +64,7 @@ Section Run.
           Read mepccVal : FullCapWithTag <- @^mepccReg;
           Write @^mepccReg : FullCapWithTag <- (IF exception
                                                 then #pcc
-                                                else (IF scrIdx == $$(getRegScrId mepcc)
+                                                else (IF scrIdx == $$(getScrId mepcc)
                                                       then scr
                                                       else #mepccVal));
 
@@ -100,7 +100,7 @@ Section Run.
           
           
           LETA _ <- writeRegsPred procName scrRegInfos
-                      (!exception && (wbScr && scrIdx != $$(getRegScrId mepcc))) scrIdx scr;
+                      (!exception && (wbScr && scrIdx != $$(getScrId mepcc))) scrIdx scr;
 
           LETA _ <- writeRegsPred procName csrRegInfos
                       ((!exception && wbCsr) &&

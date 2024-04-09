@@ -444,7 +444,7 @@ Section InstBaseSpec.
                       @%[ "cdTag" <- (cs1 @% "tag") && !isCapSealed (cs1 @% "cap") && #representable ]
                       @%[ "cdCap" <- cs1 @% "cap" ]
                       @%[ "cdVal" <- #newAddr ]));
-          instProperties := DefProperties<| implicitReg := getRegScrId cgp |>;
+          instProperties := DefProperties<| implicitReg := getRegId cgp |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
         |};
@@ -1203,7 +1203,7 @@ Section InstBaseSpec.
                       @%[ "wbCsr?" <- $$true]
                       @%[ "csrVal" <- pack #newMStatus ]));
           instProperties := DefProperties
-                              <| implicitScr := getRegScrId mepcc |>
+                              <| implicitScr := getScrId mepcc |>
                                                   <| implicitCsr := getCsrId mstatus |><| hasCd := false |>;
           goodInstEncode := eq_refl;
           goodImmEncode := ltac:(eexists; cbv; eauto)
@@ -1217,16 +1217,16 @@ Section InstBaseSpec.
 
   Definition scrList : list ScrReg :=
     let ZeroBits := if compressed then 1 else 2 in
-    [ {|scrRegInfo := Build_RegInfo (getRegScrId mtcc) mtccReg;
+    [ {|scrRegInfo := Build_RegInfo (getScrId mtcc) mtccReg;
         isLegal ty val := $$true;
         legalize ty val := val |};
-      {|scrRegInfo := Build_RegInfo (getRegScrId mtdc) mtdcReg;
+      {|scrRegInfo := Build_RegInfo (getScrId mtdc) mtdcReg;
         isLegal ty val := isZero (TruncLsbTo 2 _ val);
         legalize ty val := ({< TruncMsbTo (Xlen - 2) 2 val, $$(wzero 2) >}) |};
-      {|scrRegInfo := Build_RegInfo (getRegScrId mscratchc) mScratchCReg;
+      {|scrRegInfo := Build_RegInfo (getScrId mscratchc) mScratchCReg;
         isLegal ty val := $$true;
         legalize ty val := val |};
-      {|scrRegInfo := Build_RegInfo (getRegScrId mepcc) mepccReg;
+      {|scrRegInfo := Build_RegInfo (getScrId mepcc) mepccReg;
         isLegal ty val := isZero (TruncLsbTo ZeroBits _ val);
         legalize ty val :=
           ({< TruncMsbTo (Xlen - ZeroBits) ZeroBits val, $$(wzero ZeroBits) >}) |}

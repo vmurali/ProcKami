@@ -349,7 +349,7 @@ Section CapHelpers.
       RetE ((#baseTop @% "aTopBase") == (#baseTop2 @% "aTopBase")) ).
 End CapHelpers.
 
-Inductive RegScrName :=
+Inductive RegName :=
 | x0
 | x1
 | x2
@@ -479,13 +479,9 @@ Inductive RegScrName :=
 | ct3
 | ct4
 | ct5
-| ct6
-| mtcc
-| mtdc
-| mscratchc
-| mepcc.
+| ct6.
 
-Definition getRegScrIdZ (name: RegScrName) : Z :=
+Definition getRegIdZ (name: RegName) : Z :=
   match name with
   | x0 => 0
   | x1 => 1
@@ -617,19 +613,15 @@ Definition getRegScrIdZ (name: RegScrName) : Z :=
   | ct4 => 29
   | ct5 => 30
   | ct6 => 31
-  | mtcc => 28
-  | mtdc => 29
-  | mscratchc => 30
-  | mepcc => 31
   end.
 
-Definition isSameRegScr (a b: RegScrName) : bool :=
-  Z.eqb (getRegScrIdZ a) (getRegScrIdZ b).
+Definition isSameReg (a b: RegName) : bool :=
+  Z.eqb (getRegIdZ a) (getRegIdZ b).
 
-Definition getRegScrId (name: RegScrName) : word RegIdSz :=
-  ZToWord _ (getRegScrIdZ name).
+Definition getRegId (name: RegName) : word RegIdSz :=
+  ZToWord _ (getRegIdZ name).
 
-Definition getRegNameOpt (id: Z): option RegScrName :=
+Definition getRegNameOpt (id: Z): option RegName :=
   match id with
   | 0%Z => Some c0
   | 1%Z => Some c1
@@ -668,7 +660,30 @@ Definition getRegNameOpt (id: Z): option RegScrName :=
 
 Definition getRegName (id: Z) := forceOption _ _ (getRegNameOpt id) tt.
 
-Definition getScrNameOpt (id: Z): option RegScrName :=
+
+Inductive ScrName :=
+| scr0
+| mtcc
+| mtdc
+| mscratchc
+| mepcc.
+
+Definition getScrIdZ (name: ScrName) : Z :=
+  match name with
+  | scr0 => 0
+  | mtcc => 28
+  | mtdc => 29
+  | mscratchc => 30
+  | mepcc => 31
+end.
+
+Definition isSameScr (a b: ScrName) : bool :=
+  Z.eqb (getScrIdZ a) (getScrIdZ b).
+
+Definition getScrId (name: ScrName) : word ScrIdSz :=
+  ZToWord _ (getScrIdZ name).
+
+Definition getScrNameOpt (id: Z): option ScrName :=
   match id with
   | 28%Z => Some mtcc
   | 29%Z => Some mtdc
@@ -704,7 +719,6 @@ Definition getCsrId (name: CsrName) : word CsrIdSz := NToWord _ (getCsrIdN name)
 
 Definition getCsrNameOpt (id: Z): option CsrName :=
   match id with
-  | 0%Z => Some csr0
   | 768%Z => Some mstatus
   | 772%Z => Some mie
   | 834%Z => Some mcause
