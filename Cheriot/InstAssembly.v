@@ -221,8 +221,8 @@ Notation "'lui' pd , pimm" := (BuildInst "LUI" x0 x0 pd csr0 (Z.shiftr pimm 12%Z
 Notation "'%hi(' pimm )" := (Z.shiftr pimm%Z 12%Z) (at level 64): cheriot_assembly_scope.
 Notation "'%lo(' pimm )" := (Z.modulo pimm%Z (Z.pow 2 12)) (at level 64): cheriot_assembly_scope.
 
-Notation "'auicgp' pd , pimm" := (BuildInst "AUICGP" x0 x0 pd 0%Z pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
-Notation "'auipcc' pd , pimm" := (BuildInst "AUIPCC" x0 x0 pd 0%Z pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'auicgp' pd , pimm" := (BuildInst "AUICGP" x0 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'auipcc' pd , pimm" := (BuildInst "AUIPCC" x0 x0 pd csr0 pimm%Z false) (at level 65, only parsing): cheriot_assembly_scope.
 Notation "'candperm' pd , ps1 , ps2" := (BuildInst "CAndPerm" ps1 ps2 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
 Notation "'ccleartag' pd , ps1" := (BuildInst "CClearTag" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
 Notation "'cgetaddr' pd , ps1" := (BuildInst "CGetAddr" ps1 x0 pd csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
