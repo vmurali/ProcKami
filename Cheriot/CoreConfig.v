@@ -55,6 +55,28 @@ Section Prefix.
           nil
       else nil.
 
+  Record TrapRegsStruct ty :=
+    { mtccF: FullCapWithTag @# ty;
+      mtdcF: FullCapWithTag @# ty;
+      mScratchCF: FullCapWithTag @# ty;
+      mepccF: FullCapWithTag @# ty;
+      mStatusF: Data @# ty;
+      mCauseF: Data @# ty;
+      mtValF: Data @# ty;
+      mTimeF: Data @# ty;
+      mTimeCmpF: Data @# ty;
+      mtiF: Bool @# ty }.
+  
+  Record SpecRegsStruct ty :=
+           { pcCapF: Cap @# ty;
+             pcValF: Addr @# ty;
+             prevPcValF: Maybe Addr @# ty;
+             regsArrayF: Array NumRegs FullCapWithTag @# ty;
+             memArrayF: Array NumMemBytes FullCapWithTag @# ty;
+             pcCountNF: type Addr -> nat;
+             trapRegs: option (TrapRegsStruct ty)
+           }.
+
   Definition specBaseMod: BaseModule := BaseMod specRegs specRules [].
 
   Theorem WfSpecDecExecRule: forall ty, WfActionT specRegs (specDecExecRule scrList csrList ty specInstEntries).

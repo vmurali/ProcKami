@@ -166,9 +166,10 @@ Section Run.
     Definition specDecExecRule :=
       ( Read pcCap : Cap <- @^pcCapReg;
         Read pcVal : Addr <- @^pcValReg;
+        Read memArr: Array NumMemBytes FullCapWithTag <- @^memArray;
         LETAE baseTop <- getCapBaseTop (STRUCT { "cap" ::= #pcCap; "val" ::= #pcVal });
         LET topBound <- ZeroExtend 1 #pcVal + $(InstSz/8) <= (#baseTop @% "top");
-        LETA inst <- instReqSpec procName #pcVal;
+        LETAE inst <- instReqSpec #memArr #pcVal;
         Read regs : Array NumRegs FullCapWithTag <- @^regsArray;
         LET cs1Idx <- getIndex #inst (@rs1 _) implicitReg;
         LET cs2Idx <- rs2Fixed #inst;
@@ -199,8 +200,8 @@ Section Run.
                              RetE (Var ty (SyntaxKind FullOutput) out))
                         as out; RetE (Var ty (SyntaxKind FullOutput) out));
         
-        LETA ld <- loadReqSpec procName (#out @% "pcMemAddr") (#out @% "memSize") (#out @% "memCap?")
-                     (#out @% "ldSigned?");
+        LETAE ld <- loadReqSpec #memArr (#out @% "pcMemAddr") (#out @% "memSize") (#out @% "memCap?")
+                      (#out @% "ldSigned?");
         LET cd <- ITE (#out @% "mem?" && !(#out @% "store?"))
                     (STRUCT { "tag" ::= #ld @% "tag";
                               "cap" ::= #ld @% "cap";
@@ -214,8 +215,9 @@ Section Run.
                                              #cd (#regs@[#cdIdx])]);
         Write @^regsArray : Array NumRegs FullCapWithTag <- #updRegs;
 
-        LETA _ <- storeReqSpec procName (!(#out @% "exception?") && (#out @% "mem?") && (#out @% "store?"))
-                    (#out @% "pcMemAddr") (#out @% "memSize") (#out @% "memCap?") #cd;
+        LETAE newMemArr <- storeReqSpec #memArr (!(#out @% "exception?") && (#out @% "mem?") && (#out @% "store?"))
+                             (#out @% "pcMemAddr") (#out @% "memSize") (#out @% "memCap?") #cd;
+        Write @^memArray : Array NumMemBytes FullCapWithTag <- #newMemArr;
 
         LETN nativePcVal : _ <- ToNative #pcVal;
         ReadN pcCount : NativeKind (fun (pc: type Addr) => 0) <- @^pcCountNReg;
