@@ -236,8 +236,6 @@ Section IsolationSpec.
 
       contextsInMtdc: forall i: Fin.t (length contexts),
         SubArrayMatch _ (@memInit (@memParams trapCore)) RegIdSz (nth_Fin contexts i)
-          (wadd (wadd mtdcVal (ZToWord _ 24)) (natToWord _ (FinFun.Fin2Restrict.f2n i)));
-
-
+          (wadd (wadd mtdcVal (ZToWord _ 24)) (natToWord _ (FinFun.Fin2Restrict.f2n i)))
     }.
 End IsolationSpec.
