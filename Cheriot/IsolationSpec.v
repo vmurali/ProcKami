@@ -109,7 +109,7 @@ Section TrapCoreSpec.
   Local Notation MemVar x := (Var type (SyntaxKind (Array _ FullCapWithTag)) x).
 
   Record TrapCoreSpec := {
-      numCoresWord: word Imm12Sz;
+      numProcessesInWord: word Imm12Sz;
       timerQuantum: word Imm12Sz;
       trapCoreHasTrap: hasTrap = true;
 
@@ -127,15 +127,14 @@ Section TrapCoreSpec.
                                                            "LG" ::= Const type false;
                                                            "GL" ::= Const type false }));
       mtccNotSealed: evalExpr (isCapSealed ###mtccCap) = false;
+      mtccContainsInsts: ListSubArrayMatch _ memInit (trapHandlerInsts timerQuantum numProcessesInWord) mtccVal;
 
-      mtccContainsInsts: ListSubArrayMatch _ memInit (trapHandlerInsts timerQuantum numCoresWord) mtccVal;
-
-      mtdcValidBounds: AddrPlusSizeInBounds mtdcCap mtdcVal (MtdcTotalSize numCoresWord);
+      mtdcValidBounds: AddrPlusSizeInBounds mtdcCap mtdcVal (MtdcTotalSize numProcessesInWord);
 
       curr := (MemVar memInit) @[###mtdcVal + $16];
       currTagged: evalExpr (curr @% "tag") = true;
       currCapIsMtdcCap: evalExpr (curr @% "cap") = mtdcCap;
-      currAddr: exists n, wltu n numCoresWord = true /\
+      currAddr: exists n, wltu n numProcessesInWord = true /\
                             evalExpr (curr @% "val") = wadd mtdcVal (ZToWord _ (MtdcTotalSize n));
       currValidBounds: hasPerms mtdcCap (evalExpr (STRUCT { "U0" ::= Const type false;
                                                             "SE" ::= Const type false;
@@ -195,30 +194,30 @@ Section IsolationSpec.
   Local Notation MemVar x := (Var type (SyntaxKind (Array _ FullCapWithTag)) x).
 
   Record IsolationSpec := {
-      cores: list (CoreConfigParams * list (type FullCap));
+      processes: list (CoreConfigParams * list (type FullCap));
       procNameLength: nat;
-      coresNameLengthEq: forall c, In c cores -> String.length (@procName (fst c)) = procNameLength;
-      disjointCoreNames: NoDup (map (fun c => @procName (fst c)) cores);
-      coreDominatingMemCaps: forall c, In c cores -> DominatingCaps (snd c) (@memInit (@memParams (fst c)));
-      coreDominatingRegCaps: forall c, In c cores -> DominatingCaps (snd c) (@regsInit (fst c));
-      coreDominatingPcc: forall c,
-        In c cores ->
+      processesNameLengthEq: forall c, In c processes -> String.length (@procName (fst c)) = procNameLength;
+      disjointProcessNames: NoDup (map (fun c => @procName (fst c)) processes);
+      processDominatingMemCaps: forall c, In c processes -> DominatingCaps (snd c) (@memInit (@memParams (fst c)));
+      processDominatingRegCaps: forall c, In c processes -> DominatingCaps (snd c) (@regsInit (fst c));
+      processDominatingPcc: forall c,
+        In c processes ->
         DominatingCapsSingle (snd c)
           (evalExpr (STRUCT { "cap" ::= Const _ (convTypeToConst (@pcCapInit (fst c)));
                               "val" ::= Const _ (@pcValInit (fst c))}));
-      coreNoTrap: forall c, In c cores -> @hasTrap (fst c) = false;
+      processNoTrap: forall c, In c processes -> @hasTrap (fst c) = false;
       
       trapCore: CoreConfigParams;
-      trapCoreMemSize: forall c, In c cores ->
+      trapCoreMemSize: forall c, In c processes ->
                                  @LgNumMemBytes (@memParams (fst c)) = @LgNumMemBytes (@memParams trapCore);
       sameMemTrapCore: forall x c dc,
-        In c cores -> In dc (snd c) -> evalLetExpr (InBoundsAddr (###x) (###dc)) = true ->
+        In c processes -> In dc (snd c) -> evalLetExpr (InBoundsAddr (###x) (###dc)) = true ->
         evalExpr (MemVar (@memInit (@memParams trapCore)) @[###x]) =
           evalExpr (MemVar (@memInit (@memParams (fst c))) @[###x]);
 
       trapCoreProps: @TrapCoreSpec trapCore;
 
-      numCoresSame: wordVal _ (@numCoresWord trapCore trapCoreProps) = Z.of_nat (length cores);
+      numProcessesSame: wordVal _ (@numProcessesInWord trapCore trapCoreProps) = Z.of_nat (length processes);
       
       noOverlapCaps: ForallOrdPairs CapsNoOverlap
                        ([evalExpr (STRUCT { "cap" ::= ###(@mtccCap trapCore);
@@ -226,14 +225,14 @@ Section IsolationSpec.
                           [evalExpr (STRUCT { "cap" ::= ###(@mtdcCap trapCore);
                                               "val" ::= ###(@mtdcVal trapCore) })] ::
                           [evalExpr (rmTag (mTimeCap trapCoreProps))] ::
-                          [evalExpr (rmTag (mTimeCmpCap trapCoreProps))] :: map snd cores);
+                          [evalExpr (rmTag (mTimeCmpCap trapCoreProps))] :: map snd processes);
 
       contexts := map (fun '(c, _) => fun i => match i with
                                                | Fin.F1 _ => evalExpr (STRUCT { "tag" ::= Const type true;
                                                                                 "cap" ::= ###(@pcCapInit c);
                                                                                 "val" ::= ###(@pcValInit c) })
                                                | _ => regsInit i
-                                               end) cores;
+                                               end) processes;
 
       contextsInMtdc: forall i: Fin.t (length contexts),
         SubArrayMatch _ (@memInit (@memParams trapCore)) RegIdSz (nth_Fin contexts i)
@@ -242,6 +241,3 @@ Section IsolationSpec.
 
     }.
 End IsolationSpec.
-(*
-- Initialize memory with trap handler (at mtcc)
-*)
