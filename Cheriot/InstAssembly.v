@@ -34,14 +34,21 @@ Inductive ResolvedProg :=
 | ResolvedProgData (size: Z) (val: list (word 8))
 | ResolvedProgAlign (size: Z).
 
-Definition findInstEntry name : option InstEntrySpec :=
+Definition findInstEntryOpt name : option InstEntrySpec :=
   find (fun x => String.eqb name (instName x)) specInstEntries.
 
+Definition findInstName name := forceOption _ _ (match findInstEntryOpt name with
+                                                 | Some _ => Some name
+                                                 | None => None
+                                                 end) unit.
+
+Definition findInstEntry name := forceOption _ _ (findInstEntryOpt name) unit.
+
 Ltac findInstEntryLtac name :=
-  let x := eval cbv [findInstEntry find String.eqb Ascii.eqb Bool.eqb instName
+  let x := eval cbv [findInstEntryOpt find String.eqb Ascii.eqb Bool.eqb instName
                        specInstEntries mkBranchInst mkLdInst mkStInst
              scrList isValidScrs legalizeScrs csrList isValidCsrs mkCsrEntry]
-  in (findInstEntry name)
+  in (findInstEntryOpt name)
     in match x with
        | Some ?y => exact (y: InstEntrySpec)
        end.
@@ -63,32 +70,6 @@ Definition instEncoder (i: Instruction) : list (word 8) :=
   splitInst (encodeInst ie (getRegId cs1I) (getRegId cs2I) (getRegId cdI)
                (getScrId scrI) (getCsrId csrI) (ZToWord _ immI)).
 
-Definition startAlign := 2%Z.
-
-Definition instSize (inst: Instruction) := Z.of_nat (length (instEncoder inst)).
-
-Definition getNextAlignDiff (sz curr: Z) :=
-  let realCurr := Z.modulo (Z.pow 2 startAlign + curr) sz in
-  (Z.modulo (sz - realCurr) sz)%Z.
-
-Fixpoint getAddrMap (prog: Prog) (currLabelAddrMap: Z * Z * (Z -> Z)): Z * Z * (Z -> Z) :=
-  match prog with
-  | ProgSkip => currLabelAddrMap
-  | ProgInst inst rel => let '(curr, label, addrMap) := currLabelAddrMap in
-                         (curr + instSize inst, label, addrMap)%Z
-  | ProgSeq p1 p2 => getAddrMap p2 (getAddrMap p1 currLabelAddrMap)
-  | ProgDeclLabel cont => let '(curr, label, addrMap) := currLabelAddrMap in
-                          getAddrMap (cont (label + 1)%Z) (curr, label + 1, addrMap)%Z
-  | ProgLabel l => let '(curr, label, addrMap) := currLabelAddrMap in
-                   (curr, label, fun i => if (i =? l)%Z
-                                          then curr
-                                          else addrMap i)
-  | ProgData sz _ => let '(curr, label, addrMap) := currLabelAddrMap in
-                     (curr + sz, label, addrMap)%Z
-  | ProgAlign sz => let '(curr, label, addrMap) := currLabelAddrMap in
-                    (curr + getNextAlignDiff sz curr, label, addrMap)%Z
-  end.
-
 Section setLabel.
   Variable addrMap: Z -> Z.
   Fixpoint setLabel (prog: Prog) (label: Z): ResolvedProg * Z :=
@@ -104,28 +85,6 @@ Section setLabel.
     | ProgAlign sz => (ResolvedProgAlign sz, label)
     end.
 End setLabel.
-
-Fixpoint getInstBytesResolved (prog: ResolvedProg) (curr: Z): (list (word 8) * Z) :=
-  match prog with
-  | ResolvedProgSkip => ([], curr)
-  | ResolvedProgInst inst immRel =>
-      let instBytes := instEncoder (getInstructionRel inst curr immRel) in
-      (instBytes, (curr + Z.of_nat (length instBytes))%Z)
-  | ResolvedProgSeq p1 p2 => let '(p1', curr2) := getInstBytesResolved p1 curr in
-                             let '(p2', c) := getInstBytesResolved p2 curr2 in
-                             (p1' ++ p2', c)
-  | ResolvedProgData size vals => (firstn (Z.to_nat size) vals, (curr + size)%Z)
-  | ResolvedProgAlign size =>
-      let len := getNextAlignDiff size curr in
-      (repeat (wzero 8) (Z.to_nat len), (curr + len)%Z)
-  end.
-
-(* Bytes of instruction or the first error with assembly instruction, whether it's relative or not and a line number *)
-Definition getInstBytes (prog: Prog): (list (word 8))%type :=
-  let '(_, _, addrMap) := getAddrMap prog (0%Z, 0%Z, fun i => (-1)%Z) in
-  let '(resolved, _) := setLabel addrMap prog 0%Z in
-  let '(xs, _) := getInstBytesResolved resolved 0%Z in
-  xs.
 
 Definition isNonNegZ (z : Z) := match z with
                                 | Z.neg _ => false
@@ -154,34 +113,82 @@ Definition isImmValid (i: Instruction) :=
   let '(Build_Instruction ie cs1I cs2I cdI scrI csrI immI) := i in
   zWithinWidthStart immI (immStart ie) (immEnd ie) (signExt (instProperties ie)).
 
-(* TODO: Use length instBytes when compressed is supported *)
-Fixpoint getInstBytesErrorResolved (prog: ResolvedProg) (curr: Z) (idx: nat):
-  (Z * nat * list (Instruction * bool * Z * nat)) :=
-  match prog with
-  | ResolvedProgSkip => (curr, S idx, [])
-  | ResolvedProgInst inst immRel =>
-      ((curr + 4)%Z, S idx,
-        if isImmValid (getInstructionRel inst curr immRel) then [] else [(inst, immRel, curr, idx)])
-  | ResolvedProgSeq p1 p2 => let '(curr2, i2, errs1) := getInstBytesErrorResolved p1 curr idx in
-                             let '(c, i, errs2) := getInstBytesErrorResolved p2 curr2 i2 in
-                             (c, i, errs1 ++ errs2)
-  | ResolvedProgData size vals => ((curr + size)%Z, S idx, [])
-  | ResolvedProgAlign size =>
-      let len := getNextAlignDiff size curr in
-      ((curr + len)%Z, S idx, [])
-  end.
+Section StartAlign.
+  Variable startAlign: Z.
 
-Definition getInstBytesError (prog: Prog): list (Instruction * bool * Z * nat) :=
-  let '(_, _, addrMap) := getAddrMap prog (0%Z, 0%Z, fun i => (-1)%Z) in
-  let '(resolved, _) := setLabel addrMap prog 0%Z in
-  let '(_, _, errs) := getInstBytesErrorResolved resolved 0%Z 0 in
-  errs.
+  Definition getNextAlignDiff (sz curr: Z) :=
+    let realCurr := Z.modulo (Z.pow 2 startAlign + curr) sz in
+    (Z.modulo (sz - realCurr) sz)%Z.
+
+  Fixpoint getAddrMap (prog: Prog) (currLabelAddrMap: Z * Z * (Z -> Z)): Z * Z * (Z -> Z) :=
+    match prog with
+    | ProgSkip => currLabelAddrMap
+    | ProgInst inst rel => let '(curr, label, addrMap) := currLabelAddrMap in
+                           (curr + 4, label, addrMap)%Z
+    | ProgSeq p1 p2 => getAddrMap p2 (getAddrMap p1 currLabelAddrMap)
+    | ProgDeclLabel cont => let '(curr, label, addrMap) := currLabelAddrMap in
+                            getAddrMap (cont (label + 1)%Z) (curr, label + 1, addrMap)%Z
+    | ProgLabel l => let '(curr, label, addrMap) := currLabelAddrMap in
+                     (curr, label, fun i => if (i =? l)%Z
+                                            then curr
+                                            else addrMap i)
+    | ProgData sz _ => let '(curr, label, addrMap) := currLabelAddrMap in
+                       (curr + sz, label, addrMap)%Z
+    | ProgAlign sz => let '(curr, label, addrMap) := currLabelAddrMap in
+                      (curr + getNextAlignDiff sz curr, label, addrMap)%Z
+    end.
+
+  Fixpoint getInstBytesResolved (prog: ResolvedProg) (curr: Z): (list (word 8) * Z) :=
+    match prog with
+    | ResolvedProgSkip => ([], curr)
+    | ResolvedProgInst inst immRel =>
+        let instBytes := instEncoder (getInstructionRel inst curr immRel) in
+        (instBytes, (curr + 4)%Z)
+    | ResolvedProgSeq p1 p2 => let '(p1', curr2) := getInstBytesResolved p1 curr in
+                               let '(p2', c) := getInstBytesResolved p2 curr2 in
+                               (p1' ++ p2', c)
+    | ResolvedProgData sz vals => (firstn (Z.to_nat sz) vals, (curr + sz)%Z)
+    | ResolvedProgAlign sz =>
+        let len := getNextAlignDiff sz curr in
+        (repeat (wzero 8) (Z.to_nat len), (curr + len)%Z)
+    end.
+
+  (* TODO: Use length instBytes when compressed is supported *)
+  Fixpoint getInstBytesErrorResolved (prog: ResolvedProg) (curr: Z) (idx: nat):
+    (Z * nat * list (Instruction * bool * Z * nat)) :=
+    match prog with
+    | ResolvedProgSkip => (curr, S idx, [])
+    | ResolvedProgInst inst immRel =>
+        ((curr + 4)%Z, S idx,
+          if isImmValid (getInstructionRel inst curr immRel) then [] else [(inst, immRel, curr, idx)])
+    | ResolvedProgSeq p1 p2 => let '(curr2, i2, errs1) := getInstBytesErrorResolved p1 curr idx in
+                               let '(c, i, errs2) := getInstBytesErrorResolved p2 curr2 i2 in
+                               (c, i, errs1 ++ errs2)
+    | ResolvedProgData size vals => ((curr + size)%Z, S idx, [])
+    | ResolvedProgAlign size =>
+        let len := getNextAlignDiff size curr in
+        ((curr + len)%Z, S idx, [])
+    end.
+  (* Bytes of instruction or the first error with assembly instruction, whether it's relative or not and a line number *)
+  Definition getInstBytes (prog: Prog): (list (word 8))%type :=
+    let '(_, _, addrMap) := getAddrMap prog (0%Z, 0%Z, fun i => (-1)%Z) in
+    let '(resolved, _) := setLabel addrMap prog 0%Z in
+    let '(xs, _) := getInstBytesResolved resolved 0%Z in
+    xs.
+
+  Definition getInstBytesError (prog: Prog): list (Instruction * bool * Z * nat) :=
+    let '(_, _, addrMap) := getAddrMap prog (0%Z, 0%Z, fun i => (-1)%Z) in
+    let '(resolved, _) := setLabel addrMap prog 0%Z in
+    let '(_, _, errs) := getInstBytesErrorResolved resolved 0%Z 0 in
+    errs.
+
+End StartAlign.
 
 Declare Scope cheriot_assembly_scope.
 Delimit Scope cheriot_assembly_scope with cheriot_assembly.
 
 Local Notation BuildInst name ps1 ps2 pd scrId csrId immV rel :=
-  (ProgInst (Build_Instruction ltac:(findInstEntryLtac name) ps1 ps2 pd scrId csrId immV%Z) rel)
+  (ProgInst (Build_Instruction (findInstEntry name) ps1 ps2 pd scrId csrId immV%Z) rel)
     (only parsing).
 
 Local Open Scope cheriot_assembly_scope.
@@ -218,7 +225,7 @@ Notation "'and' pd , ps1 , ps2" := (BuildInst "And" ps1 ps2 pd scr0 csr0 0%Z fal
 Notation "'sll' pd , ps1 , ps2" := (BuildInst "SLL" ps1 ps2 pd scr0 csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
 Notation "'srl' pd , ps1 , ps2" := (BuildInst "SRL" ps1 ps2 pd scr0 csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
 Notation "'sra' pd , ps1 , ps2" := (BuildInst "SRA" ps1 ps2 pd scr0 csr0 0%Z false) (at level 65, only parsing): cheriot_assembly_scope.
-Notation "'lui' pd , pimm" := (BuildInst "LUI" x0 x0 pd scr0 csr0 (Z.shiftr pimm 12%Z) false) (at level 65, only parsing): cheriot_assembly_scope.
+Notation "'lui' pd , pimm" := (BuildInst "LUI" x0 x0 pd scr0 csr0 pimm false) (at level 65, only parsing): cheriot_assembly_scope.
 
 Notation "'%hi(' pimm )" := (Z.shiftr pimm%Z 12%Z) (at level 64): cheriot_assembly_scope.
 Notation "'%lo(' pimm )" := (Z.modulo pimm%Z (Z.pow 2 12)) (at level 64): cheriot_assembly_scope.

@@ -25,6 +25,7 @@ Section Run.
 
   Definition handleException
     (mtiReset: Bool @# ty)
+    (currPcVal: Addr @# ty)
     (newPcVal: Addr @# ty)
     (changePcCap: Bool @# ty)
     (newPcCap: Cap @# ty)
@@ -57,6 +58,9 @@ Section Run.
       Write @^pcCapReg : Cap <- (IF exception
                                  then #exceptionPc @% "cap"
                                  else ITE changePcCap newPcCap #pcCap);
+
+      Write @^prevPcValReg: Maybe Addr <- STRUCT { "valid" ::= $$true;
+                                                   "data" ::= currPcVal };
 
       if hasTrap
       then
@@ -215,6 +219,7 @@ Section Run.
 
         handleException
           ((*mtiReset :=*) #mti)
+          ((*currPcVal :=*) #pcVal)
           ((*newPcVal :=*) ITE (#out @% "taken?") (#out @% "pcMemAddr") (#pcVal + $(InstSz/8)))
           ((*changePcCap :=*) #out @% "changePcCap?")
           ((*newPcCap :=*) #out @% "pcCap")

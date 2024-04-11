@@ -536,3 +536,37 @@ Section ExistsForall.
     tauto.
   Qed.
 End ExistsForall.
+
+
+Section nth_Fin_nth_error.
+  Variable A: Type.
+
+  Lemma nth_Fin'_nth_error:
+    forall n i (xs: list A) (len_eq: n = length xs),
+      let i' := proj1_sig (Fin.to_nat i) in
+      Some (nth_Fin' xs len_eq i) = nth_error xs i'.
+  Proof.
+    induction n; cbn; intros *; try easy.
+    destruct xs; cbn in *; try easy.
+    inversion len_eq.
+    destruct i eqn:?; cbn; auto.
+    destruct (Fin.to_nat _) eqn:?; cbn.
+    assert (n0 = n); subst.
+    { inversion len_eq; subst; auto. }
+    specialize (IHn t xs (f_equal pred len_eq)).
+    rewrite Heqs in IHn; cbn in IHn; auto.
+  Qed.
+  
+  Lemma nth_Fin_nth_error:
+    forall (xs: list A) i,
+      let i' := proj1_sig (Fin.to_nat i) in
+      Some (nth_Fin xs i) = nth_error xs i'.
+  Proof.
+    cbn; intros.
+    rewrite <- (nth_Fin'_nth_error _ _ eq_refl).
+    unfold nth_Fin'; repeat f_equal.
+    clear; induction i; cbn; auto.
+    rewrite <- IHi; auto.
+  Qed.
+ 
+End nth_Fin_nth_error.

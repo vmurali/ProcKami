@@ -1,6 +1,7 @@
 Require Import Kami.AllNotations ProcKami.Cheriot.InstAssembly ProcKami.Cheriot.Types.
 
 Section TrapHandler.
+  Variable startAlign: Z.
   Variable TimerQuantum: word 12.
   Variable NumProcesses: word 12.
 
@@ -95,8 +96,13 @@ Section TrapHandler.
       advanceContext mtdcAddr curr tmp pf1 pf2 pf3 ;;
       loadContextSetTimeCmpMRet mtdcAddr curr tmp pf1 pf2 pf3 ).
 
-  Definition trapHandlerInst := trapHandler c1 c2 c3 eq_refl eq_refl eq_refl.
+  Definition trapHandlerInsts :=
+    ltac:(let y := eval unfold trapHandler, saveCurrentContext, advanceContext,
+              loadContextSetTimeCmpMRet, setTimeCmp, saveAllRegsExcept, loadAllRegsExcept,
+              getInstBytes, getAddrMap, setLabel, getInstBytesResolved, getInstructionRel, instEncoder, splitInst in
+          (getInstBytes startAlign (trapHandler c1 c2 c3 eq_refl eq_refl eq_refl)) in
+            let z := eval simpl in y in exact z).
 
-  Definition trapHandlerSize := ltac:(let x := eval cbv in
-                                      (Z.of_nat (length (getInstBytes trapHandlerInst))) in exact x).
+  Definition trapHandlerSize := ltac:(let x := eval simpl in
+                                      (Z.of_nat (length trapHandlerInsts)) in exact x).
 End TrapHandler.

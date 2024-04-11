@@ -485,6 +485,7 @@ Section Run.
 
           handleException scrs csrs
             ((*mtiReset :=*) #mti)
+            ((*currPcVal :=*) #pcVal)
             ((*newPcVal :=*) (ITE (#out @% "taken?")
                                  (#out @% "addrOrScrOrCsrVal")
                                  (#pcVal + if compressed

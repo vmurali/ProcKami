@@ -98,7 +98,6 @@ Definition isRegsAscii := false.
 Definition isRegsRfArg := true.
 Definition pcCapReg := "pcCap".
 Definition pcValReg := "pcVal".
-Definition prevPcCapReg := "prevPcCap".
 Definition prevPcValReg := "prevPcVal".
 Definition justFenceIReg := "justFenceI".
 Definition startFenceIReg := "startFenceI".

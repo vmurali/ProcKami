@@ -64,20 +64,58 @@ Section Props.
                   RetE (###baseBound && ###topBound )) = true.
 
   Definition SubArrayMatch k n (f: type (Array (Nat.pow 2 n) k)) m (g: type (Array (Nat.pow 2 m) k))
-    (start: type (Bit n)) :=
+    (start: type Addr) :=
     forall i, (i < Nat.pow 2 m)%nat ->
-              evalExpr (###f@[###start + $i]) = evalExpr (###g@[Const type (natToWord m i)]).
+              evalExpr (###f@[(TruncMsbTo (Xlen - LgNumBanks) LgNumBanks ###start) + $i]) =
+                evalExpr (###g@[Const type (natToWord m i)]).
+
+  (* Assumes the starting of the list is aligned to 8 bytes *)
+  Definition ListSubArrayMatch n (f: type (Array (Nat.pow 2 n) FullCapWithTag)) (ls: list (type (Bit 8)))
+    (start: type Addr): Prop :=
+    forall i,
+      let iz := Z.of_nat (FinFun.Fin2Restrict.f2n i) in
+      nth_Fin ls i =
+        evalLetExpr ( LETC offsetAddr <- Const type (ZToWord _ (iz / 8));
+                      LETC s <- TruncMsbTo (Xlen - LgNumBanks) LgNumBanks ###start;
+                      LETC eightBytes <- unpack (Array 8 (Bit 8)) (pack (rmTag (###f@[###s + ###offsetAddr])));
+                      RetE (###eightBytes@[Const type (ZToWord 3 iz)]) ).
+
+  Definition ListSubArrayMatchGeneral n (f: type (Array (Nat.pow 2 n) FullCapWithTag)) (ls: list (type (Bit 8)))
+    (start: type Addr) (startOffset: word 3): Prop :=
+    let startOffsetZ := wordVal _ startOffset in
+    let startOffsetNat := Z.to_nat startOffsetZ in
+    let prelude := repeat (wzero 8) startOffsetNat in
+    forall i,
+      let iz := Z.of_nat (FinFun.Fin2Restrict.f2n i) in
+      (iz >= startOffsetZ)%Z ->
+      nth_Fin (prelude ++ ls) i =
+        evalLetExpr ( LETC offsetAddr <- Const type (ZToWord _ (iz / 8));
+                      LETC s <- TruncMsbTo (Xlen - LgNumBanks) LgNumBanks ###start;
+                      LETC eightBytes <- unpack (Array 8 (Bit 8)) (pack (rmTag (###f@[###s + ###offsetAddr])));
+                      RetE (###eightBytes@[Const type (ZToWord 3 iz)]) ).
+
+  Lemma ListSubArrayMatch_iff_General0 n f ls start:
+    @ListSubArrayMatch n f ls start <-> @ListSubArrayMatchGeneral n f ls start (wzero 3).
+  Proof.
+    unfold ListSubArrayMatch, ListSubArrayMatchGeneral; intros.
+    cbn [wordVal wzero].
+    unfold Z.modulo, Z.div_eucl, Z.to_nat, repeat, app.
+    split; intros; auto.
+    apply H; (auto || lia).
+  Qed.
 End Props.
 
 Section TrapCoreSpec.
   Context `{coreConfigParams: CoreConfigParams}.
   Instance memParamsInst: MemParams := @memParams coreConfigParams.
-  Variable numCoresWord: word Imm12Sz.
+
   Local Open Scope kami_expr.
 
   Local Notation MemVar x := (Var type (SyntaxKind (Array _ FullCapWithTag)) x).
 
   Record TrapCoreSpec := {
+      numCoresWord: word Imm12Sz;
+      timerQuantum: word Imm12Sz;
       trapCoreHasTrap: hasTrap = true;
 
       mtccValidBounds: AddrPlusSizeInBounds mtccCap mtccVal trapHandlerSize;
@@ -94,7 +132,9 @@ Section TrapCoreSpec.
                                                            "LG" ::= Const type false;
                                                            "GL" ::= Const type false }));
       mtccNotSealed: evalExpr (isCapSealed ###mtccCap) = false;
-                                            
+
+      mtccContainsInsts: ListSubArrayMatch _ memInit (trapHandlerInsts timerQuantum numCoresWord) mtccVal;
+
       mtdcValidBounds: AddrPlusSizeInBounds mtdcCap mtdcVal (MtdcTotalSize numCoresWord);
 
       curr := (MemVar memInit) @[###mtdcVal + $16];
@@ -161,8 +201,6 @@ Section IsolationSpec.
 
   Record IsolationSpec := {
       cores: list (CoreConfigParams * list (type FullCap));
-      numCoresWord: word Imm12Sz;
-      numCoresSame: wordVal _ numCoresWord = Z.of_nat (length cores);
       procNameLength: nat;
       coresNameLengthEq: forall c, In c cores -> String.length (@procName (fst c)) = procNameLength;
       disjointCoreNames: NoDup (map (fun c => @procName (fst c)) cores);
@@ -183,8 +221,10 @@ Section IsolationSpec.
         evalExpr (MemVar (@memInit (@memParams trapCore)) @[###x]) =
           evalExpr (MemVar (@memInit (@memParams (fst c))) @[###x]);
 
-      trapCoreProps: @TrapCoreSpec trapCore numCoresWord;
+      trapCoreProps: @TrapCoreSpec trapCore;
 
+      numCoresSame: wordVal _ (@numCoresWord trapCore trapCoreProps) = Z.of_nat (length cores);
+      
       noOverlapCaps: ForallOrdPairs CapsNoOverlap
                        ([evalExpr (STRUCT { "cap" ::= ###(@mtccCap trapCore);
                                             "val" ::= ###(@mtccVal trapCore) })] ::
@@ -201,11 +241,12 @@ Section IsolationSpec.
                                                end) cores;
 
       contextsInMtdc: forall i: Fin.t (length contexts),
-        SubArrayMatch (@memInit (@memParams trapCore)) RegIdSz (nth_Fin contexts i)
-          (natToWord _ (FinFun.Fin2Restrict.f2n i))
+        SubArrayMatch _ (@memInit (@memParams trapCore)) RegIdSz (nth_Fin contexts i)
+          (wadd (wadd mtdcVal (ZToWord _ 24)) (natToWord _ (FinFun.Fin2Restrict.f2n i)));
+
+
     }.
 End IsolationSpec.
-
 (*
 - Initialize memory with trap handler (at mtcc)
 *)
