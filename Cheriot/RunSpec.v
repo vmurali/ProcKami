@@ -217,6 +217,14 @@ Section Run.
         LETA _ <- storeReqSpec procName (!(#out @% "exception?") && (#out @% "mem?") && (#out @% "store?"))
                     (#out @% "pcMemAddr") (#out @% "memSize") (#out @% "memCap?") #cd;
 
+        LETN nativePcVal : _ <- ToNative #pcVal;
+        ReadN pcCount : NativeKind (fun (pc: type Addr) => 0) <- @^pcCountNReg;
+        WriteN @^pcCountNReg : NativeKind (fun (pc: type Addr) => 0) <-
+                                 (Var ty (NativeKind (fun (pc: type Addr) => 0))
+                                            (fun (pc: type Addr) => if weqb pc nativePcVal
+                                                                    then S (pcCount pc)
+                                                                    else pcCount pc));
+
         handleException
           ((*mtiReset :=*) #mti)
           ((*currPcVal :=*) #pcVal)

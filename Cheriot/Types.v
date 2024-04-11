@@ -123,6 +123,7 @@ Definition mtValReg := "MTVal".
 Definition mTimeReg := "MTime".
 Definition mTimeCmpReg := "MTimeCmp".
 Definition mtiReg := "MTI".
+Definition pcCountNReg := "pcCount".
 
 Record MemBankInit :=
   { instRqName: string;

@@ -21,6 +21,7 @@ Section Prefix.
       (@^regsArray, existT _ _ (Some (SyntaxConst (@convTypeToConst (Array NumRegs FullCapWithTag) regsInit)))) ::
       (@^memArray, existT _ _ (Some (SyntaxConst (@convTypeToConst (Array NumMemBytes FullCapWithTag)
                                                     memInit)))) ::
+      (@^pcCountNReg, existT _ _ (Some (NativeConst (fun (pc: type Addr) => 0)))) ::
       if hasTrap
       then
         (@^mtccReg,
