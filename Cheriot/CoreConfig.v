@@ -47,7 +47,6 @@ Section Prefix.
                                               "val" ::= Const _ (wzero Xlen)})))))) ::
           (@^mepccReg, existT _ (SyntaxKind FullCapWithTag) (Some (SyntaxConst (getDefaultConst FullCapWithTag)))) ::
           (@^mStatusReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::
-          (@^mieReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::
           (@^mCauseReg, existT _ (SyntaxKind Data) None) ::
           (@^mtValReg, existT _ (SyntaxKind Data) None) ::
           (@^mTimeReg, existT _ (SyntaxKind Data) (Some (SyntaxConst (wzero Xlen)))) ::

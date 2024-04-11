@@ -1281,18 +1281,10 @@ Section InstBaseSpec.
    |}.
 
   Definition MStatusInit := Xlen 'h"80".
-  Definition MIEInit : word Xlen := evalExpr (ZeroExtend (Xlen - 12)
-                                                ({<if MeieInit then Const type (4'h"8") else $0,
-                                                    if MtieInit then Const type (4'h"8") else $0,
-                                                    if MsieInit then Const type (4'h"8") else $0>})).
-
   Definition csrList : list CsrReg := [
       {|csrRegInfo := Build_RegInfo (getCsrId mstatus) mStatusReg;
         isSystemCsr := true;
         csrMask := Some (Xlen 'h"88") |};
-      {|csrRegInfo := Build_RegInfo (getCsrId mie) mieReg;
-        isSystemCsr := true;
-        csrMask := Some (Xlen 'h"888") |};
       {|csrRegInfo := Build_RegInfo (getCsrId mcause) mCauseReg;
         isSystemCsr := true;
         csrMask := None |};
