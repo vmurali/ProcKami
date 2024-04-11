@@ -13,11 +13,6 @@ Section InBoundsPermsTy.
     Definition InBoundsAddr :=
       ( LETE inRangeVal <- getCapBaseTop cap;
         RetE ((x >= #inRangeVal @% "base") && (ZeroExtend 1 x < #inRangeVal @% "top"))).
-
-    Definition InBoundsPermsAddr :=
-      ( LETC perms <- getCapPerms (cap @% "cap");
-        LETE inBounds <- InBoundsAddr;
-        RetE ((#perms @% "EX" || #perms @% "LD" || #perms @% "SD") && #inBounds)).
   End InBoundsPerms.
 
   Section Subset.
