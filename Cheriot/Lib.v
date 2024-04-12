@@ -186,36 +186,38 @@ Definition getAddrFromInfo (name: string) n (regs: list (RegInfo n)) :=
   | None => wzero _
   end.
 
-Local Open Scope kami_action.
-Definition readRegs prefix n (regs: list (RegInfo n)) ty (addr: Bit n @# ty) k : ActionT ty k :=
-  redAction (@Kor _ k)
-    (fun x => ( If (addr == Const ty (regAddr x))
-                then ( Read retVal : k <- ((prefix ++ "_") ++ (regName x))%string;
-                       Ret #retVal )
-                else Ret (Const ty Default) as ret;
-                Ret #ret )) regs.
+Section ReadWriteRegs.
+  Local Open Scope kami_action.
+  Definition readRegs prefix n (regs: list (RegInfo n)) ty (addr: Bit n @# ty) k : ActionT ty k :=
+    redAction (@Kor _ k)
+      (fun x => ( If (addr == Const ty (regAddr x))
+                  then ( Read retVal : k <- ((prefix ++ "_") ++ (regName x))%string;
+                         Ret #retVal )
+                  else Ret (Const ty Default) as ret;
+                  Ret #ret )) regs.
 
-Definition writeRegsPred prefix n (regs: list (RegInfo n)) ty
-  (pred: Bool @# ty) (addr: Bit n @# ty) k (val: k @# ty) :=
-  fold_right (fun x rest => ( If (addr == Const ty (regAddr x))
-                              then (WriteIf pred Then ((prefix ++ "_") ++ (regName x))%string : k <- val; Retv)
-                              else Retv;
-                              rest ) ) Retv regs.
+  Definition writeRegsPred prefix n (regs: list (RegInfo n)) ty
+    (pred: Bool @# ty) (addr: Bit n @# ty) k (val: k @# ty) :=
+    fold_right (fun x rest => ( If (addr == Const ty (regAddr x))
+                                then (WriteIf pred Then ((prefix ++ "_") ++ (regName x))%string : k <- val; Retv)
+                                else Retv;
+                                rest ) ) Retv regs.
 
-Definition writeRegs prefix n (regs: list (RegInfo n)) ty (addr: Bit n @# ty) k (val: k @# ty) :=
-  fold_right (fun x rest => ( If (addr == Const ty (regAddr x))
-                              then ( Write ((prefix ++ "_") ++ (regName x))%string : k <- val; Retv )
-                              else Retv;
-                              rest ) ) Retv regs.
+  Definition writeRegs prefix n (regs: list (RegInfo n)) ty (addr: Bit n @# ty) k (val: k @# ty) :=
+    fold_right (fun x rest => ( If (addr == Const ty (regAddr x))
+                                then ( Write ((prefix ++ "_") ++ (regName x))%string : k <- val; Retv )
+                                else Retv;
+                                rest ) ) Retv regs.
 
-Definition callReadRegFile k (name: string) ty n (idx: Bit n @# ty) : ActionT ty k :=
-  ( Call ret : Array 1 k <- name (idx: Bit n);
-    Ret (ReadArrayConst #ret Fin.F1) ).
+  Definition callReadRegFile k (name: string) ty n (idx: Bit n @# ty) : ActionT ty k :=
+    ( Call ret : Array 1 k <- name (idx: Bit n);
+      Ret (ReadArrayConst #ret Fin.F1) ).
 
-Definition callWriteRegFile (name: string) ty n (idx: Bit n @# ty) k (v: k @# ty) : ActionT ty Void :=
-  ( Call name (STRUCT { "addr" ::= idx;
-                        "data" ::= BuildArray (fun _ => v) } : WriteRq n (Array 1 k));
-    Retv ).
+  Definition callWriteRegFile (name: string) ty n (idx: Bit n @# ty) k (v: k @# ty) : ActionT ty Void :=
+    ( Call name (STRUCT { "addr" ::= idx;
+                          "data" ::= BuildArray (fun _ => v) } : WriteRq n (Array 1 k));
+      Retv ).
+End ReadWriteRegs.
 
 Module Type ToNat.
   Parameter t: Type.

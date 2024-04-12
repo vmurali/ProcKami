@@ -2,10 +2,6 @@ Require Import Kami.AllNotations.
 Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
 Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.MemSpec.
 
-Notation "'IfE' cexpr 'then' tact 'else' fact 'as' name ; cont " :=
-  (IfElseE cexpr%kami_expr tact fact (fun name => cont))
-    (at level 14, right associativity) : kami_expr_scope.
-
 Section Run.
   Context `{coreConfigParams: CoreConfigParams}.
   Instance memParamsInst: MemParams := memParams.
@@ -122,8 +118,9 @@ Section Run.
       then
       ( Read mTime : Data <- @^mTimeReg;
         Read mTimeCmp: Data <- @^mTimeCmpReg;
-        LET msb <- UniBit (TruncMsb (Xlen - 1) 1) (#mTime - #mTimeCmp);
-        WriteIf (isZero #msb) Then @^mtiReg : Bool <- $$true;
+        Read mti: Bool <- @^mtiReg;
+        LET msb <- TruncMsbTo 1 (Xlen - 1) (#mTime - #mTimeCmp);
+        Write @^mtiReg : Bool <- ITE (isZero #msb) $$true #mti;
         Write @^mTimeReg : Data <- #mTime + $1;
         Retv )
       else Retv ).
