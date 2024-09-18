@@ -66,7 +66,7 @@ Section DeviceIfc.
                                                         "data" ::= #req @% "req" @% "data" } in
     STRUCT { "dtag" ::= castBits _ (#req @% "req" @% "dtag") ;
              "req" ::= deviceInReq}).
-  abstract (unfold numDevices; simpl; unfold deviceIfcs; rewrite map_length; auto).
+  abstract (unfold numDevices; simpl; unfold deviceIfcs; rewrite length_map; auto).
   Defined.
   
   Local Definition routerSendReq ty (req: ty (ChannelAReq tagK)): ActionT ty Bool :=

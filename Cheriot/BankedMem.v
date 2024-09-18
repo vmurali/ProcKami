@@ -95,7 +95,7 @@ Section BankedMem.
                          (eq_rect _ _ (instReqCallHelp ms
                                          (exprs ++ [#ret]) (S pos)) _ _))
           end.
-        abstract (rewrite app_length, <- Nat.add_assoc; reflexivity).
+        abstract (rewrite length_app, <- Nat.add_assoc; reflexivity).
         Defined.
       End CommonIdx.
 
@@ -148,7 +148,7 @@ Section BankedMem.
                          as ret;
                          (eq_rect _ _ (memReqCallHelp ms (S pos) (exprs ++ [#ret])) _ _))
           end.
-        abstract (rewrite app_length, <- Nat.add_assoc; reflexivity).
+        abstract (rewrite length_app, <- Nat.add_assoc; reflexivity).
         Defined.
       End CommonIdx.
 
