@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Lib.
+Require Import Kami.AllNotations.
 Require Import RecordUpdate.RecordUpdate.
 Require Export ProcKami.Cheriot.CheriotTypes.
 

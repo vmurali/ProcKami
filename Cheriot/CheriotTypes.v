@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Lib.
+Require Import Kami.AllNotations.
 Require Import RecordUpdate.RecordUpdate.
 
 Definition compressed := false.

@@ -1,4 +1,4 @@
-Require Import Kami.AllNotations ProcKami.Cheriot.Lib ProcKami.Cheriot.Types.
+Require Import Kami.AllNotations ProcKami.Cheriot.Types.
 
 Section DecExec.
   Variable ty: Kind -> Type.

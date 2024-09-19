@@ -1,5 +1,5 @@
 Require Import Kami.AllNotations.
-Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.CoreConfig.
+Require Import ProcKami.Cheriot.Types ProcKami.Cheriot.CoreConfig.
 Require Import ProcKami.Cheriot.InstAssembly ProcKami.Cheriot.TrapHandler.
 
 Section InBoundsPermsTy.

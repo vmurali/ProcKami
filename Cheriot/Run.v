@@ -1,5 +1,5 @@
 Require Import Kami.AllNotations.
-Require Import ProcKami.Cheriot.Lib ProcKami.Cheriot.Types ProcKami.Cheriot.RunSpec.
+Require Import ProcKami.Cheriot.Types ProcKami.Cheriot.RunSpec.
 Require Import ProcKami.Cheriot.DecExec ProcKami.Cheriot.BankedMem.
 
 Section Run.
