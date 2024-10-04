@@ -85,7 +85,7 @@ Section Prefix.
            readRegs writeRegsPred];
       intros.
     destruct hasTrap;
-      cbn [redAction fold_right Kami.Notations.redActionHelp scrList csrList scrRegInfo csrRegInfo
+      cbn [redAction fold_right Kami.LibMisc.redActionHelp scrList csrList scrRegInfo csrRegInfo
              map filter isSystemCsr negb regName];
       repeat dischargeWfActionT_specific.
   Qed.

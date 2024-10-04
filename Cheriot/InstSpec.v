@@ -438,7 +438,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"7b"))];
           immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_U];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETC newAddr <- (cs1 @% "val") + ZeroExtendTo Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
+            ( LETC newAddr <- (cs1 @% "val") + SignExtendTo Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
               LETE representable <- representableFnCap (rmTag cs1) #newAddr;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- (cs1 @% "tag") && !isCapSealed (cs1 @% "cap") && #representable ]
@@ -452,7 +452,7 @@ Section InstBaseSpec.
           uniqId := [fieldVal opcodeField (truncMsb (7'h"17"))];
           immEncoder := [Build_ImmEncoder (fst auiLuiField) imm20_U];
           spec ty pc inst cs1 cs2 scr csr :=
-            ( LETC newAddr <- (pc @% "val") + ZeroExtendTo Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
+            ( LETC newAddr <- (pc @% "val") + SignExtendTo Xlen ({< auiLuiOffset inst, $$(wzero 11) >});
               LETE representable <- representableFnCap pc #newAddr;
               RetE ((DefWbFullOutput ty)
                       @%[ "cdTag" <- #representable ]
