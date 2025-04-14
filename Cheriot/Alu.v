@@ -657,6 +657,7 @@ Section Alu.
                                      "updIe" :: Bool ;
                                      "mRet" :: Bool ;
                                      "resValid" :: Bool ;
+                                     "fetchException" :: Bool ;
                                      "exception" :: Bool }.
 
   Local Definition exception x := (STRUCT { "valid" ::= $$true;
@@ -848,18 +849,24 @@ Section Alu.
       LETC isException <- Kor [TagException; BoundsException;
                                #fullIllegal; EBreak; ECall; #clcException; #cscException; #isCapException];
 
-      (* TODO: Must follow priority *)
-      LETC mcause: Bit Xlen <- Kor [ ITE0 #fullIllegal $IllegalException;
-                                     ITE0 EBreak $EBreakException;
-                                     ITE0 ECall $ECallException;
-                                     ITE0 #clcException $LdAlignException;
-                                     ITE0 #cscException $SdAlignException;
-                                     ITE0 #isCapException $CapException ];
+      LETC mcause: Bit Xlen <- ITE (TagException || BoundsException)
+                                 $CapException
+                                 (ITE (#isException && !#isCapException)
+                                    (Kor [ ITE0 #fullIllegal $IllegalException;
+                                           ITE0 EBreak $EBreakException;
+                                           ITE0 ECall $ECallException;
+                                           ITE0 #clcException $LdAlignException;
+                                           ITE0 #cscException $SdAlignException ])
+                                    (ITE0 #isCapException $CapException));
 
-      LETC mtval: Bit Xlen <- Kor [ ITE0 #fullIllegal inst;
-                                    ITE0 (#clcException || #cscException) #resAddrVal;
-                                    ITE0 #isCapException
-                                      (ZeroExtendTo Xlen ({< #capExceptionSrc, #capExceptionVal >})) ];
+      LETC mtval: Bit Xlen <- ITE (TagException || BoundsException)
+                                (@ZeroExtendTo _ Xlen CapExceptSz (Kor [ITE0 TagException $TagViolation;
+                                                                        ITE0 BoundsException $BoundsViolation]))
+                                   (ITE (#isException && !#isCapException)
+                                      (Kor [ ITE0 #fullIllegal inst;
+                                             ITE0 (#clcException || #cscException) #resAddrVal ])
+                                      (ITE0 #isCapException
+                                         (ZeroExtendTo Xlen ({< #capExceptionSrc, #capExceptionVal >}))));
 
       LETC saturated <- saturatedMax
                           (Kor [ITE0 CGetBase #cap1Base; ITE0 CGetTop #cap1Top; ITE0 CGetLen #adderResFull;
@@ -947,6 +954,7 @@ Section Alu.
                                    "mRet" ::= MRet && !#isException;
                                    "resValid" ::= !(Branch || #load_store || #isCsr || CSpecialRw ||
                                                       isZero #rdIdx || #isException);
+                                   "fetchException" ::= (TagException || BoundsException);
                                    "exception" ::= #isException };
       RetE #ret ).
 End Alu.
@@ -1042,7 +1050,7 @@ Section Scr.
 
   Variable WriteScr: Bool @# ty.
   Variable Exception: Bool @# ty.
-  Variable FetchBoundsViolation: Bool @# ty.
+  Variable FetchViolation: Bool @# ty.
   Variable MRet: Bool @# ty.
 
   Variable scrIdx: Bit RegFixedIdSz @# ty.
@@ -1083,7 +1091,7 @@ Section Scr.
                       @%[ "addr" <- ({< TruncMsbTo (Xlen - NumLsb0BitsInstAddr) NumLsb0BitsInstAddr (newCap @% "addr"),
                                         $$(wzero NumLsb0BitsInstAddr) >}) ];
 
-      Write @^"mepcc" <- Kor [ ITE0 Exception (STRUCT { "tag" ::= #fullPc @% "tag" && !FetchBoundsViolation;
+      Write @^"mepcc" <- Kor [ ITE0 Exception (STRUCT { "tag" ::= #fullPc @% "tag" && !FetchViolation;
                                                         "ecap" ::= #fullPc @% "ecap";
                                                         "addr" ::= #fullPc @% "addr" });
                                ITE (WriteScr && scrIdx == $Mepcc) #updCap #mepcc ];
