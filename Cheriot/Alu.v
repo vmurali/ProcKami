@@ -619,6 +619,9 @@ Section Alu.
   Variable           CsrSet: Bool @# ty. (* CSRRS, CSRRSI *)
   Variable         CsrClear: Bool @# ty. (* CSRRC, CSRRCI *)
   Variable           CsrImm: Bool @# ty. (* CSRRWI, CSRRSI, CSRRCI; rs1 field *)
+
+  Variable  BoundsException: Bool @# ty.
+  Variable     TagException: Bool @# ty.
   
   Local Open Scope kami_expr.
   Local Notation ITE0 x y := (ITE x y (Const ty Default)).
@@ -800,26 +803,6 @@ Section Alu.
       LETC capSrException <- (CSpecialRw || MRet || (#isCsr && #csrSr))
                              && !(pcCap @% "perms" @% "SR");
       LETC isCapMem <- memSz == $LgNumBytesFullCapSz;
-      LETC capException <-
-        Kor [ ITE0 #capSrException (exception $SrViolation) ;
-              ITE (#load_store && !tag1) (exception $TagViolation)
-                (ITE (#load_store && !#cap1NotSealed ||
-                        (CJalr && (!#cJalrSealedCond || !#cap1NotSealed && isNotZero (imm inst))))
-                   (exception $SealViolation)
-                   (ITE ((CJalr && !(#cap1Perms @% "EX")) || (Load && !(#cap1Perms @% "LD")) ||
-                           (Store && !(#cap1Perms @% "SD")))
-                      (exception (Kor [ ITE0 (CJalr && !(#cap1Perms @% "EX")) $ExViolation;
-                                        ITE0 (Load && !(#cap1Perms @% "LD")) $LdViolation;
-                                        ITE0 (Store && !(#cap1Perms @% "SD")) $SdViolation ]))
-                      (ITE (Store && #isCapMem && !(#cap1Perms @% "MC"))
-                         (exception $McSdViolation)
-                         (ITE0 (#load_store && !#boundsRes)
-                            (exception $BoundsViolation) )))) ];
-
-      LETC capExceptionVal <- #capException @% "data";
-      LETC isCapException <- #capException @% "valid";
-      LETC capExceptionSrc <- ITE0 (!#capSrException) #rs1Idx;
-
       LETC capNotAligned <- isNotZero (TruncLsbTo LgNumBytesFullCapSz (AddrSz - LgNumBytesFullCapSz) #resAddrVal) &&
                               #isCapMem;
       LETC clcException <- Load && #capNotAligned;
@@ -842,8 +825,30 @@ Section Alu.
 
       LETC fullIllegal <- Kor [Illegal; #csrIllegal; #scrIllegal];
 
-      LETC isException <- Kor [#fullIllegal; EBreak; ECall; #clcException; #cscException; #isCapException];
+      LETC capException <-
+        Kor [ ITE0 #capSrException (exception $SrViolation) ;
+              ITE (#load_store && !tag1) (exception $TagViolation)
+                (ITE (#load_store && !#cap1NotSealed ||
+                        (CJalr && (!#cJalrSealedCond || !#cap1NotSealed && isNotZero (imm inst))))
+                   (exception $SealViolation)
+                   (ITE ((CJalr && !(#cap1Perms @% "EX")) || (Load && !(#cap1Perms @% "LD")) ||
+                           (Store && !(#cap1Perms @% "SD")))
+                      (exception (Kor [ ITE0 (CJalr && !(#cap1Perms @% "EX")) $ExViolation;
+                                        ITE0 (Load && !(#cap1Perms @% "LD")) $LdViolation;
+                                        ITE0 (Store && !(#cap1Perms @% "SD")) $SdViolation ]))
+                      (ITE (Store && #isCapMem && !(#cap1Perms @% "MC"))
+                         (exception $McSdViolation)
+                         (ITE0 (#load_store && !#boundsRes)
+                            (exception $BoundsViolation) )))) ];
 
+      LETC capExceptionVal <- #capException @% "data";
+      LETC isCapException <- #capException @% "valid";
+      LETC capExceptionSrc <- ITE0 (!#capSrException) #rs1Idx;
+
+      LETC isException <- Kor [TagException; BoundsException;
+                               #fullIllegal; EBreak; ECall; #clcException; #cscException; #isCapException];
+
+      (* TODO: Must follow priority *)
       LETC mcause: Bit Xlen <- Kor [ ITE0 #fullIllegal $IllegalException;
                                      ITE0 EBreak $EBreakException;
                                      ITE0 ECall $ECallException;
