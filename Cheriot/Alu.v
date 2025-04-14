@@ -444,9 +444,9 @@ Section Cap.
         LETC mask_ef : Bit (AddrSz + 1) <- ~#cram;
         LETC lost_base : Bool <- isNotZero (base .& #mask_ef);
         LETC outBase <-  (base .& #cram);
-        (* TODO for subset without fixed base
-           + ZeroExtend Xlen (pack (IsSubset && #lost_base &&
-           !(#isESaturated && ((base .& #cram) == #cram)))) *)
+        (* TODO for subset without fixed base.
+           + (ZeroExtend Xlen (pack (IsSubset && #lost_base &&
+           !(#isESaturated && ((base .& #cram) == #cram))))) << #ef *)
         LETC outLength: Bit (AddrSz + 1) <- (ZeroExtendTo (AddrSz + 1) #mf) << #ef;
         LETC ret: Bounds <- STRUCT {
                                 "E" ::= #ef;
