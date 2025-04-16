@@ -325,7 +325,7 @@ Section Cap.
 
     Definition normalCsrs : list N := [].
 
-    Definition CsrsIdSz := Eval compute in (Nat.log2_up (Nat.max (length systemCsrs) (length normalCsrs))).
+    Definition CsrsIdSz := Eval compute in (Nat.log2_up (length systemCsrs + length normalCsrs)).
 
     Definition findSystemCsrs (val: CsrId @# ty) :=
       findIdxExpr (map (fun x => Const ty (NToWord CsrIdSz x)) systemCsrs) CsrsIdSz val.
