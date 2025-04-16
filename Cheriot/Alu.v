@@ -294,19 +294,46 @@ Section Cap.
     Definition CapException := 28.
   End Exceptions.
 
-  Section Csr.
-    Definition mcycle : N := hex "B00".
-    Definition mtime : N := hex "B01".
-    Definition minstret : N := hex "B02".
-    Definition mcycleh : N := hex "B80".
-    Definition mtimeh : N := hex "B81".
-    Definition minstreth : N := hex "B82".
-    Definition mshwm : N := hex "BC1".
-    Definition mshwmb : N := hex "BC2".
+  Section FindIdxExpr.
+    Variable K: Kind.
+    Variable ls: list (K @# ty).
+    Variable n: nat.
+    Variable e: K @# ty.
 
-    Definition mstatusCsr : N := hex "300".
-    Definition mcauseCsr : N := hex "342".
-    Definition mtvalCsr : N := hex "343".
+    Definition findIdxExpr: Maybe (Bit n) @# ty :=
+      Kor (map (fun '(x, y) => (ITE (e == y)
+                                  (Valid (Const ty (natToWord n x)))
+                                  (Const ty Default)): Maybe (Bit n) @# ty) (tag ls)).
+  End FindIdxExpr.
+
+  Section Csr.
+    Definition Mcycle : N := hex "B00".
+    Definition Mtime : N := hex "B01".
+    Definition Minstret : N := hex "B02".
+    Definition Mcycleh : N := hex "B80".
+    Definition Mtimeh : N := hex "B81".
+    Definition Minstreth : N := hex "B82".
+    Definition Mshwm : N := hex "BC1".
+    Definition Mshwmb : N := hex "BC2".
+
+    Definition Mstatus : N := hex "300".
+    Definition Mcause : N := hex "342".
+    Definition Mtval : N := hex "343".
+
+    Definition systemCsrs := [ Mcycle ; Mtime; Minstret; Mcycleh; Mtimeh; Minstreth; Mshwm; Mshwmb;
+                               Mstatus; Mcause; Mtval].
+
+    Definition normalCsrs : list N := [].
+
+    Definition CsrsIdSz := Eval compute in (Nat.log2_up (Nat.max (length systemCsrs) (length normalCsrs))).
+
+    Definition findSystemCsrs (val: CsrId @# ty) :=
+      findIdxExpr (map (fun x => Const ty (NToWord CsrIdSz x)) systemCsrs) CsrsIdSz val.
+
+    Definition NormalCsrsIdSz := Eval compute in (Nat.log2_up (length normalCsrs)).
+
+    Definition findNormalCsrs (val: CsrId @# ty) :=
+      findIdxExpr (map (fun x => Const ty (NToWord CsrIdSz x)) normalCsrs) CsrsIdSz val.
 
     Definition MshwmAlign := 4.
   End Csr.
@@ -316,6 +343,13 @@ Section Cap.
     Definition Mtdc := 29.
     Definition Mscratchc := 30.
     Definition Mepcc := 31.
+
+    Definition scrs := [ Mtcc; Mtdc; Mscratchc; Mepcc ].
+
+    Definition ScrsIdSz := Eval compute in (Nat.log2_up (length scrs)).
+
+    Definition findScrs (val: Bit RegFixedIdSz @# ty) :=
+      findIdxExpr (map (fun x => Const ty (natToWord RegFixedIdSz x)) scrs) ScrsIdSz val.
   End Scr.
 
   Section Sealed.
@@ -805,10 +839,8 @@ Section Alu.
 
       LETC isCsr <- CsrRw || CsrSet || CsrClear;
 
-      LETC csrSr <- Kor [ #immVal == GetCsrIdx mstatusCsr;
-                          #immVal == GetCsrIdx mcauseCsr;
-                          #immVal == GetCsrIdx mtvalCsr ];
-      LETC capSrException <- (CSpecialRw || MRet || (#isCsr && #csrSr))
+      LETC csrSrIdx <- findSystemCsrs #immVal;
+      LETC capSrException <- (CSpecialRw || MRet || (#isCsr && (#csrSrIdx @% "valid")))
                              && !(pcCap @% "perms" @% "SR");
       LETC isCapMem <- memSz == $LgNumBytesFullCapSz;
       LETC capNotAligned <- isNotZero (TruncLsbTo LgNumBytesFullCapSz (AddrSz - LgNumBytesFullCapSz) #resAddrVal) &&
@@ -816,24 +848,10 @@ Section Alu.
       LETC clcException <- Load && #capNotAligned;
       LETC cscException <- Store && #capNotAligned;
 
-      LETC csrIllegal <- #isCsr && !Kor [ #immVal == GetCsrIdx mcycle;
-                                          #immVal == GetCsrIdx mtime;
-                                          #immVal == GetCsrIdx minstret;
-                                          #immVal == GetCsrIdx mcycleh;
-                                          #immVal == GetCsrIdx mtimeh;
-                                          #immVal == GetCsrIdx minstreth;
-                                          #immVal == GetCsrIdx mshwm;
-                                          #immVal == GetCsrIdx mshwmb;
-                                          #immVal == GetCsrIdx mstatusCsr;
-                                          #immVal == GetCsrIdx mcauseCsr;
-                                          #immVal == GetCsrIdx mtvalCsr ];
-
-      LETC scrIllegal <- CSpecialRw && !Kor [ #rs2Idx == $Mtcc;
-                                              #rs2Idx == $Mtdc;
-                                              #rs2Idx == $Mscratchc;
-                                              #rs2Idx == $Mepcc ];
-
-      LETC fullIllegal <- Kor [Illegal; #csrIllegal; #scrIllegal];
+      LETC csrNewIdx <- Kor [#csrSrIdx; findNormalCsrs #immVal];
+      LETC scrNewIdx <- findScrs #rs2Idx;
+      
+      LETC fullIllegal <- Kor [Illegal; #isCsr && !(#csrNewIdx @% "valid"); CSpecialRw && !(#scrNewIdx @% "valid")];
 
       LETC capException <-
         Kor [ ITE0 #capSrException (exception $SrViolation) ;
@@ -858,19 +876,19 @@ Section Alu.
       LETC isException <- Kor [TagException; BoundsException;
                                #fullIllegal; EBreak; ECall; #clcException; #cscException; #isCapException];
 
-      LETC mcause: Bit Xlen <- ITE (TagException || BoundsException)
-                                 $CapException
-                                 (ITE (#isException && !#isCapException)
-                                    (Kor [ ITE0 #fullIllegal $IllegalException;
-                                           ITE0 EBreak $EBreakException;
-                                           ITE0 ECall $ECallException;
-                                           ITE0 #clcException $LdAlignException;
-                                           ITE0 #cscException $SdAlignException ])
-                                    (ITE0 #isCapException $CapException));
+      LETC mcauseVal: Bit Xlen <- ITE (TagException || BoundsException)
+                                    $CapException
+                                    (ITE (#isException && !#isCapException)
+                                       (Kor [ ITE0 #fullIllegal $IllegalException;
+                                              ITE0 EBreak $EBreakException;
+                                              ITE0 ECall $ECallException;
+                                              ITE0 #clcException $LdAlignException;
+                                              ITE0 #cscException $SdAlignException ])
+                                       (ITE0 #isCapException $CapException));
 
-      LETC mtval: Bit Xlen <- ITE (TagException || BoundsException)
-                                (@ZeroExtendTo _ Xlen CapExceptSz (Kor [ITE0 TagException $TagViolation;
-                                                                        ITE0 BoundsException $BoundsViolation]))
+      LETC mtvalVal: Bit Xlen <- ITE (TagException || BoundsException)
+                                   (@ZeroExtendTo _ Xlen CapExceptSz (Kor [ITE0 TagException $TagViolation;
+                                                                           ITE0 BoundsException $BoundsViolation]))
                                    (ITE (#isException && !#isCapException)
                                       (Kor [ ITE0 #fullIllegal inst;
                                              ITE0 (#clcException || #cscException) #resAddrVal ])
@@ -917,7 +935,7 @@ Section Alu.
                            ITE0 CUnseal #cUnsealCap ];
 
       LETC ieBitSet <- unpack Bool (TruncMsbTo 1 (IeBit - 1) (TruncLsbTo IeBit (Xlen - IeBit) #csrWrite));
-      LETC updIeCsr <- #isCsr && #immVal == GetCsrIdx mstatusCsr &&
+      LETC updIeCsr <- #isCsr && #immVal == GetCsrIdx Mstatus &&
                                               Kor [ CsrRw;
                                                     CsrSet && #ieBitSet;
                                                     CsrClear && #ieBitSet];
@@ -932,8 +950,8 @@ Section Alu.
       (* Contains Index for Csr/Scr, operation for CSR, isWrite for CSR/SCR and memSz for ld/st *)
       LETC zeroECap : ECap <- @Const ty ECap Default;
       LETC csrScrMemMeta <- #zeroECap @%[ "base" <-
-                                            Kor [ ITE0 #isCsr (ZeroExtendTo (Xlen + 1) #immVal);
-                                                  ITE0 CSpecialRw (ZeroExtendTo (Xlen + 1) #rs2Idx) ]]
+                                            Kor [ ITE0 #isCsr (ZeroExtendTo (Xlen + 1) (#csrNewIdx @% "data"));
+                                                  ITE0 CSpecialRw (ZeroExtendTo (Xlen + 1) (#scrNewIdx @% "data")) ]]
                               @%[ "E" <- ZeroExtendTo ExpSz ({< pack CsrClear, pack CsrSet, pack CsrRw, memSz >}) ]
                               @%[ "R" <- CsrRw || isNotZero #rs1Idx ];
 
@@ -941,8 +959,8 @@ Section Alu.
                                    "resAddrTag" ::= Kor [ ITE0 ((Branch && #branchTaken) || CJal) #boundsRes;
                                                           ITE0 CJalr tag1 ];
                                    "resAddrCap" ::= ITE #isException
-                                                      (#zeroECap @%[ "base" <- ZeroExtend 1 #mcause ]
-                                                         @%["top" <- ZeroExtend 1 #mtval] )
+                                                      (#zeroECap @%[ "base" <- ZeroExtend 1 #mcauseVal ]
+                                                         @%["top" <- ZeroExtend 1 #mtvalVal] )
                                                       (Kor [ITE0 CJalr #cJalrAddrCap;
                                                             ITE0 (#isCsr || CSpecialRw) #csrScrMemMeta ]);
                                    "resAddrVal" ::= #resAddrVal;
@@ -987,7 +1005,7 @@ Section Csr.
   Variable Commit: Bool @# ty.
 
   Variable newIe: Bool @# ty.
-  Variable csrIdx: CsrId @# ty.
+  Variable csrIdx: Bit CsrsIdSz @# ty.
   Variable updVal: Data @# ty.
   Variable newMcause: Data @# ty.
   Variable newMtval: Data @# ty.
@@ -996,7 +1014,8 @@ Section Csr.
   Local Open Scope kami_action.
   Local Open Scope kami_expr.
 
-  Local Notation checkIdx idx := (csrIdx == $$(NToWord CsrIdSz idx)).
+  Local Notation checkIdx idx := (csrIdx == (Kor [findSystemCsrs $$(NToWord CsrIdSz idx);
+                                                  findNormalCsrs $$(NToWord CsrIdSz idx)]) @% "data").
   Local Notation ITE0 x y := (ITE x y (Const ty Default)).
   Local Notation "@^ x" := (prefix ++ "_" ++ x)%string (at level 0).
   
@@ -1016,44 +1035,44 @@ Section Csr.
       Read mcauseVal : Data <- @^"mcauseReg";
       Read mtvalVal : Data <- @^"mtvalReg";
 
-      LET ret : Data <- Kor [ ITE0 (checkIdx mcycle) #mcycleLsb;
-                              ITE0 (checkIdx mtime) #mtimeLsb;
-                              ITE0 (checkIdx minstret) #minstretLsb;
-                              ITE0 (checkIdx mcycleh) #mcycleMsb;
-                              ITE0 (checkIdx mtimeh) #mtimeMsb;
-                              ITE0 (checkIdx minstreth) #minstretMsb;
-                              ITE0 (checkIdx mshwm) ({< #mshwmVal, $$(wzero MshwmAlign) >});
-                              ITE0 (checkIdx mshwmb) ({< #mshwmbVal, $$(wzero MshwmAlign) >});
-                              ITE0 (checkIdx mstatusCsr) (ZeroExtendTo Xlen ({< pack #ieVal, $$(wzero (IeBit-1)) >}));
-                              ITE0 (checkIdx mcauseCsr) #mcauseVal;
-                              ITE0 (checkIdx mtvalCsr) #mtvalVal ];
+      LET ret : Data <- Kor [ ITE0 (checkIdx Mcycle) #mcycleLsb;
+                              ITE0 (checkIdx Mtime) #mtimeLsb;
+                              ITE0 (checkIdx Minstret) #minstretLsb;
+                              ITE0 (checkIdx Mcycleh) #mcycleMsb;
+                              ITE0 (checkIdx Mtimeh) #mtimeMsb;
+                              ITE0 (checkIdx Minstreth) #minstretMsb;
+                              ITE0 (checkIdx Mshwm) ({< #mshwmVal, $$(wzero MshwmAlign) >});
+                              ITE0 (checkIdx Mshwmb) ({< #mshwmbVal, $$(wzero MshwmAlign) >});
+                              ITE0 (checkIdx Mstatus) (ZeroExtendTo Xlen ({< pack #ieVal, $$(wzero (IeBit-1)) >}));
+                              ITE0 (checkIdx Mcause) #mcauseVal;
+                              ITE0 (checkIdx Mtval) #mtvalVal ];
       
       LET writeVal : Data <- Kor [ ITE0 CsrSet (#ret .| updVal);
                                    ITE0 CsrClear (#ret .& ~updVal);
                                    updVal ];
 
-      Write @^"mcycleFull" : Bit DXlen <- Kor [ ITE0 (WriteCsr && checkIdx mcycle)  ({< #mcycleMsb, #writeVal >});
-                                                ITE0 (WriteCsr && checkIdx mcycleh) ({< #writeVal, #mcycleLsb >});
+      Write @^"mcycleFull" : Bit DXlen <- Kor [ ITE0 (WriteCsr && checkIdx Mcycle)  ({< #mcycleMsb, #writeVal >});
+                                                ITE0 (WriteCsr && checkIdx Mcycleh) ({< #writeVal, #mcycleLsb >});
                                                 #mcycleVal + $1 ];
 
-      Write @^"mtimeFull" : Bit DXlen <- Kor [ ITE0 (WriteCsr && checkIdx mtime)  ({< #mtimeMsb, #writeVal >});
-                                               ITE0 (WriteCsr && checkIdx mtimeh) ({< #writeVal, #mtimeLsb >});
+      Write @^"mtimeFull" : Bit DXlen <- Kor [ ITE0 (WriteCsr && checkIdx Mtime)  ({< #mtimeMsb, #writeVal >});
+                                               ITE0 (WriteCsr && checkIdx Mtimeh) ({< #writeVal, #mtimeLsb >});
                                                #mtimeVal + $1 ];
 
-      Write @^"minstretFull" : Bit DXlen <- Kor [ ITE0 (WriteCsr && checkIdx minstret)
+      Write @^"minstretFull" : Bit DXlen <- Kor [ ITE0 (WriteCsr && checkIdx Minstret)
                                                     ({< #minstretMsb, #writeVal >});
-                                                  ITE0 (WriteCsr && checkIdx minstreth)
+                                                  ITE0 (WriteCsr && checkIdx Minstreth)
                                                     ({< #writeVal, #minstretLsb >});
                                                   #minstretVal + ZeroExtendTo DXlen (pack Commit) ] ;
 
       Write @^"mshwmbReg" : Bit (Xlen - MshwmAlign) <-
-                              Kor [ ITE0 (WriteCsr && checkIdx mshwmb) (TruncLsbTo (Xlen - MshwmAlign) _ #writeVal);
+                              Kor [ ITE0 (WriteCsr && checkIdx Mshwmb) (TruncLsbTo (Xlen - MshwmAlign) _ #writeVal);
                                     #mshwmbVal ];
 
       LET stAddrTrunc <- TruncLsbTo (Xlen - MshwmAlign) _ stAddr;
 
       Write @^"mshwmReg" : Bit (Xlen - MshwmAlign) <-
-                             Kor [ ITE0 (WriteCsr && checkIdx mshwm) (TruncLsbTo (Xlen - MshwmAlign) _ #writeVal);
+                             Kor [ ITE0 (WriteCsr && checkIdx Mshwm) (TruncLsbTo (Xlen - MshwmAlign) _ #writeVal);
                                    ITE0 (IsStore && (#stAddrTrunc >= #mshwmbVal) && (#stAddrTrunc < #mshwmVal))
                                      #stAddrTrunc;
                                    #mshwmVal ];
@@ -1061,10 +1080,10 @@ Section Csr.
       Write @^"ieSingle" : Bool <- ITE UpdIe newIe #ieVal;
 
       Write @^"mcauseReg" : Data <- Kor [ ITE0 Exception newMcause;
-                                          ITE (WriteCsr && checkIdx mcauseCsr) #writeVal #mcauseVal ];
+                                          ITE (WriteCsr && checkIdx Mcause) #writeVal #mcauseVal ];
 
       Write @^"mtvalReg" : Data <- Kor [ ITE0 Exception newMtval;
-                                         ITE (WriteCsr && checkIdx mtvalCsr) #writeVal #mcauseVal ];
+                                         ITE (WriteCsr && checkIdx Mtval) #writeVal #mcauseVal ];
       
       Ret #ret
     ).
@@ -1080,7 +1099,7 @@ Section Scr.
   Variable FetchViolation: Bool @# ty.
   Variable MRet: Bool @# ty.
 
-  Variable scrIdx: Bit RegFixedIdSz @# ty.
+  Variable scrIdx: Bit ScrsIdSz @# ty.
   Variable newCap: FullECapWithTag @# ty.
   Variable nextPcc: FullECapWithTag @# ty.
 
@@ -1094,6 +1113,7 @@ Section Scr.
                                         "newPcFull" :: FullECapWithTag ;
                                         "redirectPc" :: Bool }.
 
+  Local Notation checkIdx idx := (scrIdx == (findScrs $$(natToWord RegFixedIdSz idx)) @% "data").
   Notation isLsbSet x := (isNotZero (TruncLsbTo NumLsb0BitsInstAddr (Xlen - NumLsb0BitsInstAddr) x)).
 
   Definition doScr: ActionT ty ScrOutput :=
@@ -1104,9 +1124,9 @@ Section Scr.
 
       Read fullPc: FullECapWithTag <- @^"fullPc";
 
-      Write @^"mtdc" <- ITE (WriteScr && scrIdx == $Mtdc) newCap #mtdc;
+      Write @^"mtdc" <- ITE (WriteScr && checkIdx Mtdc) newCap #mtdc;
 
-      Write @^"mscratchc" <- ITE (WriteScr && scrIdx == $Mscratchc) newCap #mscratchc;
+      Write @^"mscratchc" <- ITE (WriteScr && checkIdx Mscratchc) newCap #mscratchc;
 
       LET updTag <- newCap @% "tag" &&
                       !isLsbSet (newCap @% "addr") &&
@@ -1122,13 +1142,13 @@ Section Scr.
       Write @^"mepcc" <- Kor [ ITE0 Exception (STRUCT { "tag" ::= #fullPc @% "tag" && !FetchViolation;
                                                         "ecap" ::= #fullPc @% "ecap";
                                                         "addr" ::= #fullPc @% "addr" });
-                               ITE (WriteScr && scrIdx == $Mepcc) #updCap #mepcc ];
-      Write @^"mtcc" <- ITE (WriteScr && scrIdx == $Mtcc) #updCap #mtcc;
+                               ITE (WriteScr && checkIdx Mepcc) #updCap #mepcc ];
+      Write @^"mtcc" <- ITE (WriteScr && checkIdx Mtcc) #updCap #mtcc;
 
-      LET scr: FullECapWithTag <- Kor [ ITE0 (scrIdx == $Mtcc) #mtcc;
-                                        ITE0 (scrIdx == $Mtdc) #mtdc;
-                                        ITE0 (scrIdx == $Mscratchc) #mscratchc;
-                                        ITE0 (scrIdx == $Mepcc) #mepcc ];
+      LET scr: FullECapWithTag <- Kor [ ITE0 (checkIdx Mtcc) #mtcc;
+                                        ITE0 (checkIdx Mtdc) #mtdc;
+                                        ITE0 (checkIdx Mscratchc) #mscratchc;
+                                        ITE0 (checkIdx Mepcc) #mepcc ];
 
       LET redirectPc <- Kor [ Exception; MRet ];
 
