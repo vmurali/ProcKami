@@ -56,6 +56,7 @@ Definition Cap : Kind :=
        "B" :: Bit CapBSz })%kami_expr.
 
 Definition DXlen := Eval compute in Xlen + Xlen.
+Definition MemSzSz := Eval compute in Nat.log2_up (Nat.log2_up (DXlen/8)).
 Definition FullCapSz := Eval compute in Xlen + size Cap.
 Definition NumBytesFullCapSz := Eval compute in (FullCapSz/8).
 Definition LgNumBytesFullCapSz := Eval compute in lgCeil NumBytesFullCapSz.
@@ -558,7 +559,7 @@ Section Alu.
   Variable   val2: Data @# ty.
   Variable     ie: Bool @# ty.
 
-  Variable            memSz: Bit 2 @# ty.
+  Variable            memSz: Bit MemSzSz @# ty.
   
   Variable           Src1Pc: Bool @# ty. (* CJAL, BNE, BEq, BLT, BGE, BLTU, BGEU, AUIPCC *)
   Variable          InvSrc2: Bool @# ty. (* SLTI, SLTIU, Sub, SLT, SLTU, CSub, CGetLen *)
@@ -650,6 +651,12 @@ Section Alu.
                                      "resAddrCap" :: ECap ;
                                      "resAddrVal" :: Addr ;
                                      "linkAddr" :: Addr ;
+                                     "storeVal" :: FullECapWithTag ;
+                                     "mcause" :: Data ;
+                                     "mtval" :: Data ;
+                                     "csrId" :: CsrId ;
+                                     "scrId" :: Bit RegFixedIdSz ;
+                                     "memSz" :: Bit MemSzSz ;
                                      "ie" :: Bool ;
                                      "branch" :: Bool ;
                                      "branchTaken" :: Bool ;
@@ -661,12 +668,16 @@ Section Alu.
                                      "st" :: Bool ;
                                      "csr" :: Bool ;
                                      "scr" :: Bool ;
+                                     "csrScrWrite" :: Bool ;
+                                     "csrRw" :: Bool ;
+                                     "csrSet" :: Bool ;
+                                     "csrClear" :: Bool ;
                                      "updIe" :: Bool ;
                                      "mRet" :: Bool ;
                                      "resValid" :: Bool ;
                                      "fetchException" :: Bool ;
                                      "exception" :: Bool }.
-
+             
   Local Definition exception x := (STRUCT { "valid" ::= $$true;
                                             "data" ::= x } : Maybe (Bit CapExceptSz) @# ty ).
 
@@ -890,7 +901,6 @@ Section Alu.
                            ITE0 CGetHigh (pack #encodedCap);
                            ITE0 #cjal_cjalr #linkAddr;
                            ITE0 Cram (TruncLsbTo Xlen 1 (#newBounds @% "cram"));
-                           ITE0 Store val2;
                            ITE0 #isCsr #csrWrite;
                            #saturated;
                            #zeroExtendBoolRes];
@@ -923,26 +933,20 @@ Section Alu.
                                              "ecap" ::= #resCap;
                                              "addr" ::= #resVal };
 
-      (* CJALR can redirect from this stage instead of waiting for commit stage *)
-
-      (* Contains Index for Csr/Scr, opcode for CSR, isWrite for CSR/SCR and memSz for ld/st *)
-      LETC zeroECap : ECap <- @Const ty ECap Default;
-      LETC csrScrMemMeta <- #zeroECap @%[ "base" <-
-                                            Kor [ ITE0 #isCsr (ZeroExtendTo (Xlen + 1) #immVal);
-                                                  ITE0 CSpecialRw (ZeroExtendTo (Xlen + 1) #rs2Idx) ]]
-                              @%[ "E" <- ZeroExtendTo ExpSz ({< pack CsrClear, pack CsrSet, pack CsrRw, memSz >}) ]
-                              @%[ "R" <- CsrRw || isNotZero #rs1Idx ];
-
       LETC ret: AluRes <- STRUCT { "res" ::= #res;
                                    "resAddrTag" ::= Kor [ ITE0 ((Branch && #branchTaken) || CJal) #boundsRes;
                                                           ITE0 CJalr tag1 ];
-                                   "resAddrCap" ::= ITE #isException
-                                                      (#zeroECap @%[ "base" <- ZeroExtend 1 #mcauseVal ]
-                                                         @%["top" <- ZeroExtend 1 #mtvalVal] )
-                                                      (Kor [ITE0 CJalr #cJalrAddrCap;
-                                                            ITE0 (#isCsr || CSpecialRw) #csrScrMemMeta ]);
-                                   "resAddrVal" ::= #resAddrVal;
+                                   "resAddrCap" ::= #cJalrAddrCap;
+                                   "resAddrVal" ::= #resAddrVal; (* Note: has load/store address also *)
                                    "linkAddr" ::= #linkAddr;
+                                   "storeVal" ::= STRUCT { "tag" ::= tag2 ;
+                                                           "ecap" ::= cap2 ;
+                                                           "addr" ::= val2 } ;
+                                   "mcause" ::= #mcauseVal ;
+                                   "mtval" ::= #mtvalVal ;
+                                   "csrId" ::= #immVal ;
+                                   "scrId" ::= #rs2Idx ;
+                                   "memSz" ::= memSz ;
                                    "ie" ::= (#newIe || #newIeCsr);
                                    "branch" ::= Branch && !#isException;
                                    "branchTaken" ::= #branchTaken;
@@ -954,6 +958,10 @@ Section Alu.
                                    "st" ::= Store && !#isException;
                                    "csr" ::= #isCsr && !#isException;
                                    "scr" ::= CSpecialRw && !#isException;
+                                   "csrScrWrite" ::= (CsrRw || isNotZero #rs1Idx);
+                                   "csrRw" ::= CsrRw;
+                                   "csrSet" ::= CsrSet;
+                                   "csrClear" ::= CsrClear;
                                    "updIe" ::= (((isInterruptEnabling #cap1OType || isInterruptDisabling #cap1OType)
                                                  && CJalr) || #updIeCsr) && !#isException;
                                    "mRet" ::= MRet && !#isException;
