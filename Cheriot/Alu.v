@@ -294,18 +294,6 @@ Section Cap.
     Definition CapException := 28.
   End Exceptions.
 
-  Section FindIdxExpr.
-    Variable K: Kind.
-    Variable ls: list (K @# ty).
-    Variable n: nat.
-    Variable e: K @# ty.
-
-    Definition findIdxExpr: Maybe (Bit n) @# ty :=
-      Kor (map (fun '(x, y) => (ITE (e == y)
-                                  (Valid (Const ty (natToWord n x)))
-                                  (Const ty Default)): Maybe (Bit n) @# ty) (tag ls)).
-  End FindIdxExpr.
-
   Section Csr.
     Definition Mcycle : N := hex "B00".
     Definition Mtime : N := hex "B01".
@@ -320,21 +308,6 @@ Section Cap.
     Definition Mcause : N := hex "342".
     Definition Mtval : N := hex "343".
 
-    Definition systemCsrs := [ Mcycle ; Mtime; Minstret; Mcycleh; Mtimeh; Minstreth; Mshwm; Mshwmb;
-                               Mstatus; Mcause; Mtval].
-
-    Definition normalCsrs : list N := [].
-
-    Definition CsrsIdSz := Eval compute in (Nat.log2_up (length systemCsrs + length normalCsrs)).
-
-    Definition findSystemCsrs (val: CsrId @# ty) :=
-      findIdxExpr (map (fun x => Const ty (NToWord CsrIdSz x)) systemCsrs) CsrsIdSz val.
-
-    Definition NormalCsrsIdSz := Eval compute in (Nat.log2_up (length normalCsrs)).
-
-    Definition findNormalCsrs (val: CsrId @# ty) :=
-      findIdxExpr (map (fun x => Const ty (NToWord CsrIdSz x)) normalCsrs) CsrsIdSz val.
-
     Definition MshwmAlign := 4.
   End Csr.
 
@@ -343,13 +316,6 @@ Section Cap.
     Definition Mtdc := 29.
     Definition Mscratchc := 30.
     Definition Mepcc := 31.
-
-    Definition scrs := [ Mtcc; Mtdc; Mscratchc; Mepcc ].
-
-    Definition ScrsIdSz := Eval compute in (Nat.log2_up (length scrs)).
-
-    Definition findScrs (val: Bit RegFixedIdSz @# ty) :=
-      findIdxExpr (map (fun x => Const ty (natToWord RegFixedIdSz x)) scrs) ScrsIdSz val.
   End Scr.
 
   Section Sealed.
@@ -839,8 +805,19 @@ Section Alu.
 
       LETC isCsr <- CsrRw || CsrSet || CsrClear;
 
-      LETC csrSrIdx <- findSystemCsrs #immVal;
-      LETC capSrException <- (CSpecialRw || MRet || (#isCsr && (#csrSrIdx @% "valid")))
+      LETC validCsr <- Kor [ #immVal == GetCsrIdx Mcycle;
+                             #immVal == GetCsrIdx Mtime;
+                             #immVal == GetCsrIdx Minstret;
+                             #immVal == GetCsrIdx Mcycleh;
+                             #immVal == GetCsrIdx Mtimeh;
+                             #immVal == GetCsrIdx Minstreth;
+                             #immVal == GetCsrIdx Mshwm;
+                             #immVal == GetCsrIdx Mshwmb;
+                             #immVal == GetCsrIdx Mstatus;
+                             #immVal == GetCsrIdx Mcause;
+                             #immVal == GetCsrIdx Mtval ];
+
+      LETC capSrException <- (CSpecialRw || MRet || (#isCsr && #validCsr))
                              && !(pcCap @% "perms" @% "SR");
       LETC isCapMem <- memSz == $LgNumBytesFullCapSz;
       LETC capNotAligned <- isNotZero (TruncLsbTo LgNumBytesFullCapSz (AddrSz - LgNumBytesFullCapSz) #resAddrVal) &&
@@ -848,10 +825,12 @@ Section Alu.
       LETC clcException <- Load && #capNotAligned;
       LETC cscException <- Store && #capNotAligned;
 
-      LETC csrNewIdx <- Kor [#csrSrIdx; findNormalCsrs #immVal];
-      LETC scrNewIdx <- findScrs #rs2Idx;
-      
-      LETC fullIllegal <- Kor [Illegal; #isCsr && !(#csrNewIdx @% "valid"); CSpecialRw && !(#scrNewIdx @% "valid")];
+      LETC validScr <- Kor [ #rs2Idx == $Mtcc;
+                             #rs2Idx == $Mtdc;
+                             #rs2Idx == $Mscratchc;
+                             #rs2Idx == $Mepcc ];
+
+      LETC fullIllegal <- Kor [Illegal; #isCsr && !#validCsr; CSpecialRw && !#validScr];
 
       LETC capException <-
         Kor [ ITE0 #capSrException (exception $SrViolation) ;
@@ -949,8 +928,8 @@ Section Alu.
       (* Contains Index for Csr/Scr, opcode for CSR, isWrite for CSR/SCR and memSz for ld/st *)
       LETC zeroECap : ECap <- @Const ty ECap Default;
       LETC csrScrMemMeta <- #zeroECap @%[ "base" <-
-                                            Kor [ ITE0 #isCsr (ZeroExtendTo (Xlen + 1) (#csrNewIdx @% "data"));
-                                                  ITE0 CSpecialRw (ZeroExtendTo (Xlen + 1) (#scrNewIdx @% "data")) ]]
+                                            Kor [ ITE0 #isCsr (ZeroExtendTo (Xlen + 1) #immVal);
+                                                  ITE0 CSpecialRw (ZeroExtendTo (Xlen + 1) #rs2Idx) ]]
                               @%[ "E" <- ZeroExtendTo ExpSz ({< pack CsrClear, pack CsrSet, pack CsrRw, memSz >}) ]
                               @%[ "R" <- CsrRw || isNotZero #rs1Idx ];
 
@@ -1002,7 +981,7 @@ Section Csr.
   Variable Commit: Bool @# ty.
 
   Variable newIe: Bool @# ty.
-  Variable csrIdx: Bit CsrsIdSz @# ty.
+  Variable csrIdx: CsrId @# ty.
   Variable updVal: Data @# ty.
   Variable newMcause: Data @# ty.
   Variable newMtval: Data @# ty.
@@ -1011,8 +990,7 @@ Section Csr.
   Local Open Scope kami_action.
   Local Open Scope kami_expr.
 
-  Local Notation checkIdx idx := (csrIdx == (Kor [findSystemCsrs $$(NToWord CsrIdSz idx);
-                                                  findNormalCsrs $$(NToWord CsrIdSz idx)]) @% "data").
+  Local Notation checkIdx idx := (csrIdx == $$(NToWord CsrIdSz idx)).
   Local Notation ITE0 x y := (ITE x y (Const ty Default)).
   Local Notation "@^ x" := (prefix ++ "_" ++ x)%string (at level 0).
   
@@ -1096,7 +1074,7 @@ Section Scr.
   Variable FetchViolation: Bool @# ty.
   Variable MRet: Bool @# ty.
 
-  Variable scrIdx: Bit ScrsIdSz @# ty.
+  Variable scrIdx: Bit RegFixedIdSz @# ty.
   Variable newCap: FullECapWithTag @# ty.
   Variable nextPcc: FullECapWithTag @# ty.
 
@@ -1110,7 +1088,7 @@ Section Scr.
                                         "newPcFull" :: FullECapWithTag ;
                                         "redirectPc" :: Bool }.
 
-  Local Notation checkIdx idx := (scrIdx == (findScrs $$(natToWord RegFixedIdSz idx)) @% "data").
+  Local Notation checkIdx idx := (scrIdx == $idx).
   Notation isLsbSet x := (isNotZero (TruncLsbTo NumLsb0BitsInstAddr (Xlen - NumLsb0BitsInstAddr) x)).
 
   Definition doScr: ActionT ty ScrOutput :=
