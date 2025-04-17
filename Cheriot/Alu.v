@@ -925,7 +925,6 @@ Section Alu.
                                     #cjal_cjalr;
                                     CSpecialRw ]);
 
-      (* Also contains index for Csr and Scr, opcode for Csr, isWrite for Csr, Scr *)
       LETC resCap <- Kor [ ITE0 CAndPerm #cAndPermCap;
                            ITE0 (CClearTag || CMove || CChangeAddr || CSpecialRw) (ITE Src1Pc pcCap cap1);
                            ITE0 CSetHigh #cSetHighCap;
@@ -947,7 +946,7 @@ Section Alu.
 
       (* CJALR can redirect from this stage instead of waiting for commit stage *)
 
-      (* Contains Index for Csr/Scr, operation for CSR, isWrite for CSR/SCR and memSz for ld/st *)
+      (* Contains Index for Csr/Scr, opcode for CSR, isWrite for CSR/SCR and memSz for ld/st *)
       LETC zeroECap : ECap <- @Const ty ECap Default;
       LETC csrScrMemMeta <- #zeroECap @%[ "base" <-
                                             Kor [ ITE0 #isCsr (ZeroExtendTo (Xlen + 1) (#csrNewIdx @% "data"));
@@ -985,8 +984,6 @@ Section Alu.
                                    "exception" ::= #isException };
       RetE #ret ).
 End Alu.
-
-(* CSpecialRW *)
 
 (* CSRs mslwm, mshwm, performance counters *)
 
