@@ -548,90 +548,162 @@ End Fields.
 Section Alu.
   Variable     ty: Kind -> Type.
 
-  Variable  pcCap: ECap @# ty.
-  Variable  pcVal: Addr @# ty.
-  Variable   inst: Inst @# ty.
-  Variable   tag1: Bool @# ty.
-  Variable   cap1: ECap @# ty.
-  Variable   val1: Data @# ty.
-  Variable   tag2: Bool @# ty.
-  Variable   cap2: ECap @# ty.
-  Variable   val2: Data @# ty.
-  Variable     ie: Bool @# ty.
+  Variable pcCap: ECap @# ty. (* A single PCCap and tag exception when we have a superscalar processor; all other values are repeated per lane *)
+  Variable TagException: Bool @# ty.
 
-  Variable            memSz: Bit MemSzSz @# ty.
-  
-  Variable           Src1Pc: Bool @# ty. (* CJAL, BNE, BEq, BLT, BGE, BLTU, BGEU, AUIPCC *)
-  Variable          InvSrc2: Bool @# ty. (* SLTI, SLTIU, Sub, SLT, SLTU, CSub, CGetLen *)
-  Variable         Src2Zero: Bool @# ty. (* CSetAddr,
-                                            CGetAddr, CSetHigh, CAndPerm, CClearTag, CMove, CSeal, CUnseal,
-                                            CSetBounds, CSetBoundsExact, CSetBoundsRoundDown, CSetBoundsImm,
-                                            CSpecialRW *)
-  Variable   ZeroExtendSrc1: Bool @# ty. (* SLTIU, SRLI, SLTU, SRL, BLTU, BGEU, AUIPCC,
-                                            CIncAddr, CIncAddrImm, CSetAddr *)
-  Variable           Branch: Bool @# ty. (* BNE, BEq, BLT, BGE, BLTU, BGEU *)
-  Variable         BranchLt: Bool @# ty. (* BLT, BLTU, BGE, BGEU *)
-  Variable        BranchNeg: Bool @# ty. (* BEq, BGE, BGE, BGEU *)
-  Variable              Slt: Bool @# ty. (* SLTI, SLTIU, SLT, SLTU *)
-  Variable              Add: Bool @# ty. (* AddI, Add, Sub, CIncAddr, CIncAddrImm, CSetAddr, CSub *)
-  Variable              Xor: Bool @# ty. (* XorI, Xor *)
-  Variable               Or: Bool @# ty. (* OrI, Or,
-                                            CGetAddr, CSetHigh, CAndPerm, CClearTag, CMove, CSeal, CUnseal,
-                                            CSetBounds, CSetBoundsExact, CSetBoundsRoundDown, CSetBoundsImm,
-                                            CSpecialRW *)
-  Variable              And: Bool @# ty. (* AndI, And *)
-  Variable               Sl: Bool @# ty. (* SLLI, SLL *)
-  Variable               Sr: Bool @# ty. (* SRLI, SRAI, SRL, SRA *)
-  Variable            Store: Bool @# ty. (* CSB, CSH, CSW, CSC *)
-  Variable             Load: Bool @# ty. (* CLB, CLH, CLW, CLBU, CLHU, CLC *)
-  Variable        SetBounds: Bool @# ty. (* CSetBounds, CSetBoundsExact, CSetBoundsImm, CSetBoundsRoundDown *)
-  Variable   SetBoundsExact: Bool @# ty. (* CSetBoundsExact *)
-  Variable     BoundsSubset: Bool @# ty. (* CBoundsRoundDown *)
-  Variable  BoundsFixedBase: Bool @# ty. (* CBoundsRoundDown *)
+  Definition AluIn :=
+    STRUCT_TYPE {
+                  "pcVal" :: Addr ;
+                   "inst" :: Inst ;
+                   "reg1" :: FullECapWithTag ;
+                   "reg2" :: FullECapWithTag ;
+                  "memSz" :: Bit MemSzSz ;
+                     "ie" :: Bool ;
 
-  Variable      CChangeAddr: Bool @# ty. (* CIncAddr, CIncAddrImm, CSetAddr, AUIPCC *)
-  Variable           AuiPcc: Bool @# ty.
-  Variable         CGetBase: Bool @# ty.
-  Variable          CGetTop: Bool @# ty.
-  Variable          CGetLen: Bool @# ty.
-  Variable         CGetPerm: Bool @# ty.
-  Variable         CGetType: Bool @# ty.
-  Variable          CGetTag: Bool @# ty.
-  Variable         CGetHigh: Bool @# ty.
-  Variable             Cram: Bool @# ty.
-  Variable             Crrl: Bool @# ty.
-  Variable        CSetEqual: Bool @# ty.
-  Variable      CTestSubset: Bool @# ty.
-  Variable         CAndPerm: Bool @# ty.
-  Variable        CClearTag: Bool @# ty.
-  Variable         CSetHigh: Bool @# ty.
-  Variable            CMove: Bool @# ty.
-  Variable            CSeal: Bool @# ty.
-  Variable          CUnseal: Bool @# ty.
-  
-  Variable    SignExtendImm: Bool @# ty. (* AddI, SLTI, XorI, OrI, AndI, CIncAddrImm,
-                                            CLB, CLH, CLW, CLBU, CLHU, CLC, CJALR *)
-  Variable    ZeroExtendImm: Bool @# ty. (* SLTIU, CSetBoundsImm, SLLI, SRLI, SRAI *)
-  Variable             CJal: Bool @# ty.
-  Variable            CJalr: Bool @# ty.
-  Variable           AuiImm: Bool @# ty. (* AUIPCC, AUICGP *)
-  Variable              Lui: Bool @# ty.
+                 "Src1Pc" :: Bool ; (* CJAL, BNE, BEq, BLT, BGE, BLTU, BGEU, AUIPCC *)
+                "InvSrc2" :: Bool ; (* SLTI, SLTIU, Sub, SLT, SLTU, CSub, CGetLen *)
+               "Src2Zero" :: Bool ; (* CSetAddr,
+                                       CGetAddr, CSetHigh, CAndPerm, CClearTag, CMove, CSeal, CUnseal,
+                                       CSetBounds, CSetBoundsExact, CSetBoundsRoundDown, CSetBoundsImm,
+                                       CSpecialRW *)
+         "ZeroExtendSrc1" :: Bool ; (* SLTIU, SRLI, SLTU, SRL, BLTU, BGEU, AUIPCC,
+                                       CIncAddr, CIncAddrImm, CSetAddr *)
+                 "Branch" :: Bool ; (* BNE, BEq, BLT, BGE, BLTU, BGEU *)
+               "BranchLt" :: Bool ; (* BLT, BLTU, BGE, BGEU *)
+              "BranchNeg" :: Bool ; (* BEq, BGE, BGE, BGEU *)
+                    "Slt" :: Bool ; (* SLTI, SLTIU, SLT, SLTU *)
+                    "Add" :: Bool ; (* AddI, Add, Sub, CIncAddr, CIncAddrImm, CSetAddr, CSub *)
+                    "Xor" :: Bool ; (* XorI, Xor *)
+                     "Or" :: Bool ; (* OrI, Or,
+                                       CGetAddr, CSetHigh, CAndPerm, CClearTag, CMove, CSeal, CUnseal,
+                                       CSetBounds, CSetBoundsExact, CSetBoundsRoundDown, CSetBoundsImm,
+                                       CSpecialRW *)
+                    "And" :: Bool ; (* AndI, And *)
+                     "Sl" :: Bool ; (* SLLI, SLL *)
+                     "Sr" :: Bool ; (* SRLI, SRAI, SRL, SRA *)
+                  "Store" :: Bool ; (* CSB, CSH, CSW, CSC *)
+                   "Load" :: Bool ; (* CLB, CLH, CLW, CLBU, CLHU, CLC *)
+              "SetBounds" :: Bool ; (* CSetBounds, CSetBoundsExact, CSetBoundsImm, CSetBoundsRoundDown *)
+         "SetBoundsExact" :: Bool ; (* CSetBoundsExact *)
+           "BoundsSubset" :: Bool ; (* CBoundsRoundDown *)
+        "BoundsFixedBase" :: Bool ; (* CBoundsRoundDown *)
+    
+            "CChangeAddr" :: Bool ; (* CIncAddr, CIncAddrImm, CSetAddr, AUIPCC *)
+                 "AuiPcc" :: Bool ;
+               "CGetBase" :: Bool ;
+                "CGetTop" :: Bool ;
+                "CGetLen" :: Bool ;
+               "CGetPerm" :: Bool ;
+               "CGetType" :: Bool ;
+                "CGetTag" :: Bool ;
+               "CGetHigh" :: Bool ;
+                   "Cram" :: Bool ;
+                   "Crrl" :: Bool ;
+              "CSetEqual" :: Bool ;
+            "CTestSubset" :: Bool ;
+               "CAndPerm" :: Bool ;
+              "CClearTag" :: Bool ;
+               "CSetHigh" :: Bool ;
+                  "CMove" :: Bool ;
+                  "CSeal" :: Bool ;
+                "CUnseal" :: Bool ;
+      
+          "SignExtendImm" :: Bool ; (* AddI, SLTI, XorI, OrI, AndI, CIncAddrImm,
+                                                CLB, CLH, CLW, CLBU, CLHU, CLC, CJALR *)
+          "ZeroExtendImm" :: Bool ; (* SLTIU, CSetBoundsImm, SLLI, SRLI, SRAI *)
+                   "CJal" :: Bool ;
+                  "CJalr" :: Bool ;
+                 "AuiImm" :: Bool ; (* AUIPCC, AUICGP *)
+                    "Lui" :: Bool ;
+    
+             "CSpecialRw" :: Bool ;
+                   "MRet" :: Bool ;
+                  "ECall" :: Bool ;
+                 "EBreak" :: Bool ;
+                "Illegal" :: Bool ;
+    
+                  "CsrRw" :: Bool ; (* CSRRW, CSRRWI *)
+                 "CsrSet" :: Bool ; (* CSRRS, CSRRSI *)
+               "CsrClear" :: Bool ; (* CSRRC, CSRRCI *)
+                 "CsrImm" :: Bool ; (* CSRRWI, CSRRSI, CSRRCI; rs1 field *)
+    
+        "BoundsException" :: Bool }.
 
-  Variable       CSpecialRw: Bool @# ty.
-  Variable             MRet: Bool @# ty.
-  Variable            ECall: Bool @# ty.
-  Variable           EBreak: Bool @# ty.
-  Variable          Illegal: Bool @# ty.
-
-  Variable            CsrRw: Bool @# ty. (* CSRRW, CSRRWI *)
-  Variable           CsrSet: Bool @# ty. (* CSRRS, CSRRSI *)
-  Variable         CsrClear: Bool @# ty. (* CSRRC, CSRRCI *)
-  Variable           CsrImm: Bool @# ty. (* CSRRWI, CSRRSI, CSRRCI; rs1 field *)
-
-  Variable  BoundsException: Bool @# ty.
-  Variable     TagException: Bool @# ty.
-  
+  Variable aluIn : AluIn @# ty.
   Local Open Scope kami_expr.
+    
+  Definition            pcVal: Addr @# ty := aluIn @% "pcVal".
+  Definition             inst: Inst @# ty := aluIn @% "inst".
+  Definition             tag1: Bool @# ty := aluIn @% "reg1" @% "tag".
+  Definition             cap1: ECap @# ty := aluIn @% "reg1" @% "ecap".
+  Definition             val1: Data @# ty := aluIn @% "reg1" @% "addr".
+  Definition             tag2: Bool @# ty := aluIn @% "reg2" @% "tag".
+  Definition             cap2: ECap @# ty := aluIn @% "reg2" @% "ecap".
+  Definition             val2: Data @# ty := aluIn @% "reg2" @% "addr".
+  Definition     memSz: Bit MemSzSz @# ty := aluIn @% "memSz".
+  Definition               ie: Bool @# ty := aluIn @% "ie".
+
+  Definition           Src1Pc: Bool @# ty := aluIn @% "Src1Pc". 
+  Definition          InvSrc2: Bool @# ty := aluIn @% "InvSrc2". 
+  Definition         Src2Zero: Bool @# ty := aluIn @% "Src2Zero". 
+  Definition   ZeroExtendSrc1: Bool @# ty := aluIn @% "ZeroExtendSrc1". 
+  Definition           Branch: Bool @# ty := aluIn @% "Branch". 
+  Definition         BranchLt: Bool @# ty := aluIn @% "BranchLt". 
+  Definition        BranchNeg: Bool @# ty := aluIn @% "BranchNeg". 
+  Definition              Slt: Bool @# ty := aluIn @% "Slt". 
+  Definition              Add: Bool @# ty := aluIn @% "Add". 
+  Definition              Xor: Bool @# ty := aluIn @% "Xor". 
+  Definition               Or: Bool @# ty := aluIn @% "Or". 
+  Definition              And: Bool @# ty := aluIn @% "And". 
+  Definition               Sl: Bool @# ty := aluIn @% "Sl". 
+  Definition               Sr: Bool @# ty := aluIn @% "Sr". 
+  Definition            Store: Bool @# ty := aluIn @% "Store". 
+  Definition             Load: Bool @# ty := aluIn @% "Load". 
+  Definition        SetBounds: Bool @# ty := aluIn @% "SetBounds". 
+  Definition   SetBoundsExact: Bool @# ty := aluIn @% "SetBoundsExact". 
+  Definition     BoundsSubset: Bool @# ty := aluIn @% "BoundsSubset". 
+  Definition  BoundsFixedBase: Bool @# ty := aluIn @% "BoundsFixedBase". 
+
+  Definition      CChangeAddr: Bool @# ty := aluIn @% "CChangeAddr". 
+  Definition           AuiPcc: Bool @# ty := aluIn @% "AuiPcc".
+  Definition         CGetBase: Bool @# ty := aluIn @% "CGetBase".
+  Definition          CGetTop: Bool @# ty := aluIn @% "CGetTop".
+  Definition          CGetLen: Bool @# ty := aluIn @% "CGetLen".
+  Definition         CGetPerm: Bool @# ty := aluIn @% "CGetPerm".
+  Definition         CGetType: Bool @# ty := aluIn @% "CGetType".
+  Definition          CGetTag: Bool @# ty := aluIn @% "CGetTag".
+  Definition         CGetHigh: Bool @# ty := aluIn @% "CGetHigh".
+  Definition             Cram: Bool @# ty := aluIn @% "Cram".
+  Definition             Crrl: Bool @# ty := aluIn @% "Crrl".
+  Definition        CSetEqual: Bool @# ty := aluIn @% "CSetEqual".
+  Definition      CTestSubset: Bool @# ty := aluIn @% "CTestSubset".
+  Definition         CAndPerm: Bool @# ty := aluIn @% "CAndPerm".
+  Definition        CClearTag: Bool @# ty := aluIn @% "CClearTag".
+  Definition         CSetHigh: Bool @# ty := aluIn @% "CSetHigh".
+  Definition            CMove: Bool @# ty := aluIn @% "CMove".
+  Definition            CSeal: Bool @# ty := aluIn @% "CSeal".
+  Definition          CUnseal: Bool @# ty := aluIn @% "CUnseal".
+  
+  Definition    SignExtendImm: Bool @# ty := aluIn @% "SignExtendImm". 
+  Definition    ZeroExtendImm: Bool @# ty := aluIn @% "ZeroExtendImm". 
+  Definition             CJal: Bool @# ty := aluIn @% "CJal".
+  Definition            CJalr: Bool @# ty := aluIn @% "CJalr".
+  Definition           AuiImm: Bool @# ty := aluIn @% "AuiImm". 
+  Definition              Lui: Bool @# ty := aluIn @% "Lui".
+
+  Definition       CSpecialRw: Bool @# ty := aluIn @% "CSpecialRw".
+  Definition             MRet: Bool @# ty := aluIn @% "MRet".
+  Definition            ECall: Bool @# ty := aluIn @% "ECall".
+  Definition           EBreak: Bool @# ty := aluIn @% "EBreak".
+  Definition          Illegal: Bool @# ty := aluIn @% "Illegal".
+
+  Definition            CsrRw: Bool @# ty := aluIn @% "CsrRw". 
+  Definition           CsrSet: Bool @# ty := aluIn @% "CsrSet". 
+  Definition         CsrClear: Bool @# ty := aluIn @% "CsrClear". 
+  Definition           CsrImm: Bool @# ty := aluIn @% "CsrImm". 
+
+  Definition  BoundsException: Bool @# ty := aluIn @% "BoundsException".
+  
   Local Notation ITE0 x y := (ITE x y (Const ty Default)).
   Local Notation GetCsrIdx x := $$(NToWord CsrIdSz x).
 
@@ -646,7 +718,7 @@ Section Alu.
   Definition saturatedMax {n} (e: Bit (n + 1) @# ty) :=
     ITE (unpack Bool (TruncMsbTo 1 n e)) $$(wones n) (TruncLsbTo n 1 e).
 
-  Definition AluRes := STRUCT_TYPE { "res" :: FullECapWithTag ;
+  Definition AluOut := STRUCT_TYPE { "res" :: FullECapWithTag ;
                                      "resAddrTag" :: Bool ;
                                      "resAddrCap" :: ECap ;
                                      "resAddrVal" :: Addr ;
@@ -681,7 +753,7 @@ Section Alu.
   Local Definition exception x := (STRUCT { "valid" ::= $$true;
                                             "data" ::= x } : Maybe (Bit CapExceptSz) @# ty ).
 
-  Definition alu : AluRes ## ty :=
+  Definition alu : AluOut ## ty :=
     ( LETC signExtImm <- ITE0 SignExtendImm signExtendImm;
 
       LETC cap1Base <- cap1 @% "base";
@@ -933,7 +1005,7 @@ Section Alu.
                                              "ecap" ::= #resCap;
                                              "addr" ::= #resVal };
 
-      LETC ret: AluRes <- STRUCT { "res" ::= #res;
+      LETC ret: AluOut <- STRUCT { "res" ::= #res;
                                    "resAddrTag" ::= Kor [ ITE0 ((Branch && #branchTaken) || CJal) #boundsRes;
                                                           ITE0 CJalr tag1 ];
                                    "resAddrCap" ::= #cJalrAddrCap;
