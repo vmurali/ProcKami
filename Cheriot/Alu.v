@@ -85,6 +85,50 @@ Definition FullECapWithTag := STRUCT_TYPE { "tag" :: Bool;
                                             "ecap" :: ECap;
                                             "addr" :: Addr }.
 
+Section Exceptions.
+  Definition BoundsViolation := 1.
+  Definition TagViolation := 2.
+  Definition SealViolation := 3.
+  Definition ExViolation := 17.
+  Definition LdViolation := 18.
+  Definition SdViolation := 19.
+  (* Note: Definition McLdViolation := 20. Clear loaded tag when Mc is absent *)
+  Definition McSdViolation := 21.
+  Definition SrViolation := 24.
+  Definition IllegalException := 2.
+  Definition EBreakException := 3.
+  Definition LdAlignException := 4.
+  Definition SdAlignException := 6.
+  Definition ECallException := 8.
+  Definition CapException := 28.
+
+  Definition McauseSz := 5.
+End Exceptions.
+
+Section Csr.
+  Definition Mcycle : N := hex "B00".
+  Definition Mtime : N := hex "B01".
+  Definition Minstret : N := hex "B02".
+  Definition Mcycleh : N := hex "B80".
+  Definition Mtimeh : N := hex "B81".
+  Definition Minstreth : N := hex "B82".
+  Definition Mshwm : N := hex "BC1".
+  Definition Mshwmb : N := hex "BC2".
+
+  Definition Mstatus : N := hex "300".
+  Definition Mcause : N := hex "342".
+  Definition Mtval : N := hex "343".
+
+  Definition MshwmAlign := 4.
+End Csr.
+
+Section Scr.
+  Definition Mtcc := 28.
+  Definition Mtdc := 29.
+  Definition Mscratchc := 30.
+  Definition Mepcc := 31.
+End Scr.
+
 Section Cap.
   Variable ty: Kind -> Type.
   Local Open Scope kami_expr.
@@ -276,48 +320,6 @@ Section Cap.
                                       else {< Const ty (2'b"00"), pack (perms @% "U0"), pack (perms @% "SE"),
                                          pack (perms @% "US") >})))))%kami_expr >}).
   End CapPerms.
-
-  Section Exceptions.
-    Definition BoundsViolation := 1.
-    Definition TagViolation := 2.
-    Definition SealViolation := 3.
-    Definition ExViolation := 17.
-    Definition LdViolation := 18.
-    Definition SdViolation := 19.
-    (* Note: Definition McLdViolation := 20. Clear loaded tag when Mc is absent *)
-    Definition McSdViolation := 21.
-    Definition SrViolation := 24.
-    Definition IllegalException := 2.
-    Definition EBreakException := 3.
-    Definition LdAlignException := 4.
-    Definition SdAlignException := 6.
-    Definition ECallException := 8.
-    Definition CapException := 28.
-  End Exceptions.
-
-  Section Csr.
-    Definition Mcycle : N := hex "B00".
-    Definition Mtime : N := hex "B01".
-    Definition Minstret : N := hex "B02".
-    Definition Mcycleh : N := hex "B80".
-    Definition Mtimeh : N := hex "B81".
-    Definition Minstreth : N := hex "B82".
-    Definition Mshwm : N := hex "BC1".
-    Definition Mshwmb : N := hex "BC2".
-
-    Definition Mstatus : N := hex "300".
-    Definition Mcause : N := hex "342".
-    Definition Mtval : N := hex "343".
-
-    Definition MshwmAlign := 4.
-  End Csr.
-
-  Section Scr.
-    Definition Mtcc := 28.
-    Definition Mtdc := 29.
-    Definition Mscratchc := 30.
-    Definition Mepcc := 31.
-  End Scr.
 
   Section Sealed.
     Definition unsealed : Bit CapOTypeSz @# ty := $0.
@@ -545,6 +547,16 @@ Section Fields.
   Definition isCompressed := isAllOnes (TruncLsbTo 2 _ inst).
 End Fields.
 
+Section CaseDefault.
+  Variable ty: Kind -> Type.
+  Variable k: Kind.
+  Variable ls: list ((Bool @# ty) * (k @# ty)).
+  Variable def: k @# ty.
+  Definition caseDefault :=
+    let allExprs := map (fun '(x, y) => ITE x y (Const ty Default)) ls in
+    Kor (ITE (UniBool Neg (Kor (map fst ls))) def (Const ty Default) :: allExprs).
+End CaseDefault.
+
 Section Alu.
   Variable     ty: Kind -> Type.
 
@@ -609,7 +621,7 @@ Section Alu.
                 "CUnseal" :: Bool ;
       
           "SignExtendImm" :: Bool ; (* AddI, SLTI, XorI, OrI, AndI, CIncAddrImm,
-                                                CLB, CLH, CLW, CLBU, CLHU, CLC, CJALR *)
+                                       CLB, CLH, CLW, CLBU, CLHU, CLC, CJALR *)
           "ZeroExtendImm" :: Bool ; (* SLTIU, CSetBoundsImm, SLLI, SRLI, SRAI *)
                    "CJal" :: Bool ;
                   "CJalr" :: Bool ;
@@ -718,45 +730,41 @@ Section Alu.
   Definition saturatedMax {n} (e: Bit (n + 1) @# ty) :=
     ITE (unpack Bool (TruncMsbTo 1 n e)) $$(wones n) (TruncLsbTo n 1 e).
 
-  Definition AluOut := STRUCT_TYPE { "res" :: FullECapWithTag ;
-                                     "resAddrTag" :: Bool ;
-                                     "resAddrCap" :: ECap ;
-                                     "resAddrVal" :: Addr ;
-                                     "linkAddr" :: Addr ;
-                                     "storeVal" :: FullECapWithTag ;
-                                     "mcause" :: Data ;
-                                     "mtval" :: Data ;
-                                     "csrId" :: CsrId ;
-                                     "scrId" :: Bit RegFixedIdSz ;
-                                     "memSz" :: Bit MemSzSz ;
-                                     "ie" :: Bool ;
+  Definition WbOps := STRUCT_TYPE { "isCompressed" :: Bool ;
+                                    "memSz" :: Bit MemSzSz ;
+                                    "csrScrWrite" :: Bool ;
+                                    "csrId" :: CsrId ;
+                                    "csrRw" :: Bool ;
+                                    "csrSet" :: Bool ;
+                                    "csrClear" :: Bool ;
+                                    "scrId" :: Bit RegFixedIdSz ;
+                                    "fetchException" :: Bool ;
+                                    "mcause" :: Bit McauseSz ;
+                                    "mtval" :: Addr }.
+
+  Definition AluOut := STRUCT_TYPE { "res" :: FullECapWithTag ; (* Reg result or Store Val *)
+                                     "resAddrTag" :: Bool ; (* PC tag on (Branch && BranchTaken), Cjal and Cjalr *)
+                                     "resAddrCap" :: ECap ; (* PC cap on Cjalr, WbOps for PC+2/4, Mem, Csr, Scr, Exceptions *)
+                                     "resAddrVal" :: Addr ; (* PC val on (Branch && BranchTaken), Cjal and Cjalr, Load or Store address *)
                                      "branch" :: Bool ;
                                      "branchTaken" :: Bool ;
                                      "cjal" :: Bool ;
                                      "cjalr" :: Bool ;
-                                     "redirectPcVal" :: Bool ;
-                                     "redirectPcCap" :: Bool ;
+                                     "mRet" :: Bool ;
                                      "ld" :: Bool ;
                                      "st" :: Bool ;
                                      "csr" :: Bool ;
                                      "scr" :: Bool ;
-                                     "csrScrWrite" :: Bool ;
-                                     "csrRw" :: Bool ;
-                                     "csrSet" :: Bool ;
-                                     "csrClear" :: Bool ;
-                                     "updIe" :: Bool ;
-                                     "mRet" :: Bool ;
                                      "resValid" :: Bool ;
-                                     "fetchException" :: Bool ;
+                                     "ie" :: Bool ; (* only Cjalr *)
+                                     "updIe" :: Bool ; (* only Cjalr *)
                                      "exception" :: Bool }.
              
   Local Definition exception x := (STRUCT { "valid" ::= $$true;
                                             "data" ::= x } : Maybe (Bit CapExceptSz) @# ty ).
 
   Definition alu : AluOut ## ty :=
-    ( LETC signExtImm <- ITE0 SignExtendImm signExtendImm;
-
-      LETC cap1Base <- cap1 @% "base";
+    ( LETC cap1Base <- cap1 @% "base";
       LETC cap1Top <- cap1 @% "top";
       LETC cap1Perms <- cap1 @% "perms";
       LETC cap1OType <- cap1 @% "oType";
@@ -773,11 +781,11 @@ Section Alu.
       LETC immVal <- imm inst;
 
       LETC src1 <- ITE Src1Pc pcVal val1;
-      LETC src2Full <- Kor [ #signExtImm; ITE0 ZeroExtendImm zeroExtendImm; ITE0 AuiImm auiImm;
-                             SignExtend 1 (ITE0 (!Src2Zero) val2)];
-      LETC adderSrc1 <- Kor [ ITE0 CGetLen #cap1Top;
-                              ITE ZeroExtendSrc1 (ZeroExtend 1 #src1) (SignExtend 1 #src1) ];
-      LETC adderSrc2 <- Kor [ ITE0 CGetLen #cap1Base; #src2Full ];
+      LETC src2Full <- caseDefault [(SignExtendImm, signExtendImm); (ZeroExtendImm, zeroExtendImm); (AuiImm, auiImm)]
+                         (SignExtend 1 (ITE0 (!Src2Zero) val2));
+      LETC adderSrc1 <- ITE CGetLen #cap1Top
+                          (ITE ZeroExtendSrc1 (ZeroExtend 1 #src1) (SignExtend 1 #src1));
+      LETC adderSrc2 <- ITE CGetLen #cap1Base #src2Full;
       LETC adderSrc2Fixed <- ITE InvSrc2 (~#adderSrc2) #adderSrc2;
       LETC carryExt  <- ZeroExtend Xlen (pack InvSrc2);
       LETC adderResFull <- #adderSrc1 + #adderSrc2Fixed + #carryExt;
@@ -794,8 +802,8 @@ Section Alu.
       LETC slRes <- val1 << #shiftAmt;
       LETC srRes <- TruncLsbTo Xlen 1 (#adderSrc1 >>> #shiftAmt);
 
-      LETC addrImmVal <- Kor [ #signExtImm; ITE0 Branch branchImm; ITE0 CJal jalImm; ITE0 Store stImm;
-                               ITE0 CSpecialRw $0 ];
+      LETC addrImmVal <- Kor [ ITE0 SignExtendImm signExtendImm; ITE0 Branch branchImm; ITE0 CJal jalImm;
+                               ITE0 Store stImm; ITE0 CSpecialRw $0 ];
       LETC resAddrValFullTemp <- (ZeroExtend 1 #src1) + #addrImmVal;
       LETC resAddrValFull <- {< TruncMsbTo Xlen 1 #resAddrValFullTemp,
           ITE CJalr $$WO~0 (TruncLsbTo 1 Xlen #resAddrValFullTemp) >};
@@ -811,26 +819,26 @@ Section Alu.
 
       LETC change_addr <- #branch_jump_load_store || CChangeAddr;
 
-      LETC baseCheckBase <- Kor [ ITE0 Src1Pc (pcCap @% "base"); ITE0 #seal_unseal #cap2Base; #cap1Base ];
-      LETC baseCheckAddr <- Kor [ ITE0 CSeal (ZeroExtend 1 val2); ITE0 CUnseal (ZeroExtendTo (Xlen + 1) #cap1OType);
-                                  ITE0 #branch_jump_load_store # resAddrValFull;
-                                  ITE0 CTestSubset #cap2Base;
-                                  #adderResFull ];
+      LETC baseCheckBase <- caseDefault [(Src1Pc, pcCap @% "base"); (#seal_unseal, #cap2Base)] #cap1Base;
+      LETC baseCheckAddr <- caseDefault [(CSeal, ZeroExtend 1 val2); (CUnseal, ZeroExtendTo (Xlen + 1) #cap1OType);
+                                         (#branch_jump_load_store, #resAddrValFull);
+                                         (CTestSubset, #cap2Base)]
+                              #adderResFull;
       LETC baseCheck <- (#baseCheckBase <= #baseCheckAddr) &&
                           (!#change_addr || !(unpack Bool (TruncMsbTo 1 Xlen #baseCheckAddr)));
 
       LETC representableLimit <- getRepresentableLimit
                                    (ITE Src1Pc (pcCap @% "base") #cap1Base)
                                    (get_ECorrected_from_E (ITE Src1Pc (pcCap @% "E") (cap1 @% "E")));
-      LETC topCheckTop <- Kor [ ITE0 #seal_unseal #cap2Top;
-                                ITE0 (#branch_jump || CChangeAddr) #representableLimit;
-                                #cap1Top ];
-      LETC topCheckAddr <-  Kor [ ITE0 CSeal (ZeroExtend 1 val2);
-                                  ITE0 CUnseal (ZeroExtendTo (Xlen + 1) #cap1OType);
-                                  ITE0 #branch_jump_load_store #resAddrValFull;
-                                  ITE0 CTestSubset #cap2Top;
-                                  #adderResFull ];
-      LETC addrPlus <- Kor [ITE0 #load_store ($1 << memSz); ZeroExtend Xlen (pack (!CTestSubset))];
+      LETC topCheckTop <- caseDefault [(#seal_unseal, #cap2Top);
+                                       (#branch_jump || CChangeAddr, #representableLimit)]
+                            #cap1Top;
+      LETC topCheckAddr <-  caseDefault [(CSeal, ZeroExtend 1 val2);
+                                         (CUnseal, ZeroExtendTo (Xlen + 1) #cap1OType);
+                                         (#branch_jump_load_store, #resAddrValFull);
+                                         (CTestSubset, #cap2Top)]
+                              #adderResFull;
+      LETC addrPlus <- ITE #load_store ($1 << memSz) (ZeroExtend Xlen (pack (!CTestSubset)));
       LETC topCheckAddrFinal <- #topCheckAddr + #addrPlus;
       LETC topCheck <-
         (#topCheckAddrFinal <= #topCheckTop) &&
@@ -916,6 +924,7 @@ Section Alu.
       LETC fullIllegal <- Kor [Illegal; #isCsr && !#validCsr; CSpecialRw && !#validScr];
 
       LETC capException <-
+        (* Note: Kor is correct because of disjointness of capSrException with rest *)
         Kor [ ITE0 #capSrException (exception $SrViolation) ;
               ITE (#load_store && !tag1) (exception $TagViolation)
                 (ITE (#load_store && !#cap1NotSealed ||
@@ -938,15 +947,15 @@ Section Alu.
       LETC isException <- Kor [TagException; BoundsException;
                                #fullIllegal; EBreak; ECall; #clcException; #cscException; #isCapException];
 
-      LETC mcauseVal: Bit Xlen <- ITE (TagException || BoundsException)
-                                    $CapException
-                                    (ITE (#isException && !#isCapException)
-                                       (Kor [ ITE0 #fullIllegal $IllegalException;
-                                              ITE0 EBreak $EBreakException;
-                                              ITE0 ECall $ECallException;
-                                              ITE0 #clcException $LdAlignException;
-                                              ITE0 #cscException $SdAlignException ])
-                                       (ITE0 #isCapException $CapException));
+      LETC mcauseVal: Bit McauseSz <- ITE (TagException || BoundsException)
+                                        $CapException
+                                        (ITE0 #isException
+                                           (ITE #isCapException $CapException
+                                              (Kor [ ITE0 #fullIllegal $IllegalException;
+                                                     ITE0 EBreak $EBreakException;
+                                                     ITE0 ECall $ECallException;
+                                                     ITE0 #clcException $LdAlignException;
+                                                     ITE0 #cscException $SdAlignException ])));
 
       LETC mtvalVal: Bit Xlen <- ITE (TagException || BoundsException)
                                    (@ZeroExtendTo _ Xlen CapExceptSz (Kor [ITE0 TagException $TagViolation;
@@ -1005,46 +1014,46 @@ Section Alu.
                                              "ecap" ::= #resCap;
                                              "addr" ::= #resVal };
 
-      LETC ret: AluOut <- STRUCT { "res" ::= #res;
+      LETC storeVal : FullECapWithTag <- STRUCT { "tag" ::= tag2 ;
+                                                  "ecap" ::= cap2 ;
+                                                  "addr" ::= val2 };
+
+      LETC wbOps <- STRUCT { "memSz" ::= memSz ;
+                             "csrScrWrite" ::= (CsrRw || isNotZero #rs1Idx);
+                             "csrId" ::= #immVal ;
+                             "csrRw" ::= CsrRw;
+                             "csrSet" ::= CsrSet;
+                             "csrClear" ::= CsrClear;
+                             "scrId" ::= #rs2Idx;
+                             "fetchException" ::= (TagException || BoundsException);
+                             "mcause" ::= #mcauseVal;
+                             "mtval" ::= #mtvalVal };
+
+      LETC ret: AluOut <- STRUCT { "res" ::= ITE Store #storeVal #res;
                                    "resAddrTag" ::= Kor [ ITE0 ((Branch && #branchTaken) || CJal) #boundsRes;
                                                           ITE0 CJalr tag1 ];
-                                   "resAddrCap" ::= #cJalrAddrCap;
-                                   "resAddrVal" ::= #resAddrVal; (* Note: has load/store address also *)
-                                   "linkAddr" ::= #linkAddr;
-                                   "storeVal" ::= STRUCT { "tag" ::= tag2 ;
-                                                           "ecap" ::= cap2 ;
-                                                           "addr" ::= val2 } ;
-                                   "mcause" ::= #mcauseVal ;
-                                   "mtval" ::= #mtvalVal ;
-                                   "csrId" ::= #immVal ;
-                                   "scrId" ::= #rs2Idx ;
-                                   "memSz" ::= memSz ;
-                                   "ie" ::= (#newIe || #newIeCsr);
+                                   "resAddrCap" ::= ITE CJalr #cJalrAddrCap
+                                                      (unpack ECap (ZeroExtendTo (size ECap) (pack #wbOps)));
+                                   "resAddrVal" ::= #resAddrVal;
                                    "branch" ::= Branch && !#isException;
                                    "branchTaken" ::= #branchTaken;
                                    "cjal" ::= CJal && !#isException;
                                    "cjalr" ::= CJalr && !#isException;
-                                   "redirectPcVal" ::= ((Branch && #branchTaken) || #cjal_cjalr) && !#isException;
-                                   "redirectPcCap" ::= CJalr && !#isException;
+                                   "mRet" ::= MRet && !#isException;
                                    "ld" ::= Load && !#isException;
                                    "st" ::= Store && !#isException;
                                    "csr" ::= #isCsr && !#isException;
                                    "scr" ::= CSpecialRw && !#isException;
-                                   "csrScrWrite" ::= (CsrRw || isNotZero #rs1Idx);
-                                   "csrRw" ::= CsrRw;
-                                   "csrSet" ::= CsrSet;
-                                   "csrClear" ::= CsrClear;
-                                   "updIe" ::= (((isInterruptEnabling #cap1OType || isInterruptDisabling #cap1OType)
-                                                 && CJalr) || #updIeCsr) && !#isException;
-                                   "mRet" ::= MRet && !#isException;
                                    "resValid" ::= !(Branch || #load_store || #isCsr || CSpecialRw ||
                                                       isZero #rdIdx || #isException);
-                                   "fetchException" ::= (TagException || BoundsException);
+                                   "ie" ::= (#newIe || #newIeCsr);
+                                   "updIe" ::= (((isInterruptEnabling #cap1OType || isInterruptDisabling #cap1OType)
+                                                 && CJalr) || #updIeCsr) && !#isException;
                                    "exception" ::= #isException };
       RetE #ret ).
 End Alu.
 
-(* CSRs mslwm, mshwm, performance counters *)
+(* CSRs performance counters *)
 
 Section Csr.
   Variable prefix: string.
@@ -1063,7 +1072,7 @@ Section Csr.
   Variable newIe: Bool @# ty.
   Variable csrIdx: CsrId @# ty.
   Variable updVal: Data @# ty.
-  Variable newMcause: Data @# ty.
+  Variable newMcause: Bit McauseSz @# ty.
   Variable newMtval: Data @# ty.
   Variable stAddr: Addr @# ty.
 
@@ -1087,7 +1096,7 @@ Section Csr.
       Read mshwmVal : Bit (Xlen - MshwmAlign) <- @^"mshwmReg";
       Read mshwmbVal : Bit (Xlen - MshwmAlign) <- @^"mshwmbReg";
       Read ieVal : Bool <- @^"ieSingle";
-      Read mcauseVal : Data <- @^"mcauseReg";
+      Read mcauseVal : Bit McauseSz <- @^"mcauseReg";
       Read mtvalVal : Data <- @^"mtvalReg";
 
       LET ret : Data <- Kor [ ITE0 (checkIdx Mcycle) #mcycleLsb;
@@ -1099,46 +1108,50 @@ Section Csr.
                               ITE0 (checkIdx Mshwm) ({< #mshwmVal, $$(wzero MshwmAlign) >});
                               ITE0 (checkIdx Mshwmb) ({< #mshwmbVal, $$(wzero MshwmAlign) >});
                               ITE0 (checkIdx Mstatus) (ZeroExtendTo Xlen ({< pack #ieVal, $$(wzero (IeBit-1)) >}));
-                              ITE0 (checkIdx Mcause) #mcauseVal;
+                              ITE0 (checkIdx Mcause) (ZeroExtendTo Xlen #mcauseVal);
                               ITE0 (checkIdx Mtval) #mtvalVal ];
       
       LET writeVal : Data <- Kor [ ITE0 CsrSet (#ret .| updVal);
                                    ITE0 CsrClear (#ret .& ~updVal);
-                                   updVal ];
+                                   ITE0 CsrRw updVal ];
 
       Write @^"mcycleFull" : Bit DXlen <- Kor [ ITE0 (WriteCsr && checkIdx Mcycle)  ({< #mcycleMsb, #writeVal >});
                                                 ITE0 (WriteCsr && checkIdx Mcycleh) ({< #writeVal, #mcycleLsb >});
-                                                #mcycleVal + $1 ];
+                                                ITE0 (!(WriteCsr && (checkIdx Mcycle || checkIdx Mcycleh))) #mcycleVal + $1 ];
 
       Write @^"mtimeFull" : Bit DXlen <- Kor [ ITE0 (WriteCsr && checkIdx Mtime)  ({< #mtimeMsb, #writeVal >});
                                                ITE0 (WriteCsr && checkIdx Mtimeh) ({< #writeVal, #mtimeLsb >});
-                                               #mtimeVal + $1 ];
+                                               ITE0 (!(WriteCsr && (checkIdx Mtime || checkIdx Mtimeh))) (#mtimeVal + $1) ];
 
       Write @^"minstretFull" : Bit DXlen <- Kor [ ITE0 (WriteCsr && checkIdx Minstret)
                                                     ({< #minstretMsb, #writeVal >});
                                                   ITE0 (WriteCsr && checkIdx Minstreth)
                                                     ({< #writeVal, #minstretLsb >});
-                                                  #minstretVal + ZeroExtendTo DXlen (pack Commit) ] ;
+                                                  ITE0 (!(WriteCsr && (checkIdx Minstret || checkIdx Minstreth)))
+                                                    (#minstretVal + ZeroExtendTo DXlen (pack Commit)) ] ;
 
       Write @^"mshwmbReg" : Bit (Xlen - MshwmAlign) <-
-                              Kor [ ITE0 (WriteCsr && checkIdx Mshwmb) (TruncLsbTo (Xlen - MshwmAlign) _ #writeVal);
-                                    #mshwmbVal ];
+                              ITE (WriteCsr && checkIdx Mshwmb) (TruncLsbTo (Xlen - MshwmAlign) _ #writeVal)
+                                #mshwmbVal;
 
       LET stAddrTrunc <- TruncLsbTo (Xlen - MshwmAlign) _ stAddr;
 
+      LET mshwmUpdCond <- IsStore && (#stAddrTrunc >= #mshwmVal) && (#stAddrTrunc < #mshwmVal);
+
       Write @^"mshwmReg" : Bit (Xlen - MshwmAlign) <-
                              Kor [ ITE0 (WriteCsr && checkIdx Mshwm) (TruncLsbTo (Xlen - MshwmAlign) _ #writeVal);
-                                   ITE0 (IsStore && (#stAddrTrunc >= #mshwmbVal) && (#stAddrTrunc < #mshwmVal))
-                                     #stAddrTrunc;
-                                   #mshwmVal ];
+                                   ITE0 #mshwmUpdCond #stAddrTrunc;
+                                   ITE0 (!((WriteCsr && checkIdx Mshwm) || #mshwmUpdCond))#mshwmVal ];
 
       Write @^"ieSingle" : Bool <- ITE UpdIe newIe #ieVal;
 
-      Write @^"mcauseReg" : Data <- Kor [ ITE0 Exception newMcause;
-                                          ITE (WriteCsr && checkIdx Mcause) #writeVal #mcauseVal ];
+      Write @^"mcauseReg" : Bit McauseSz <- caseDefault [(Exception, newMcause);
+                                                         (WriteCsr && checkIdx Mcause, TruncLsbTo McauseSz _ #writeVal)]
+                                              #mcauseVal;
 
-      Write @^"mtvalReg" : Data <- Kor [ ITE0 Exception newMtval;
-                                         ITE (WriteCsr && checkIdx Mtval) #writeVal #mcauseVal ];
+      Write @^"mtvalReg" : Data <- caseDefault [(Exception, newMtval);
+                                                (WriteCsr && checkIdx Mtval, #writeVal)]
+                                     #mtvalVal;
       
       Ret #ret
     ).
@@ -1194,10 +1207,11 @@ Section Scr.
                                           (newCap @% "addr"),
                                         $$(wzero NumLsb0BitsInstAddr) >}) ];
 
-      Write @^"mepcc" <- Kor [ ITE0 Exception (STRUCT { "tag" ::= #fullPc @% "tag" && !FetchViolation;
-                                                        "ecap" ::= #fullPc @% "ecap";
-                                                        "addr" ::= #fullPc @% "addr" });
-                               ITE (WriteScr && checkIdx Mepcc) #updCap #mepcc ];
+      Write @^"mepcc" <- caseDefault [(Exception, STRUCT { "tag" ::= #fullPc @% "tag" && !FetchViolation;
+                                                           "ecap" ::= #fullPc @% "ecap";
+                                                           "addr" ::= #fullPc @% "addr" });
+                                      (WriteScr && checkIdx Mepcc, #updCap)]
+                           #mepcc;
       Write @^"mtcc" <- ITE (WriteScr && checkIdx Mtcc) #updCap #mtcc;
 
       LET scr: FullECapWithTag <- Kor [ ITE0 (checkIdx Mtcc) #mtcc;
