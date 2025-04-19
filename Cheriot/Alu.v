@@ -641,6 +641,40 @@ Section Alu.
     
         "BoundsException" :: Bool }.
 
+  Definition WbOps := STRUCT_TYPE { "isCompressed" :: Bool ;
+                                    "memSz" :: Bit MemSzSz ;
+                                    "csrScrWrite" :: Bool ;
+                                    "csrId" :: CsrId ;
+                                    "csrRw" :: Bool ;
+                                    "csrSet" :: Bool ;
+                                    "csrClear" :: Bool ;
+                                    "scrId" :: Bit RegFixedIdSz ;
+                                    "fetchException" :: Bool ;
+                                    "mcause" :: Bit McauseSz ;
+                                    "mtval" :: Addr ;
+                                    "resValid" :: Bool ;
+                                    "branch" :: Bool ;
+                                    "branchTaken" :: Bool ;
+                                    "cjal" :: Bool ;
+                                    "mRet" :: Bool ;
+                                    "ld" :: Bool ;
+                                    "st" :: Bool ;
+                                    "csr" :: Bool ;
+                                    "scr" :: Bool ;
+                                    "exception" :: Bool}.
+
+  Goal (size WbOps <= size ECap)%nat.
+    simpl; lia.
+  Qed.
+
+  Definition AluOut := STRUCT_TYPE { "res" :: FullECapWithTag ; (* Reg result or Store Val *)
+                                     "resAddrTag" :: Bool ; (* PC tag on (Branch && BranchTaken), Cjal and Cjalr *)
+                                     "resAddrCap" :: ECap ; (* PC cap on Cjalr, WbOps for others *)
+                                     "resAddrVal" :: Addr ; (* PC val on (Branch && BranchTaken), Cjal and Cjalr, Load or Store address *)
+                                     "cjalr" :: Bool ;
+                                     "ie" :: Bool ; (* only Cjalr *)
+                                     "updIe" :: Bool (* only Cjalr *) }.
+             
   Variable aluIn : AluIn @# ty.
   Local Open Scope kami_expr.
     
@@ -730,36 +764,6 @@ Section Alu.
   Definition saturatedMax {n} (e: Bit (n + 1) @# ty) :=
     ITE (unpack Bool (TruncMsbTo 1 n e)) $$(wones n) (TruncLsbTo n 1 e).
 
-  Definition WbOps := STRUCT_TYPE { "isCompressed" :: Bool ;
-                                    "memSz" :: Bit MemSzSz ;
-                                    "csrScrWrite" :: Bool ;
-                                    "csrId" :: CsrId ;
-                                    "csrRw" :: Bool ;
-                                    "csrSet" :: Bool ;
-                                    "csrClear" :: Bool ;
-                                    "scrId" :: Bit RegFixedIdSz ;
-                                    "fetchException" :: Bool ;
-                                    "mcause" :: Bit McauseSz ;
-                                    "mtval" :: Addr }.
-
-  Definition AluOut := STRUCT_TYPE { "res" :: FullECapWithTag ; (* Reg result or Store Val *)
-                                     "resAddrTag" :: Bool ; (* PC tag on (Branch && BranchTaken), Cjal and Cjalr *)
-                                     "resAddrCap" :: ECap ; (* PC cap on Cjalr, WbOps for PC+2/4, Mem, Csr, Scr, Exceptions *)
-                                     "resAddrVal" :: Addr ; (* PC val on (Branch && BranchTaken), Cjal and Cjalr, Load or Store address *)
-                                     "branch" :: Bool ;
-                                     "branchTaken" :: Bool ;
-                                     "cjal" :: Bool ;
-                                     "cjalr" :: Bool ;
-                                     "mRet" :: Bool ;
-                                     "ld" :: Bool ;
-                                     "st" :: Bool ;
-                                     "csr" :: Bool ;
-                                     "scr" :: Bool ;
-                                     "resValid" :: Bool ;
-                                     "ie" :: Bool ; (* only Cjalr *)
-                                     "updIe" :: Bool ; (* only Cjalr *)
-                                     "exception" :: Bool }.
-             
   Local Definition exception x := (STRUCT { "valid" ::= $$true;
                                             "data" ::= x } : Maybe (Bit CapExceptSz) @# ty ).
 
@@ -1027,7 +1031,18 @@ Section Alu.
                              "scrId" ::= #rs2Idx;
                              "fetchException" ::= (TagException || BoundsException);
                              "mcause" ::= #mcauseVal;
-                             "mtval" ::= #mtvalVal };
+                             "mtval" ::= #mtvalVal;
+                             "resValid" ::= !(Branch || #load_store || #isCsr || CSpecialRw ||
+                                                isZero #rdIdx || #isException);
+                             "branch" ::= Branch && !#isException;
+                             "branchTaken" ::= #branchTaken;
+                             "cjal" ::= CJal && !#isException;
+                             "mRet" ::= MRet && !#isException;
+                             "ld" ::= Load && !#isException;
+                             "st" ::= Store && !#isException;
+                             "csr" ::= #isCsr && !#isException;
+                             "scr" ::= CSpecialRw && !#isException;
+                             "exception" ::= #isException };
 
       LETC ret: AluOut <- STRUCT { "res" ::= ITE Store #storeVal #res;
                                    "resAddrTag" ::= Kor [ ITE0 ((Branch && #branchTaken) || CJal) #boundsRes;
@@ -1035,22 +1050,12 @@ Section Alu.
                                    "resAddrCap" ::= ITE CJalr #cJalrAddrCap
                                                       (unpack ECap (ZeroExtendTo (size ECap) (pack #wbOps)));
                                    "resAddrVal" ::= #resAddrVal;
-                                   "branch" ::= Branch && !#isException;
-                                   "branchTaken" ::= #branchTaken;
-                                   "cjal" ::= CJal && !#isException;
                                    "cjalr" ::= CJalr && !#isException;
-                                   "mRet" ::= MRet && !#isException;
-                                   "ld" ::= Load && !#isException;
-                                   "st" ::= Store && !#isException;
-                                   "csr" ::= #isCsr && !#isException;
-                                   "scr" ::= CSpecialRw && !#isException;
-                                   "resValid" ::= !(Branch || #load_store || #isCsr || CSpecialRw ||
-                                                      isZero #rdIdx || #isException);
                                    "ie" ::= (#newIe || #newIeCsr);
                                    "updIe" ::= (((isInterruptEnabling #cap1OType || isInterruptDisabling #cap1OType)
-                                                 && CJalr) || #updIeCsr) && !#isException;
-                                   "exception" ::= #isException };
+                                                 && CJalr) || #updIeCsr) && !#isException };
       RetE #ret ).
+
 End Alu.
 
 (* CSRs performance counters *)
