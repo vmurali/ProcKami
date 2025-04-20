@@ -663,10 +663,6 @@ Section Alu.
                                     "scr" :: Bool ;
                                     "exception" :: Bool}.
 
-  Goal (size WbOps <= size ECap)%nat.
-    simpl; lia.
-  Qed.
-
   Definition AluOut := STRUCT_TYPE { "res" :: FullECapWithTag ; (* Reg result or Store Val *)
                                      "resAddrTag" :: Bool ; (* PC tag on (Branch && BranchTaken), Cjal and Cjalr *)
                                      "resAddrCap" :: ECap ; (* PC cap on Cjalr, WbOps for others *)
@@ -674,7 +670,11 @@ Section Alu.
                                      "cjalr" :: Bool ;
                                      "ie" :: Bool ; (* only Cjalr *)
                                      "updIe" :: Bool (* only Cjalr *) }.
-             
+
+  Goal (size WbOps <= size ECap).
+    simpl; lia.
+  Qed.
+
   Variable aluIn : AluIn @# ty.
   Local Open Scope kami_expr.
     
