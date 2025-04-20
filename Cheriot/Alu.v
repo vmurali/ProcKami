@@ -529,8 +529,10 @@ Section Fields.
   Definition rs1Fixed := extractFieldFromInst rs1FixedField.
   Definition rs2Fixed := extractFieldFromInst rs2FixedField.
   Definition rdFixed := extractFieldFromInst rdFixedField.
-  Definition c0Fixed : Bit RegFixedIdSz @# ty := $0.
-  Definition raFixed : Bit RegFixedIdSz @# ty := $1.
+  Definition c0 := 0.
+  Definition ra := 1.
+  Definition c0Fixed : Bit RegFixedIdSz @# ty := $c0.
+  Definition raFixed : Bit RegFixedIdSz @# ty := $ra.
 
   (* TODO: These should be derived from encoder/decoder *)
   Definition imm := extractFieldFromInst immField.
@@ -642,6 +644,8 @@ Section Alu.
         "BoundsException" :: Bool }.
 
   Definition WbOps := STRUCT_TYPE { "isCompressed" :: Bool ;
+                                    "resValid" :: Bool ;
+                                    "regId" :: Bit RegIdSz ;
                                     "memSz" :: Bit MemSzSz ;
                                     "csrScrWrite" :: Bool ;
                                     "csrId" :: CsrId ;
@@ -652,7 +656,6 @@ Section Alu.
                                     "fetchException" :: Bool ;
                                     "mcause" :: Bit McauseSz ;
                                     "mtval" :: Addr ;
-                                    "resValid" :: Bool ;
                                     "branch" :: Bool ;
                                     "branchTaken" :: Bool ;
                                     "cjal" :: Bool ;
@@ -668,8 +671,7 @@ Section Alu.
                                      "resAddrCap" :: ECap ; (* PC cap on Cjalr, WbOps for others *)
                                      "resAddrVal" :: Addr ; (* PC val on (Branch && BranchTaken), Cjal and Cjalr, Load or Store address *)
                                      "cjalr" :: Bool ;
-                                     "ie" :: Bool ; (* only Cjalr *)
-                                     "updIe" :: Bool (* only Cjalr *) }.
+                                     "ie" :: Bool (* always *) }.
 
   Goal (size WbOps <= size ECap).
     simpl; lia.
@@ -1008,11 +1010,12 @@ Section Alu.
                            ITE0 CUnseal #cUnsealCap ];
 
       LETC ieBitSet <- unpack Bool (TruncMsbTo 1 (IeBit - 1) (TruncLsbTo IeBit (Xlen - IeBit) #csrWrite));
-      LETC updIeCsr <- #isCsr && #immVal == GetCsrIdx Mstatus &&
-                                              Kor [ CsrRw;
-                                                    CsrSet && #ieBitSet;
-                                                    CsrClear && #ieBitSet];
-      LETC newIeCsr <- CsrRw && #ieBitSet || CsrSet;
+      LETC newIe <- ((!#isException &&
+                        Kor [ CJalr && (isInterruptEnabling #cap1OType || (ie && isInterruptInheriting #cap1OType));
+                              #isCsr && #immVal == GetCsrIdx Mstatus && Kor [CsrRw && #ieBitSet;
+                                                                             CsrSet && (#ieBitSet || ie);
+                                                                             CsrClear && (!#ieBitSet && ie)] ]) ||
+                       ie);
 
       LETC res : FullECapWithTag <- STRUCT { "tag" ::= #resTag;
                                              "ecap" ::= #resCap;
@@ -1023,6 +1026,9 @@ Section Alu.
                                                   "addr" ::= val2 };
 
       LETC wbOps <- STRUCT { "memSz" ::= memSz ;
+                             "resValid" ::= !(Branch || #load_store || #isCsr || CSpecialRw ||
+                                                isZero #rdIdx || #isException);
+                             "regId" ::= ITE CJal $ra (rd inst);
                              "csrScrWrite" ::= (CsrRw || isNotZero #rs1Idx);
                              "csrId" ::= #immVal ;
                              "csrRw" ::= CsrRw;
@@ -1032,8 +1038,6 @@ Section Alu.
                              "fetchException" ::= (TagException || BoundsException);
                              "mcause" ::= #mcauseVal;
                              "mtval" ::= #mtvalVal;
-                             "resValid" ::= !(Branch || #load_store || #isCsr || CSpecialRw ||
-                                                isZero #rdIdx || #isException);
                              "branch" ::= Branch && !#isException;
                              "branchTaken" ::= #branchTaken;
                              "cjal" ::= CJal && !#isException;
@@ -1051,11 +1055,8 @@ Section Alu.
                                                       (unpack ECap (ZeroExtendTo (size ECap) (pack #wbOps)));
                                    "resAddrVal" ::= #resAddrVal;
                                    "cjalr" ::= CJalr && !#isException;
-                                   "ie" ::= (#newIe || #newIeCsr);
-                                   "updIe" ::= (((isInterruptEnabling #cap1OType || isInterruptDisabling #cap1OType)
-                                                 && CJalr) || #updIeCsr) && !#isException };
+                                   "ie" ::= #newIe };
       RetE #ret ).
-
 End Alu.
 
 (* CSRs performance counters *)
