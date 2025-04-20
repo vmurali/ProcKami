@@ -44,7 +44,7 @@ Definition CapcMSz := 8.
 Definition CapBSz := CapcMSz + 1.
 Definition CapMSz := CapBSz.
 
-Definition IeBit := 4.
+Definition IeBit := 4. (* 4th bit counting from 0, i.e. mstatus[3] = IE *)
 
 Definition Cap : Kind :=
   (STRUCT_TYPE {
