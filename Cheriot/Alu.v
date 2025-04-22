@@ -666,7 +666,6 @@ Section Pipeline.
            "TagException" :: Bool ;
         "BoundsException" :: Bool }.
 
-  (* TODO handle reg 0 for stall/read, and for wait/write *)
   Definition AluOut := STRUCT_TYPE { "regs" :: Array NumRegs FullECapWithTag ;
                                      "waits" :: Array NumRegs Bool ;
                                      "csrs" :: Csrs ;
@@ -1209,12 +1208,9 @@ Section Pipeline.
                                 "addr" ::=  #newPcVal };
 
         LETC newRegs : Array NumRegs FullECapWithTag <-
-                         regs @[ #rdIdx <-
-                                   ITE (isZero #rdIdx)
-                                     #newPcc
-                                     (ITE (writeReg && !#isException )
-                                        #res
-                                        (regs @[ #rdIdx ])) ];
+                         UpdateArrayConst (regs @[ #rdIdx <- ITE (writeReg && !#isException )
+                                                               #res
+                                                               (regs @[ #rdIdx ]) ]) Fin.F1 #newPcc;
 
         LETC newWaits : Array NumRegs Bool <-
                           waits @[ #rdIdx <- multiCycle && isNotZero #rdIdx && !#isException ];
