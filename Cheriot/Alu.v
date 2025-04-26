@@ -55,11 +55,16 @@ Section Exceptions.
   Definition EBreakException := 3.
   Definition LdAlignException := 4.
   Definition SdAlignException := 6.
-  Definition ECallException := 8.
+  Definition ECallException := 11.
   Definition CapException := 28.
 
   Definition McauseSz := 5.
 End Exceptions.
+
+Section Interrupts.
+  Definition Mei := 11.
+  Definition Mti := 7.
+End Interrupts.
 
 Section Csr.
   (* TODO CSRs performance counters *)
@@ -568,13 +573,17 @@ Definition Csrs := STRUCT_TYPE { "mcycle" :: Bit DXlen ;
                                  "mshwmb" :: Bit (Xlen - MshwmAlign) ;
                                   
                                      "ie" :: Bool ;
+                              "interrupt" :: Bool ;
                                  "mcause" :: Bit McauseSz ;
                                   "mtval" :: Addr }.
 
 Definition Scrs := STRUCT_TYPE {   "mtcc" :: FullECapWithTag ;
                                    "mtdc" :: FullECapWithTag ;
                               "mscratchc" :: FullECapWithTag ;
-                                  "mepcc" :: FullECapWithTag }.
+                                 "mepcc" :: FullECapWithTag }.
+
+Definition Interrupts := STRUCT_TYPE { "mei" :: Bool ;
+                                       "mti" :: Bool }.
 
 Definition AluIn :=
   STRUCT_TYPE { "pcVal" :: Addr ;
@@ -583,10 +592,11 @@ Definition AluIn :=
                  "reg2" :: FullECapWithTag ;
                  "regs" :: Array NumRegs FullECapWithTag ;
                 "waits" :: Array NumRegs Bool ;
-                "memSz" :: Bit MemSzSz ;
-
                  "csrs" :: Csrs ;
                  "scrs" :: Scrs ;
+           "interrupts" :: Interrupts ;
+             "incoming" :: Interrupts ;
+                "memSz" :: Bit MemSzSz ;
 
              "readReg1" :: Bool ; (* TODO fill it *)
              "readReg2" :: Bool ; (* TODO fill it *)
@@ -650,9 +660,10 @@ Definition AluIn :=
   
            "CSpecialRw" :: Bool ;
                  "MRet" :: Bool ;
-                "ECall" :: Bool ;
+                "ECall" :: Bool ; (* ECall, Wfi *)
                "EBreak" :: Bool ;
                "FenceI" :: Bool ;
+                  "Nop" :: Bool ;
               "Illegal" :: Bool ;
   
                 "CsrRw" :: Bool ; (* CSRRW, CSRRWI *)
@@ -667,6 +678,7 @@ Definition AluOut := STRUCT_TYPE { "regs" :: Array NumRegs FullECapWithTag ;
                                    "waits" :: Array NumRegs Bool ;
                                    "csrs" :: Csrs ;
                                    "scrs" :: Scrs ;
+                                   "interrupts" :: Interrupts ;
                                    "ldRegIdx" :: Bit RegIdSz ;
                                    "memAddr" :: Addr ;
                                    "storeVal" :: FullECapWithTag ;
@@ -709,6 +721,7 @@ l other values are repeated per lane *)
   Local Definition          mshwmb: Bit _ @# ty := csrs @% "mshwmb".
 
   Local Definition               ie: Bool @# ty := csrs @% "ie".
+  Local Definition        interrupt: Bool @# ty := csrs @% "interrupt".
   Local Definition   mcause: Bit McauseSz @# ty := csrs @% "mcause".
   Local Definition            mtval: Addr @# ty := csrs @% "mtval".
 
@@ -717,6 +730,13 @@ l other values are repeated per lane *)
   Local Definition  mtdc: FullECapWithTag @# ty := scrs @% "mtdc".
   Local Definition            mscratch: _ @# ty := scrs @% "mscratchc" : FullECapWithTag @# _.
   Local Definition               mepcc: _ @# ty := scrs @% "mepcc" : FullECapWithTag @# _.
+
+  Local Definition interrupts: Interrupts @# ty := aluIn @% "interrupts".
+  Local Definition              mei: Bool @# ty := interrupts @% "mei".
+  Local Definition              mti: Bool @# ty := interrupts @% "mti".
+  Local Definition   incoming: Interrupts @# ty := aluIn @% "incoming".
+  Local Definition              mep: Bool @# ty := incoming @% "mei".
+  Local Definition              mtp: Bool @# ty := incoming @% "mti".
 
   Local Definition         readReg1: Bool @# ty := aluIn @% "readReg1".
   Local Definition         readReg2: Bool @# ty := aluIn @% "readReg2".
@@ -776,6 +796,7 @@ l other values are repeated per lane *)
   Local Definition            ECall: Bool @# ty := aluIn @% "ECall".
   Local Definition           EBreak: Bool @# ty := aluIn @% "EBreak".
   Local Definition           FenceI: Bool @# ty := aluIn @% "FenceI".
+  Local Definition              Nop: Bool @# ty := aluIn @% "Nop".
   Local Definition          Illegal: Bool @# ty := aluIn @% "Illegal".
 
   Local Definition            CsrRw: Bool @# ty := aluIn @% "CsrRw". 
@@ -980,8 +1001,9 @@ l other values are repeated per lane *)
                              #rs2IdxFixed == $Mscratchc;
                              #rs2IdxFixed == $Mepcc ];
 
-      LETC fullIllegal <- Kor [Illegal; #isCsr && !#validCsr; CSpecialRw && !#validScr;
-                               readReg1 && regIdxWrong #rs1IdxFixed;
+      LETC illegal <- Kor [Illegal; #isCsr && !#validCsr; CSpecialRw && !#validScr];
+
+      LETC wrongRegId <- Kor [ readReg1 && regIdxWrong #rs1IdxFixed;
                                readReg2 && regIdxWrong #rs2IdxFixed;
                                writeReg && regIdxWrong #rdIdxFixed ];
 
@@ -1007,26 +1029,26 @@ l other values are repeated per lane *)
       LETC capExceptionSrc <- ITE0 (!#capSrException) #rs1IdxFixed;
 
       LETC isException <- Kor [!pcTag; BoundsException;
-                               #fullIllegal; EBreak; ECall; #clcException; #cscException; #isCapException];
+                               #illegal; EBreak; ECall; #clcException; #cscException; #wrongRegId; #isCapException];
 
-      LETC mcauseVal: Bit McauseSz <- ITE (!pcTag || BoundsException)
-                                        $CapException
-                                        (ITE0 #isException
-                                           (ITE #isCapException $CapException
-                                              (Kor [ ITE0 #fullIllegal $IllegalException;
-                                                     ITE0 EBreak $EBreakException;
-                                                     ITE0 ECall $ECallException;
-                                                     ITE0 #clcException $LdAlignException;
-                                                     ITE0 #cscException $SdAlignException ])));
+      LETC mcauseExceptionVal: Bit McauseSz <- ITE (!pcTag || BoundsException)
+                                                 $CapException
+                                                 (caseDefault [ (#illegal, $IllegalException);
+                                                                (EBreak, $EBreakException);
+                                                                (ECall, $ECallException);
+                                                                (#clcException, $LdAlignException);
+                                                                (#cscException, $SdAlignException) ]
+                                                    (caseDefault [(#wrongRegId, $IllegalException)]
+                                                       (ITE0 #isCapException $CapException)));
 
-      LETC mtvalVal: Bit Xlen <- ITE (!pcTag || BoundsException)
-                                   (@ZeroExtendTo _ Xlen CapExceptSz (Kor [ITE0 (!pcTag) $TagViolation;
-                                                                           ITE0 BoundsException $BoundsViolation]))
-                                   (ITE (#isException && !#isCapException)
-                                      (Kor [ ITE0 #fullIllegal inst;
-                                             ITE0 (#clcException || #cscException) #resAddrVal ])
-                                      (ITE0 #isCapException
-                                         (ZeroExtendTo Xlen ({< #capExceptionSrc, #capExceptionVal >}))));
+      LETC mtvalExceptionVal: Bit Xlen <-
+                                ITE (!pcTag || BoundsException)
+                                  (@ZeroExtendTo _ Xlen CapExceptSz (Kor [ITE0 (!pcTag) $TagViolation;
+                                                                          ITE0 BoundsException $BoundsViolation]))
+                                  (caseDefault [ (#illegal, inst);
+                                                 (#clcException || #cscException, #resAddrVal) ]
+                                     (caseDefault [(#wrongRegId, inst)]
+                                        (ITE0 #isCapException (ZeroExtendTo Xlen ({< #capExceptionSrc, #capExceptionVal >})))));
 
       LETC saturated <- saturatedMax
                           (Kor [ITE0 CGetBase #cap1Base; ITE0 CGetTop #cap1Top; ITE0 CGetLen #adderResFull;
@@ -1083,7 +1105,7 @@ l other values are repeated per lane *)
                             ITE0 (#immVal == GetCsrIdx Mshwmb) ({< mshwmb, $$(wzero MshwmAlign) >});
                             ITE0 (#immVal == GetCsrIdx Mstatus)
                               (ZeroExtendTo Xlen ({< pack ie, $$(wzero (IeBit-1)) >}));
-                            ITE0 (#immVal == GetCsrIdx Mcause) (ZeroExtendTo Xlen mcause);
+                            ITE0 (#immVal == GetCsrIdx Mcause) ({< pack interrupt, ZeroExtendTo (Xlen - 1) mcause >});
                             ITE0 (#immVal == GetCsrIdx Mtval) mtval ];
 
       LETC csrOut <- Kor [ ITE0 CsrRw #csrIn;
@@ -1129,15 +1151,25 @@ l other values are repeated per lane *)
                                                                    !isInterruptDisabling #cap1OType && ie)]
                              ie;
 
-      LETC newMcause : Bit McauseSz <- ITE #isException
-                                         #mcauseVal
-                                         (ITE (#isCsr && #immVal == GetCsrIdx Mcause)
-                                            (TruncLsbTo McauseSz _ #csrOut)
-                                            mcause);
+      LETC newInterrupts : Interrupts <- STRUCT { "mei" ::= mep ;
+                                                  "mti" ::= (ITE0 mei mti || mtp) };
 
-      LETC newMtval : Addr <- ITE #isException
-                                #mtvalVal
-                                (ITE (#isCsr && #immVal == GetCsrIdx Mtval) #csrOut mtval);
+      LETC newInterrupt : Bool <- (mei || mti);
+
+      LETC newMcause : Bit McauseSz <- ITE mei
+                                         $Mei
+                                         (ITE mti
+                                            $Mti
+                                            (ITE #isException
+                                               #mcauseExceptionVal
+                                               (ITE (#isCsr && #immVal == GetCsrIdx Mcause)
+                                                  (TruncLsbTo McauseSz _ #csrOut)
+                                                  mcause)));
+
+      LETC newMtval : Addr <- ITE #newInterrupt $0
+                                (ITE #isException
+                                   #mtvalExceptionVal
+                                   (ITE (#isCsr && #immVal == GetCsrIdx Mtval) #csrOut mtval));
 
       LETC newCsrs : Csrs <- STRUCT { "mcycle" ::= #newMcycle ;
                                       "mtime" ::= #newMtime ;
@@ -1145,6 +1177,7 @@ l other values are repeated per lane *)
                                       "mshwm" ::= #newMshwm ;
                                       "mshwmb" ::= #newMshwmb ;
                                       "ie" ::= #newIe ;
+                                      "interrupt" ::= #newInterrupt ;
                                       "mcause" ::= #newMcause ;
                                       "mtval" ::= #newMtval };
 
@@ -1162,10 +1195,11 @@ l other values are repeated per lane *)
                        @%[ "addr" <- ({< TruncMsbTo (Xlen - NumLsb0BitsInstAddr) NumLsb0BitsInstAddr
                                            #val1, $$(wzero NumLsb0BitsInstAddr) >}) ];
 
+      LETC newMepccTag <- pcTag && !BoundsException;
       LETC newMepcc <- ITE #isException
-                         (STRUCT { "tag" ::= pcTag && !BoundsException;
+                         (STRUCT { "tag" ::= #newMepccTag;
                                    "ecap" ::= pcCap ;
-                                   "addr" ::= pcVal })
+                                   "addr" ::= pcVal (* + ITE0 (#newMepccTag && ECall) $(InstSz/8) *) })
                          (ITE (#isScrWrite && #rs2IdxFixed == $Mepcc) #newCap mepcc);
 
       LETC newMtcc <- ITE (!#isException && #isScrWrite && #rs2IdxFixed == $Mtcc) #newCap mtcc;
@@ -1221,6 +1255,7 @@ l other values are repeated per lane *)
                                    "waits" ::= #newWaits ;
                                    "csrs" ::= #newCsrs ;
                                    "scrs" ::= #newScrs ;
+                                   "interrupts" ::= #newInterrupts ;
                                    "ldRegIdx" ::= #rdIdx ;
                                    "memAddr" ::= #resAddrVal ;
                                    "storeVal" ::= #reg2 ;
