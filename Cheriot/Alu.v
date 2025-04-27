@@ -1151,14 +1151,14 @@ l other values are repeated per lane *)
                                                                    !isInterruptDisabling #cap1OType && ie)]
                              ie;
 
-      LETC newInterrupts : Interrupts <- STRUCT { "mei" ::= mep ;
-                                                  "mti" ::= (ITE0 mei mti || mtp) };
+      LETC newInterrupts : Interrupts <- STRUCT { "mei" ::= (mep || !ie && mei) ;
+                                                  "mti" ::= (mtp || (!ie || mei) && mti) };
 
-      LETC newInterrupt : Bool <- (mei || mti);
+      LETC newInterrupt : Bool <- ie && (mei || mti);
 
-      LETC newMcause : Bit McauseSz <- ITE mei
+      LETC newMcause : Bit McauseSz <- ITE (ie && mei)
                                          $Mei
-                                         (ITE mti
+                                         (ITE (ie && mti)
                                             $Mti
                                             (ITE #isException
                                                #mcauseExceptionVal
@@ -1195,11 +1195,10 @@ l other values are repeated per lane *)
                        @%[ "addr" <- ({< TruncMsbTo (Xlen - NumLsb0BitsInstAddr) NumLsb0BitsInstAddr
                                            #val1, $$(wzero NumLsb0BitsInstAddr) >}) ];
 
-      LETC newMepccTag <- pcTag && !BoundsException;
       LETC newMepcc <- ITE #isException
-                         (STRUCT { "tag" ::= #newMepccTag;
+                         (STRUCT { "tag" ::= pcTag && !BoundsException;
                                    "ecap" ::= pcCap ;
-                                   "addr" ::= pcVal (* + ITE0 (#newMepccTag && ECall) $(InstSz/8) *) })
+                                   "addr" ::= pcVal (* + ITE0 (pcTag && !BoundsException && ECall) $(InstSz/8) *) })
                          (ITE (#isScrWrite && #rs2IdxFixed == $Mepcc) #newCap mepcc);
 
       LETC newMtcc <- ITE (!#isException && #isScrWrite && #rs2IdxFixed == $Mtcc) #newCap mtcc;
