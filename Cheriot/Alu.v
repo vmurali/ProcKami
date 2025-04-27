@@ -32,6 +32,7 @@ Definition NumRegsFixed := Eval compute in (Nat.pow 2 RegFixedIdSz).
 
 Definition Imm12Sz := 12.
 Definition Imm20Sz := 20.
+Definition DecImmSz := Eval compute in (S Imm20Sz).
 
 Definition CapPermSz := 6.
 Definition CapOTypeSz := 3.
@@ -167,8 +168,6 @@ Section Fields.
   Definition rdFixed := extractFieldFromInst rdFixedField.
   Definition c0 := 0.
   Definition ra := 1.
-  Definition c0Fixed : Bit RegFixedIdSz @# ty := $c0.
-  Definition raFixed : Bit RegFixedIdSz @# ty := $ra.
 
   (* TODO: These should be derived from encoder/decoder *)
   Definition imm := extractFieldFromInst immField.
@@ -383,7 +382,7 @@ Section Cap.
       Variable otype: Bit CapOTypeSz @# ty.
       Definition isSealed := isNotZero otype.
       Definition isNotSealed := isZero otype.
-      Definition isForwardSentry := otype == $1 || otype == $2 || otype == $3.
+      Definition isForwardSentry := Kor [otype == $1; otype == $2; otype == $3].
       Definition isBackwardSentry := otype == $4 || otype == $5.
       Definition isInterruptEnabling := otype == $3 || otype == $5.
       Definition isInterruptDisabling := otype == $2 || otype == $4.
@@ -585,9 +584,99 @@ Definition Scrs := STRUCT_TYPE {   "mtcc" :: FullECapWithTag ;
 Definition Interrupts := STRUCT_TYPE { "mei" :: Bool ;
                                        "mti" :: Bool }.
 
-Definition AluIn :=
+Definition PcAluOut :=
   STRUCT_TYPE { "pcVal" :: Addr ;
+      "BoundsException" :: Bool }.
+
+Definition DecodeOut :=
+  STRUCT_TYPE { "rs1Idx" :: Bit RegFixedIdSz;
+                "rs2Idx" :: Bit RegFixedIdSz;
+                 "rdIdx" :: Bit RegFixedIdSz;
+                "decImm" :: Bit DecImmSz ;
+                 "memSz" :: Bit MemSzSz ;
+
+            "Compressed" :: Bool ;
+
+           "ImmExtRight" :: Bool ;
+            "ImmForData" :: Bool ;
+            "ImmForAddr" :: Bool ;
+ 
+              "ReadReg1" :: Bool ;
+              "ReadReg2" :: Bool ;
+              "WriteReg" :: Bool ;
+ 
+            "MultiCycle" :: Bool ; (* CLB, CLH, CLW, CLBU, CLHU, CLC *)
+ 
+                "Src1Pc" :: Bool ; (* CJAL, BNE, BEq, BLT, BGE, BLTU, BGEU, AUIPCC *)
+               "InvSrc2" :: Bool ; (* SLTI, SLTIU, Sub, SLT, SLTU, CSub, CGetLen *)
+              "Src2Zero" :: Bool ; (* CSetAddr,
+                                      CGetAddr, CSetHigh, CAndPerm, CClearTag, CMove, CSeal, CUnseal,
+                                      CSetBounds, CSetBoundsExact, CSetBoundsRoundDown, CSetBoundsImm *)
+        "ZeroExtendSrc1" :: Bool ; (* SLTIU, SRLI, SLTU, SRL, BLTU, BGEU, AUIPCC,
+                                      CIncAddr, CIncAddrImm, CSetAddr *)
+                "Branch" :: Bool ; (* BEq, BNE, BLT, BGE, BLTU, BGEU *)
+              "BranchLt" :: Bool ; (* BLT, BGE, BLTU, BGEU *)
+             "BranchNeg" :: Bool ; (* BNE, BGE, BGEU *)
+                   "Slt" :: Bool ; (* SLTI, SLTIU, SLT, SLTU *)
+                   "Add" :: Bool ; (* AddI, Add, Sub, CIncAddr, CIncAddrImm, CSetAddr, CSub *)
+                   "Xor" :: Bool ; (* XorI, Xor *)
+                    "Or" :: Bool ; (* OrI, Or,
+                                      CGetAddr, CSetHigh, CAndPerm, CClearTag, CMove, CSeal, CUnseal,
+                                      CSetBounds, CSetBoundsExact, CSetBoundsRoundDown, CSetBoundsImm *)
+                   "And" :: Bool ; (* AndI, And *)
+                    "Sl" :: Bool ; (* SLLI, SLL *)
+                    "Sr" :: Bool ; (* SRLI, SRAI, SRL, SRA *)
+                 "Store" :: Bool ; (* CSB, CSH, CSW, CSC *)
+                  "Load" :: Bool ; (* CLB, CLH, CLW, CLBU, CLHU, CLC *)
+          "LoadUnsigned" :: Bool ; (* CLBU, CLHU *)
+             "SetBounds" :: Bool ; (* CSetBounds, CSetBoundsExact, CSetBoundsImm, CSetBoundsRoundDown *)
+        "SetBoundsExact" :: Bool ; (* CSetBoundsExact *)
+          "BoundsSubset" :: Bool ; (* CBoundsRoundDown *)
+       "BoundsFixedBase" :: Bool ; (* CBoundsRoundDown *)
+   
+           "CChangeAddr" :: Bool ; (* CIncAddr, CIncAddrImm, CSetAddr, AUIPCC *)
+                "AuiPcc" :: Bool ;
+              "CGetBase" :: Bool ;
+               "CGetTop" :: Bool ;
+               "CGetLen" :: Bool ;
+              "CGetPerm" :: Bool ;
+              "CGetType" :: Bool ;
+               "CGetTag" :: Bool ;
+              "CGetHigh" :: Bool ;
+                  "Cram" :: Bool ;
+                  "Crrl" :: Bool ;
+             "CSetEqual" :: Bool ;
+           "CTestSubset" :: Bool ;
+              "CAndPerm" :: Bool ;
+             "CClearTag" :: Bool ;
+              "CSetHigh" :: Bool ;
+                 "CMove" :: Bool ;
+                 "CSeal" :: Bool ;
+               "CUnseal" :: Bool ;
+     
+                  "CJal" :: Bool ;
+                 "CJalr" :: Bool ;
+                "AuiAll" :: Bool ; (* AUIPCC, AUICGP *)
+                   "Lui" :: Bool ;
+   
+            "CSpecialRw" :: Bool ;
+                  "MRet" :: Bool ;
+                 "ECall" :: Bool ; (* ECall, Wfi *)
+                "EBreak" :: Bool ;
+                "FenceI" :: Bool ;
+                 "Fence" :: Bool ;
+               "Illegal" :: Bool ;
+   
+                 "CsrRw" :: Bool ; (* CSRRW, CSRRWI *)
+                "CsrSet" :: Bool ; (* CSRRS, CSRRSI *)
+              "CsrClear" :: Bool ; (* CSRRC, CSRRCI *)
+                "CsrImm" :: Bool   (* CSRRWI, CSRRSI, CSRRCI; rs1 field *) }.
+
+Definition AluIn :=
+  STRUCT_TYPE {
+             "pcAluOut" :: PcAluOut ;
                  "inst" :: Inst ;
+            "decodeOut" :: DecodeOut ;
                  "reg1" :: FullECapWithTag ;
                  "reg2" :: FullECapWithTag ;
                  "regs" :: Array NumRegs FullECapWithTag ;
@@ -595,84 +684,7 @@ Definition AluIn :=
                  "csrs" :: Csrs ;
                  "scrs" :: Scrs ;
            "interrupts" :: Interrupts ;
-             "incoming" :: Interrupts ;
-                "memSz" :: Bit MemSzSz ;
-
-             "readReg1" :: Bool ; (* TODO fill it *)
-             "readReg2" :: Bool ; (* TODO fill it *)
-             "writeReg" :: Bool ; (* TODO fill it *)
-
-           "multiCycle" :: Bool ; (* CLB, CLH, CLW, CLBU, CLHU, CLC *)
-
-               "Src1Pc" :: Bool ; (* CJAL, BNE, BEq, BLT, BGE, BLTU, BGEU, AUIPCC *)
-              "InvSrc2" :: Bool ; (* SLTI, SLTIU, Sub, SLT, SLTU, CSub, CGetLen *)
-             "Src2Zero" :: Bool ; (* CSetAddr,
-                                     CGetAddr, CSetHigh, CAndPerm, CClearTag, CMove, CSeal, CUnseal,
-                                     CSetBounds, CSetBoundsExact, CSetBoundsRoundDown, CSetBoundsImm *)
-       "ZeroExtendSrc1" :: Bool ; (* SLTIU, SRLI, SLTU, SRL, BLTU, BGEU, AUIPCC,
-                                     CIncAddr, CIncAddrImm, CSetAddr *)
-               "Branch" :: Bool ; (* BNE, BEq, BLT, BGE, BLTU, BGEU *)
-             "BranchLt" :: Bool ; (* BLT, BLTU, BGE, BGEU *)
-            "BranchNeg" :: Bool ; (* BEq, BGE, BGE, BGEU *)
-                  "Slt" :: Bool ; (* SLTI, SLTIU, SLT, SLTU *)
-                  "Add" :: Bool ; (* AddI, Add, Sub, CIncAddr, CIncAddrImm, CSetAddr, CSub *)
-                  "Xor" :: Bool ; (* XorI, Xor *)
-                   "Or" :: Bool ; (* OrI, Or,
-                                     CGetAddr, CSetHigh, CAndPerm, CClearTag, CMove, CSeal, CUnseal,
-                                     CSetBounds, CSetBoundsExact, CSetBoundsRoundDown, CSetBoundsImm *)
-                  "And" :: Bool ; (* AndI, And *)
-                   "Sl" :: Bool ; (* SLLI, SLL *)
-                   "Sr" :: Bool ; (* SRLI, SRAI, SRL, SRA *)
-                "Store" :: Bool ; (* CSB, CSH, CSW, CSC *)
-                 "Load" :: Bool ; (* CLB, CLH, CLW, CLBU, CLHU, CLC *)
-            "SetBounds" :: Bool ; (* CSetBounds, CSetBoundsExact, CSetBoundsImm, CSetBoundsRoundDown *)
-       "SetBoundsExact" :: Bool ; (* CSetBoundsExact *)
-         "BoundsSubset" :: Bool ; (* CBoundsRoundDown *)
-      "BoundsFixedBase" :: Bool ; (* CBoundsRoundDown *)
-  
-          "CChangeAddr" :: Bool ; (* CIncAddr, CIncAddrImm, CSetAddr, AUIPCC *)
-               "AuiPcc" :: Bool ;
-             "CGetBase" :: Bool ;
-              "CGetTop" :: Bool ;
-              "CGetLen" :: Bool ;
-             "CGetPerm" :: Bool ;
-             "CGetType" :: Bool ;
-              "CGetTag" :: Bool ;
-             "CGetHigh" :: Bool ;
-                 "Cram" :: Bool ;
-                 "Crrl" :: Bool ;
-            "CSetEqual" :: Bool ;
-          "CTestSubset" :: Bool ;
-             "CAndPerm" :: Bool ;
-            "CClearTag" :: Bool ;
-             "CSetHigh" :: Bool ;
-                "CMove" :: Bool ;
-                "CSeal" :: Bool ;
-              "CUnseal" :: Bool ;
-    
-        "SignExtendImm" :: Bool ; (* AddI, SLTI, XorI, OrI, AndI, CIncAddrImm,
-                                     CLB, CLH, CLW, CLBU, CLHU, CLC, CJALR *)
-        "ZeroExtendImm" :: Bool ; (* SLTIU, CSetBoundsImm, SLLI, SRLI, SRAI *)
-                 "CJal" :: Bool ;
-                "CJalr" :: Bool ;
-               "AuiImm" :: Bool ; (* AUIPCC, AUICGP *)
-                  "Lui" :: Bool ;
-  
-           "CSpecialRw" :: Bool ;
-                 "MRet" :: Bool ;
-                "ECall" :: Bool ; (* ECall, Wfi *)
-               "EBreak" :: Bool ;
-               "FenceI" :: Bool ;
-                  "Nop" :: Bool ;
-              "Illegal" :: Bool ;
-  
-                "CsrRw" :: Bool ; (* CSRRW, CSRRWI *)
-               "CsrSet" :: Bool ; (* CSRRS, CSRRSI *)
-             "CsrClear" :: Bool ; (* CSRRC, CSRRCI *)
-               "CsrImm" :: Bool ; (* CSRRWI, CSRRSI, CSRRCI; rs1 field *)
-
-         "TagException" :: Bool ;
-      "BoundsException" :: Bool }.
+             "incoming" :: Interrupts }.
 
 Definition AluOut := STRUCT_TYPE { "regs" :: Array NumRegs FullECapWithTag ;
                                    "waits" :: Array NumRegs Bool ;
@@ -687,6 +699,8 @@ Definition AluOut := STRUCT_TYPE { "regs" :: Array NumRegs FullECapWithTag ;
                                    "Branch" :: Bool ; (* Note: For Branch Predictor *)
                                    "CJal" :: Bool ; (* Note: For Branch Predictor *)
                                    "CJalr" :: Bool ; (* Note: For Branch Predictor *)
+                                   "LoadUnsigned" :: Bool ;
+                                   "memSz" :: Bit MemSzSz ;
                                    "pcNotLinkAddrTagVal" :: Bool ;
                                    "pcNotLinkAddrCap" :: Bool ;
                                    "stall" :: Bool ;
@@ -694,24 +708,309 @@ Definition AluOut := STRUCT_TYPE { "regs" :: Array NumRegs FullECapWithTag ;
                                    "Store" :: Bool ;
                                    "FenceI" :: Bool }.
 
+Section Decode.
+  Variable ty: Kind -> Type.
+
+  Local Notation ITE0 x y := (ITE x y (Const ty Default)).
+
+  Variable inst: Inst @# ty.
+
+  Local Open Scope kami_expr.
+
+  Definition decodeFullInst: DecodeOut ## ty :=
+    ( LETC op: Bit 5 <- opcode inst;
+      LETC f3: Bit 3 <- funct3 inst;
+      LETC f7: Bit 7 <- funct7 inst;
+      LETC f6: Bit 6 <- funct6 inst;
+      LETC rdIdx: Bit RegFixedIdSz <- rdFixed inst;
+      LETC rs1Idx: Bit RegFixedIdSz <- rs1Fixed inst;
+      LETC rs2Idx: Bit RegFixedIdSz <- rs2Fixed inst;
+      LETC immVal: Bit (snd immField) <- imm inst;
+
+      LETC Lui: Bool <- #op == $$(5'b"01101");
+      LETC AuiPcc: Bool <- #op == $$(5'b"00101");
+      LETC AuiCgp: Bool <- #op == $$(5'b"11110");
+      LETC CJal: Bool <- #op == $$(5'b"11011");
+      LETC CJalr: Bool <- #op == $$(5'b"11001") && isZero #f3;
+      LETC Branch: Bool <- #op == $$(5'b"11000") && (#f3$[2:1] != $$(2'b"01"));
+
+      LETC BranchLt: Bool <- unpack Bool (#f3$[2:2]);
+      LETC BranchNeg: Bool <- unpack Bool (#f3$[0:0]);
+      LETC BranchUnsigned: Bool <- unpack Bool (#f3$[1:1]);
+
+      LETC Load: Bool <- isZero #op && !(isAllOnes #f3);
+      LETC Store: Bool <- #op == $$(5'b"01000") && !(unpack Bool (#f3$[2:2]));
+
+      LETC LoadUnsigned: Bool <- unpack Bool (#f3$[2:2]);
+      LETC memSz: Bit MemSzSz <- #f3$[1:0];
+
+      LETC immediate: Bool <- #op == $$(5'b"00100");
+      LETC nonImmediate: Bool <- #op == $$(5'b"01100");
+      LETC addF3: Bool <- #f3 == $0;
+      LETC sllF3: Bool <- #f3 == $1;
+      LETC sltF3: Bool <- #f3 == $2;
+      LETC sltuF3: Bool <- #f3 == $3;
+      LETC xorF3: Bool <- #f3 == $4;
+      LETC srF3: Bool <- #f3 == $5;
+      LETC orF3: Bool <- #f3 == $6;
+      LETC andF3: Bool <- #f3 == $7;
+      LETC slF7: Bool <- isZero #f7;
+      LETC sraSubF7: Bool <- #f7 == $$(7'b"0100000");
+      LETC nonImmF7: Bool <- isZero #f7;
+
+      LETC AddI: Bool <- #immediate && #addF3;
+      LETC SltI: Bool <- #immediate && #sltF3;
+      LETC SltuI: Bool <- #immediate && #sltuF3;
+      LETC XorI: Bool <- #immediate && #xorF3;
+      LETC OrI: Bool <- #immediate && #orF3;
+      LETC AndI: Bool <- #immediate && #andF3;
+      LETC SllI: Bool <- #immediate && #sllF3 && #slF7;
+      LETC SrlI: Bool <- #immediate && #srF3 && #slF7;
+      LETC SraI: Bool <- #immediate && #srF3 && #sraSubF7;
+
+      LETC Add: Bool <- #nonImmediate && #addF3 && #nonImmF7;
+      LETC Sub: Bool <- #nonImmediate && #addF3 && #sraSubF7;
+      LETC Sll: Bool <- #nonImmediate && #sllF3 && #nonImmF7;
+      LETC Slt: Bool <- #nonImmediate && #sltF3 && #nonImmF7;
+      LETC Sltu: Bool <- #nonImmediate && #sltuF3 && #nonImmF7;
+      LETC Xor: Bool <- #nonImmediate && #xorF3 && #nonImmF7;
+      LETC Srl: Bool <- #nonImmediate && #srF3 && #nonImmF7;
+      LETC Sra: Bool <- #nonImmediate && #srF3 && #sraSubF7;
+      LETC Or: Bool <- #nonImmediate && #orF3 && #nonImmF7;
+      LETC And: Bool <- #nonImmediate && #andF3 && #nonImmF7;
+
+      LETC isFence: Bool <- #op == $$(5'b"00011");
+
+      LETC Fence: Bool <- #isFence && isZero #f3;
+      LETC FenceI: Bool <- #isFence && #f3 == $1;
+
+      LETC isSys: Bool <- #op == $$(5'b"11100");
+
+      LETC eHandle: Bool <- #isSys && isZero #f3 && isZero #rdIdx && isZero #rs1Idx;
+      LETC ECall: Bool <- #eHandle && isZero #f7 && isZero #rs2Idx;
+      LETC Wfi: Bool <- #eHandle && #f7 == $$(7'b"0001000") && #rs2Idx == $$(5'b"00101");
+      LETC EBreak: Bool <- #eHandle && isZero #f7 && #rs2Idx == $1;
+      LETC MRet: Bool <- #eHandle && #f7 == $$(7'b"0011000") && #rs2Idx == $$(5'b"00010");
+
+      LETC CsrRw: Bool <- #isSys && (#f3$[1:0]) == $1;
+      LETC CsrSet: Bool <- #isSys && (#f3$[1:0]) == $2;
+      LETC CsrClear: Bool <- #isSys && (#f3$[1:0]) == $3;
+
+      LETC CsrImm: Bool <- #isSys && unpack Bool (#f3$[2:2]);
+
+      LETC cheriot: Bool <- #op == $$(5'b"10110");
+      LETC cheriotNonImm: Bool <- #cheriot && isZero #f3;
+      LETC cheriot1Src: Bool <- #cheriotNonImm && #f7 == $$(7'h"7f");
+
+      LETC CGetPerm: Bool <- #cheriot1Src && #rs2Idx == $0;
+      LETC CGetType: Bool <- #cheriot1Src && #rs2Idx == $1;
+      LETC CGetBase: Bool <- #cheriot1Src && #rs2Idx == $2;
+      LETC CGetLen: Bool <- #cheriot1Src && #rs2Idx == $3;
+      LETC CGetTag: Bool <- #cheriot1Src && #rs2Idx == $4;
+      LETC CGetAddr: Bool <- #cheriot1Src && #rs2Idx == $$(5'h"f");
+      LETC CGetHigh: Bool <- #cheriot1Src && #rs2Idx == $$(5'h"17");
+      LETC CGetTop: Bool <- #cheriot1Src && #rs2Idx == $$(5'h"18");
+
+      LETC CSeal: Bool <- #cheriotNonImm && #f7 == $$(7'h"b");
+      LETC CUnseal: Bool <- #cheriotNonImm && #f7 == $$(7'h"c");
+      LETC CAndPerm: Bool <- #cheriotNonImm && #f7 == $$(7'h"d");
+      
+      LETC CSetAddr: Bool <- #cheriotNonImm && #f7 == $$(7'h"10");
+      LETC CIncAddr: Bool <- #cheriotNonImm && #f7 == $$(7'h"11");
+      LETC CIncAddrImm: Bool <- #cheriot && #f3 == $1;
+      
+      LETC CSetBounds: Bool <- #cheriotNonImm && #f7 == $$(7'h"8");
+      LETC CSetBoundsExact: Bool <- #cheriotNonImm && #f7 == $$(7'h"9");
+      LETC CSetBoundsRoundDown: Bool <- #cheriotNonImm && #f7 == $$(7'h"a");
+      LETC CSetBoundsImm: Bool <- #cheriot && #f3 == $2 && #f7 == $$(7'h"8");
+
+      LETC CSetHigh: Bool <- #cheriotNonImm && #f7 == $$(7'h"16");
+      LETC CClearTag: Bool <- #cheriot1Src && #rs2Idx == $$(5'h"b");
+
+      LETC CSub: Bool <- #cheriotNonImm && #f7 == $$(7'h"14");
+      LETC CMove: Bool <- #cheriot1Src && #rs2Idx == $$(5'h"a");
+      
+      LETC CTestSubset: Bool <- #cheriotNonImm && #f7 == $$(7'h"20");
+      LETC CSetEqual: Bool <- #cheriotNonImm && #f7 == $$(7'h"21");
+
+      LETC CSpecialRw: Bool <- #cheriotNonImm && #f7 == $$(7'h"1");
+
+      LETC Crrl: Bool <- #cheriot1Src && #rs2Idx == $8;
+      LETC Cram: Bool <- #cheriot1Src && #rs2Idx == $9;
+
+      LETC Multicycle: Bool <- #Load;
+
+      LETC Src1Pc: Bool <- Kor [#CJal; #Branch; #AuiPcc];
+      LETC InvSrc2: Bool <- Kor [#SltI; #SltuI; #Slt; #Sltu; #CSub; #CGetLen];
+      LETC Src2Zero: Bool <- Kor [#CSetAddr; #CGetAddr; #CSetHigh; #CAndPerm; #CClearTag;
+                                  #CMove; #CSeal; #CUnseal; #CSetBounds; #CSetBoundsExact;
+                                  #CSetBoundsRoundDown; #CSetBoundsImm];
+
+      LETC ZeroExtendSrc1: Bool <- Kor [#SltuI; #SrlI; #Sltu; #Srl; #BranchUnsigned; #AuiPcc;
+                                        #CIncAddr; #CIncAddrImm; #CSetAddr];
+      LETC SltAll: Bool <- Kor [#SltI; #SltuI; #Slt; #Sltu];
+      LETC AddAll: Bool <- Kor [#AddI; #Add; #Sub; #CIncAddr; #CIncAddrImm; #CSetAddr; #CSub];
+      LETC XorAll: Bool <- Kor [#XorI; #Xor];
+      LETC  OrAll: Bool <- Kor [#OrI; #Or; #CGetAddr; #CSetHigh; #CAndPerm; #CClearTag; #CMove; #CSeal;
+                                #CUnseal; #CSetBounds; #CSetBoundsExact; #CSetBoundsRoundDown; #CSetBoundsImm];
+      LETC AndAll: Bool <- Kor [#AndI; #And];
+      LETC  SlAll: Bool <- Kor [#SllI; #Sll];
+      LETC  SrAll: Bool <- Kor [#SrlI; #SraI; #Srl; #Sra];
+      LETC SetBounds: Bool <- Kor [#CSetBounds; #CSetBoundsExact; #CSetBoundsImm; #CSetBoundsRoundDown];
+      LETC SetBoundsExact: Bool <- #CSetBoundsExact;
+      LETC BoundsSubset: Bool <- #CSetBoundsRoundDown;
+      LETC BoundsFixedBase: Bool <- #CSetBoundsRoundDown;
+
+      LETC CChangeAddr: Bool <- Kor [#CIncAddr; #CIncAddrImm; #CSetAddr; #AuiPcc];
+      
+      LETC isCsr: Bool <- #isSys && isNotZero (#f3$[1:0]);
+
+      LETC SignExtendImm: Bool <- Kor [#AddI; #SltI; #XorI; #OrI; #AndI; #CIncAddrImm; #Load; #CJalr];
+      LETC ZeroExtendImm: Bool <- Kor [#SltuI; #CSetBoundsImm; #SllI; #SrlI; #SraI];
+      LETC AuiAll: Bool <- Kor [#AuiPcc; #AuiCgp];
+
+      LETC ECallAll: Bool <- Kor [#ECall; #Wfi];
+
+      LETC Illegal: Bool <- !(Kor [#Lui; #AuiAll; #CJal; #CJalr; #Branch; #Load; #Store;
+                                   #AddAll; #SltAll; #XorAll; #OrAll; #AndAll; #SlAll; #SrAll;
+                                   #Fence; #FenceI; #ECallAll; #EBreak; #MRet; #isCsr;
+                                   #CGetPerm; #CGetType; #CGetBase; #CGetLen;
+                                   #CGetTag; #CGetHigh; #CGetTop;
+                                   #CTestSubset; #CSetEqual;
+                                   #CSpecialRw; #Crrl; #Cram]);
+
+      LETC ReadReg1: Bool <- Kor [#AuiCgp; #CJalr; #Branch; #Load; #Store; #immediate; #nonImmediate;
+                                  #isCsr; #cheriot];
+
+      LETC ReadReg2: Bool <- Kor [#Branch; #Store; #immediate;
+                                  (#cheriotNonImm && !Kor [#f7 == $$(7'h"7f"); #f7 == $1])];
+
+      LETC WriteReg: Bool <- Kor [#Lui; #AuiAll; #CJal; #CJalr; #Load; #immediate; #nonImmediate;
+                                  #isCsr; #cheriot];
+
+      LETC auiLuiOffsetInst: Bit Imm20Sz <- auiLuiOffset inst;
+
+      LETC rs1Idx: Bit RegFixedIdSz <- rs1Fixed inst;
+      LETC rs2Idx: Bit RegFixedIdSz <- rs2Fixed inst;
+      LETC rdIdx: Bit RegFixedIdSz <- rdFixed inst;
+
+      LETC decImm: Bit DecImmSz <- Kor [ITE0 #SignExtendImm (SignExtendTo DecImmSz #immVal);
+                                        ITE0 (#ZeroExtendImm || #isCsr) (ZeroExtendTo DecImmSz #immVal);
+                                        ITE0 #Store (SignExtendTo DecImmSz ({< funct7 inst, rdFixed inst >}));
+                                        ITE0 #Branch (SignExtendTo DecImmSz (branchOffset inst));
+                                        ITE0 #CJal (jalOffset inst);
+                                        ITE0 #AuiAll (SignExtend 1 #auiLuiOffsetInst);
+                                        ITE0 #Lui ({<#auiLuiOffsetInst, $$WO~0>})
+                                     ];
+
+      LETC ImmExtRight: Bool <- Kor [#AuiAll; #Lui];
+
+      LETC ImmForData: Bool <- Kor [#SignExtendImm; #ZeroExtendImm; #AuiAll];
+      LETC ImmForAddr: Bool <- Kor [#SignExtendImm; #Branch; #CJal; #Store];
+
+      LETC Compressed: Bool <- isCompressed inst;
+
+      LETC res: DecodeOut <-
+                  STRUCT { "rs1Idx" ::= #rs1Idx ;
+                           "rs2Idx" ::= #rs2Idx ;
+                            "rdIdx" ::= #rdIdx ;
+                           "decImm" ::= #decImm ;
+                            "memSz" ::= #memSz ;
+
+                       "Compressed" ::= #Compressed;
+                      "ImmExtRight" ::= #ImmExtRight ;
+                       "ImmForData" ::= #ImmForData ;
+                       "ImmForAddr" ::= #ImmForAddr ;                           
+
+                         "ReadReg1" ::= #ReadReg1 ;
+                         "ReadReg2" ::= #ReadReg2 ;
+                         "WriteReg" ::= #WriteReg ;
+            
+                       "MultiCycle" ::= #Multicycle ;
+            
+                           "Src1Pc" ::= #Src1Pc ;
+                          "InvSrc2" ::= #InvSrc2 ;
+                         "Src2Zero" ::= #Src2Zero ;
+                   "ZeroExtendSrc1" ::= #ZeroExtendSrc1 ;
+                           "Branch" ::= #Branch ;
+                         "BranchLt" ::= #BranchLt ;
+                        "BranchNeg" ::= #BranchNeg ;
+                              "Slt" ::= #SltAll ;
+                              "Add" ::= #AddAll ;
+                              "Xor" ::= #XorAll ;
+                               "Or" ::= #OrAll ;
+                              "And" ::= #AndAll ;
+                               "Sl" ::= #SlAll ;
+                               "Sr" ::= #SrAll ;
+                            "Store" ::= #Store ;
+                             "Load" ::= #Load ;
+                     "LoadUnsigned" ::= #LoadUnsigned ;
+                        "SetBounds" ::= #SetBounds ;
+                   "SetBoundsExact" ::= #SetBoundsExact ;
+                     "BoundsSubset" ::= #BoundsSubset ;
+                  "BoundsFixedBase" ::= #BoundsFixedBase ;
+              
+                      "CChangeAddr" ::= #CChangeAddr ;
+                           "AuiPcc" ::= #AuiPcc ;
+                         "CGetBase" ::= #CGetBase ;
+                          "CGetTop" ::= #CGetTop ;
+                          "CGetLen" ::= #CGetLen ;
+                         "CGetPerm" ::= #CGetPerm ;
+                         "CGetType" ::= #CGetType ;
+                          "CGetTag" ::= #CGetTag ;
+                         "CGetHigh" ::= #CGetHigh ;
+                             "Cram" ::= #Cram ;
+                             "Crrl" ::= #Crrl ;
+                        "CSetEqual" ::= #CSetEqual ;
+                      "CTestSubset" ::= #CTestSubset ;
+                         "CAndPerm" ::= #CAndPerm ;
+                        "CClearTag" ::= #CClearTag ;
+                         "CSetHigh" ::= #CSetHigh ;
+                            "CMove" ::= #CMove ;
+                            "CSeal" ::= #CSeal ;
+                          "CUnseal" ::= #CUnseal ;
+                
+                             "CJal" ::= #CJal ;
+                            "CJalr" ::= #CJalr ;
+                           "AuiAll" ::= #AuiAll ;
+                              "Lui" ::= #Lui ;
+              
+                       "CSpecialRw" ::= #CSpecialRw ;
+                             "MRet" ::= #MRet ;
+                            "ECall" ::= #ECallAll ;
+                           "EBreak" ::= #EBreak ;
+                           "FenceI" ::= #FenceI ;
+                            "Fence" ::= #Fence ;
+                          "Illegal" ::= #Illegal ;
+              
+                            "CsrRw" ::= #CsrRw ;
+                           "CsrSet" ::= #CsrSet ;
+                         "CsrClear" ::= #CsrClear ;
+                           "CsrImm" ::= #CsrImm };
+           
+      RetE #res).
+
+  Definition decode : DecodeOut ## ty :=
+    ( RetE (Const ty Default)).
+End Decode.
+
 (* Decode, Load, LoadCap, Store, Fetch *)
 Section Alu.
-  Variable     ty: Kind -> Type.
+  Variable ty: Kind -> Type.
 
   (* Note: A single PCCap and tag exception when we have a superscalar processor;
-l other values are repeated per lane *)
+     other values are repeated per lane *)
   Variable pcTag: Bool @# ty.
   Variable pcCap: ECap @# ty.
 
   Variable aluIn : AluIn @# ty.
   Local Open Scope kami_expr.
   
-  Local Definition            pcVal: Addr @# ty := aluIn @% "pcVal".
-  Local Definition             inst: Inst @# ty := aluIn @% "inst".
+  Local Definition            pcVal: Addr @# ty := aluIn @% "pcAluOut" @% "pcVal".
+  Local Definition  BoundsException: Bool @# ty := aluIn @% "pcAluOut" @% "BoundsException".
+  
   Local Definition  regs: Array NumRegs _ @# ty := aluIn @% "regs".
   Local Definition waits: Array NumRegs _ @# ty := aluIn @% "waits".
-
-  Local Definition     memSz: Bit MemSzSz @# ty := aluIn @% "memSz".
 
   Local Definition             csrs: Csrs @# ty := aluIn @% "csrs".
   Local Definition      mcycle: Bit DXlen @# ty := csrs @% "mcycle".
@@ -738,85 +1037,85 @@ l other values are repeated per lane *)
   Local Definition              mep: Bool @# ty := incoming @% "mei".
   Local Definition              mtp: Bool @# ty := incoming @% "mti".
 
-  Local Definition         readReg1: Bool @# ty := aluIn @% "readReg1".
-  Local Definition         readReg2: Bool @# ty := aluIn @% "readReg2".
-  Local Definition         writeReg: Bool @# ty := aluIn @% "writeReg".
-  Local Definition       multiCycle: Bool @# ty := aluIn @% "multiCycle".
+  Local Definition         rs1IdxFixed: _ @# ty := aluIn @% "decodeOut" @% "rs1Idx" : Bit RegFixedIdSz @# ty.
+  Local Definition         rs2IdxFixed: _ @# ty := aluIn @% "decodeOut" @% "rs2Idx" : Bit RegFixedIdSz @# ty.
+  Local Definition          rdIdxFixed: _ @# ty := aluIn @% "decodeOut" @% "rdIdx" : Bit RegFixedIdSz @# ty.
+  Local Definition   decImm: Bit DecImmSz @# ty := aluIn @% "decodeOut" @% "decImm".
+  Local Definition     memSz: Bit MemSzSz @# ty := aluIn @% "decodeOut" @% "memSz".
+
+  Local Definition       Compressed: Bool @# ty := aluIn @% "decodeOut" @% "Compressed".
+  Local Definition      ImmExtRight: Bool @# ty := aluIn @% "decodeOut" @% "ImmExtRight".
+  Local Definition       ImmForData: Bool @# ty := aluIn @% "decodeOut" @% "ImmForData".
+  Local Definition       ImmForAddr: Bool @# ty := aluIn @% "decodeOut" @% "ImmForAddr".
+
+  Local Definition         ReadReg1: Bool @# ty := aluIn @% "decodeOut" @% "ReadReg1".
+  Local Definition         ReadReg2: Bool @# ty := aluIn @% "decodeOut" @% "ReadReg2".
+  Local Definition         WriteReg: Bool @# ty := aluIn @% "decodeOut" @% "WriteReg".
+
+  Local Definition       MultiCycle: Bool @# ty := aluIn @% "decodeOut" @% "MultiCycle".
   
-  Local Definition           Src1Pc: Bool @# ty := aluIn @% "Src1Pc". 
-  Local Definition          InvSrc2: Bool @# ty := aluIn @% "InvSrc2". 
-  Local Definition         Src2Zero: Bool @# ty := aluIn @% "Src2Zero". 
-  Local Definition   ZeroExtendSrc1: Bool @# ty := aluIn @% "ZeroExtendSrc1". 
-  Local Definition           Branch: Bool @# ty := aluIn @% "Branch". 
-  Local Definition         BranchLt: Bool @# ty := aluIn @% "BranchLt". 
-  Local Definition        BranchNeg: Bool @# ty := aluIn @% "BranchNeg". 
-  Local Definition              Slt: Bool @# ty := aluIn @% "Slt". 
-  Local Definition              Add: Bool @# ty := aluIn @% "Add". 
-  Local Definition              Xor: Bool @# ty := aluIn @% "Xor". 
-  Local Definition               Or: Bool @# ty := aluIn @% "Or". 
-  Local Definition              And: Bool @# ty := aluIn @% "And". 
-  Local Definition               Sl: Bool @# ty := aluIn @% "Sl". 
-  Local Definition               Sr: Bool @# ty := aluIn @% "Sr". 
-  Local Definition            Store: Bool @# ty := aluIn @% "Store". 
-  Local Definition             Load: Bool @# ty := aluIn @% "Load". 
-  Local Definition        SetBounds: Bool @# ty := aluIn @% "SetBounds". 
-  Local Definition   SetBoundsExact: Bool @# ty := aluIn @% "SetBoundsExact". 
-  Local Definition     BoundsSubset: Bool @# ty := aluIn @% "BoundsSubset". 
-  Local Definition  BoundsFixedBase: Bool @# ty := aluIn @% "BoundsFixedBase". 
+  Local Definition           Src1Pc: Bool @# ty := aluIn @% "decodeOut" @% "Src1Pc".
+  Local Definition          InvSrc2: Bool @# ty := aluIn @% "decodeOut" @% "InvSrc2".
+  Local Definition         Src2Zero: Bool @# ty := aluIn @% "decodeOut" @% "Src2Zero".
+  Local Definition   ZeroExtendSrc1: Bool @# ty := aluIn @% "decodeOut" @% "ZeroExtendSrc1".
+  Local Definition           Branch: Bool @# ty := aluIn @% "decodeOut" @% "Branch".
+  Local Definition         BranchLt: Bool @# ty := aluIn @% "decodeOut" @% "BranchLt".
+  Local Definition        BranchNeg: Bool @# ty := aluIn @% "decodeOut" @% "BranchNeg".
+  Local Definition              Slt: Bool @# ty := aluIn @% "decodeOut" @% "Slt".
+  Local Definition              Add: Bool @# ty := aluIn @% "decodeOut" @% "Add".
+  Local Definition              Xor: Bool @# ty := aluIn @% "decodeOut" @% "Xor".
+  Local Definition               Or: Bool @# ty := aluIn @% "decodeOut" @% "Or".
+  Local Definition              And: Bool @# ty := aluIn @% "decodeOut" @% "And".
+  Local Definition               Sl: Bool @# ty := aluIn @% "decodeOut" @% "Sl".
+  Local Definition               Sr: Bool @# ty := aluIn @% "decodeOut" @% "Sr".
+  Local Definition            Store: Bool @# ty := aluIn @% "decodeOut" @% "Store".
+  Local Definition             Load: Bool @# ty := aluIn @% "decodeOut" @% "Load".
+  Local Definition     LoadUnsigned: Bool @# ty := aluIn @% "decodeOut" @% "LoadUnsigned".
+  Local Definition        SetBounds: Bool @# ty := aluIn @% "decodeOut" @% "SetBounds".
+  Local Definition   SetBoundsExact: Bool @# ty := aluIn @% "decodeOut" @% "SetBoundsExact".
+  Local Definition     BoundsSubset: Bool @# ty := aluIn @% "decodeOut" @% "BoundsSubset".
+  Local Definition  BoundsFixedBase: Bool @# ty := aluIn @% "decodeOut" @% "BoundsFixedBase".
 
-  Local Definition      CChangeAddr: Bool @# ty := aluIn @% "CChangeAddr". 
-  Local Definition           AuiPcc: Bool @# ty := aluIn @% "AuiPcc".
-  Local Definition         CGetBase: Bool @# ty := aluIn @% "CGetBase".
-  Local Definition          CGetTop: Bool @# ty := aluIn @% "CGetTop".
-  Local Definition          CGetLen: Bool @# ty := aluIn @% "CGetLen".
-  Local Definition         CGetPerm: Bool @# ty := aluIn @% "CGetPerm".
-  Local Definition         CGetType: Bool @# ty := aluIn @% "CGetType".
-  Local Definition          CGetTag: Bool @# ty := aluIn @% "CGetTag".
-  Local Definition         CGetHigh: Bool @# ty := aluIn @% "CGetHigh".
-  Local Definition             Cram: Bool @# ty := aluIn @% "Cram".
-  Local Definition             Crrl: Bool @# ty := aluIn @% "Crrl".
-  Local Definition        CSetEqual: Bool @# ty := aluIn @% "CSetEqual".
-  Local Definition      CTestSubset: Bool @# ty := aluIn @% "CTestSubset".
-  Local Definition         CAndPerm: Bool @# ty := aluIn @% "CAndPerm".
-  Local Definition        CClearTag: Bool @# ty := aluIn @% "CClearTag".
-  Local Definition         CSetHigh: Bool @# ty := aluIn @% "CSetHigh".
-  Local Definition            CMove: Bool @# ty := aluIn @% "CMove".
-  Local Definition            CSeal: Bool @# ty := aluIn @% "CSeal".
-  Local Definition          CUnseal: Bool @# ty := aluIn @% "CUnseal".
+  Local Definition      CChangeAddr: Bool @# ty := aluIn @% "decodeOut" @% "CChangeAddr".
+  Local Definition           AuiPcc: Bool @# ty := aluIn @% "decodeOut" @% "AuiPcc".
+  Local Definition         CGetBase: Bool @# ty := aluIn @% "decodeOut" @% "CGetBase".
+  Local Definition          CGetTop: Bool @# ty := aluIn @% "decodeOut" @% "CGetTop".
+  Local Definition          CGetLen: Bool @# ty := aluIn @% "decodeOut" @% "CGetLen".
+  Local Definition         CGetPerm: Bool @# ty := aluIn @% "decodeOut" @% "CGetPerm".
+  Local Definition         CGetType: Bool @# ty := aluIn @% "decodeOut" @% "CGetType".
+  Local Definition          CGetTag: Bool @# ty := aluIn @% "decodeOut" @% "CGetTag".
+  Local Definition         CGetHigh: Bool @# ty := aluIn @% "decodeOut" @% "CGetHigh".
+  Local Definition             Cram: Bool @# ty := aluIn @% "decodeOut" @% "Cram".
+  Local Definition             Crrl: Bool @# ty := aluIn @% "decodeOut" @% "Crrl".
+  Local Definition        CSetEqual: Bool @# ty := aluIn @% "decodeOut" @% "CSetEqual".
+  Local Definition      CTestSubset: Bool @# ty := aluIn @% "decodeOut" @% "CTestSubset".
+  Local Definition         CAndPerm: Bool @# ty := aluIn @% "decodeOut" @% "CAndPerm".
+  Local Definition        CClearTag: Bool @# ty := aluIn @% "decodeOut" @% "CClearTag".
+  Local Definition         CSetHigh: Bool @# ty := aluIn @% "decodeOut" @% "CSetHigh".
+  Local Definition            CMove: Bool @# ty := aluIn @% "decodeOut" @% "CMove".
+  Local Definition            CSeal: Bool @# ty := aluIn @% "decodeOut" @% "CSeal".
+  Local Definition          CUnseal: Bool @# ty := aluIn @% "decodeOut" @% "CUnseal".
   
-  Local Definition    SignExtendImm: Bool @# ty := aluIn @% "SignExtendImm". 
-  Local Definition    ZeroExtendImm: Bool @# ty := aluIn @% "ZeroExtendImm". 
-  Local Definition             CJal: Bool @# ty := aluIn @% "CJal".
-  Local Definition            CJalr: Bool @# ty := aluIn @% "CJalr".
-  Local Definition           AuiImm: Bool @# ty := aluIn @% "AuiImm". 
-  Local Definition              Lui: Bool @# ty := aluIn @% "Lui".
+  Local Definition             CJal: Bool @# ty := aluIn @% "decodeOut" @% "CJal".
+  Local Definition            CJalr: Bool @# ty := aluIn @% "decodeOut" @% "CJalr".
+  Local Definition           AuiAll: Bool @# ty := aluIn @% "decodeOut" @% "AuiAll".
+  Local Definition              Lui: Bool @# ty := aluIn @% "decodeOut" @% "Lui".
 
-  Local Definition       CSpecialRw: Bool @# ty := aluIn @% "CSpecialRw".
-  Local Definition             MRet: Bool @# ty := aluIn @% "MRet".
-  Local Definition            ECall: Bool @# ty := aluIn @% "ECall".
-  Local Definition           EBreak: Bool @# ty := aluIn @% "EBreak".
-  Local Definition           FenceI: Bool @# ty := aluIn @% "FenceI".
-  Local Definition              Nop: Bool @# ty := aluIn @% "Nop".
-  Local Definition          Illegal: Bool @# ty := aluIn @% "Illegal".
+  Local Definition       CSpecialRw: Bool @# ty := aluIn @% "decodeOut" @% "CSpecialRw".
+  Local Definition             MRet: Bool @# ty := aluIn @% "decodeOut" @% "MRet".
+  Local Definition            ECall: Bool @# ty := aluIn @% "decodeOut" @% "ECall".
+  Local Definition           EBreak: Bool @# ty := aluIn @% "decodeOut" @% "EBreak".
+  Local Definition           FenceI: Bool @# ty := aluIn @% "decodeOut" @% "FenceI".
+  Local Definition            Fence: Bool @# ty := aluIn @% "decodeOut" @% "Fence".
+  Local Definition          Illegal: Bool @# ty := aluIn @% "decodeOut" @% "Illegal".
 
-  Local Definition            CsrRw: Bool @# ty := aluIn @% "CsrRw". 
-  Local Definition           CsrSet: Bool @# ty := aluIn @% "CsrSet". 
-  Local Definition         CsrClear: Bool @# ty := aluIn @% "CsrClear". 
-  Local Definition           CsrImm: Bool @# ty := aluIn @% "CsrImm". 
+  Local Definition            CsrRw: Bool @# ty := aluIn @% "decodeOut" @% "CsrRw".
+  Local Definition           CsrSet: Bool @# ty := aluIn @% "decodeOut" @% "CsrSet".
+  Local Definition         CsrClear: Bool @# ty := aluIn @% "decodeOut" @% "CsrClear".
+  Local Definition           CsrImm: Bool @# ty := aluIn @% "decodeOut" @% "CsrImm".
 
-  Local Definition  BoundsException: Bool @# ty := aluIn @% "BoundsException".
-  
   Local Notation ITE0 x y := (ITE x y (Const ty Default)).
   Local Notation GetCsrIdx x := $$(NToWord CsrIdSz x).
-
-  Local Definition signExtendImm: Bit (Xlen + 1) @# ty := SignExtendTo (Xlen + 1) (imm inst).
-  Local Definition zeroExtendImm: Bit (Xlen + 1) @# ty := ZeroExtendTo (Xlen + 1) (imm inst).
-  Local Definition         stImm: Bit (Xlen + 1) @# ty := SignExtendTo (Xlen + 1) ({< funct7 inst, rdFixed inst >}).
-  Local Definition     branchImm: Bit (Xlen + 1) @# ty := SignExtendTo (Xlen + 1) (branchOffset inst).
-  Local Definition        jalImm: Bit (Xlen + 1) @# ty := SignExtendTo (Xlen + 1) (jalOffset inst).
-  Local Definition        auiImm: Bit (Xlen + 1) @# ty := SignExtendTo (Xlen + 1)
-                                                            ({< auiLuiOffset inst, $$(wzero 11) >}).
-  Local Definition        luiImm: Bit Xlen @# ty := SignExtendTo Xlen ({< auiLuiOffset inst, $$(wzero 12) >}).
 
   Local Definition saturatedMax {n} (e: Bit (n + 1) @# ty) :=
     ITE (unpack Bool (TruncMsbTo 1 n e)) $$(wones n) (TruncLsbTo n 1 e).
@@ -828,13 +1127,12 @@ l other values are repeated per lane *)
     isNotZero (TruncMsbTo (RegFixedIdSz - RegIdSz) RegIdSz idx).
 
   Definition alu : AluOut ## ty :=
-    ( LETC rdIdx <- rd inst;
-      LETC rdIdxFixed <- rdFixed inst;
-      LETC rs1Idx <- rs1 inst;
-      LETC rs2Idx <- rs2 inst;
-      LETC rs1IdxFixed <- rs1Fixed inst;
-      LETC rs2IdxFixed <- rs2Fixed inst;
-      LETC immVal <- imm inst;
+    ( LETC rdIdx: Bit RegIdSz <- TruncLsbTo RegIdSz _ rdIdxFixed;
+      LETC rs1Idx: Bit RegIdSz <- TruncLsbTo RegIdSz _ rs1IdxFixed;
+      LETC rs2Idx: Bit RegIdSz <- TruncLsbTo RegIdSz _ rs2IdxFixed;
+      LETC immVal: Bit Imm12Sz <- TruncLsbTo Imm12Sz _ decImm;
+      LETC fullImmXlen <- ITE ImmExtRight ({< decImm, $$(wzero 11) >}) (SignExtendTo Xlen decImm);
+      LETC fullImmSXlen <- SignExtend 1 #fullImmXlen;
 
       LETC reg1 : FullECapWithTag <- ITE (isNotZero #rs1Idx) (regs @[ #rs1Idx ]) (Const ty Default);
       LETC tag1 : Bool <- #reg1 @% "tag";
@@ -860,8 +1158,7 @@ l other values are repeated per lane *)
       LETC cap2NotSealed <- isNotSealed #cap2OType;
 
       LETC src1 <- ITE Src1Pc pcVal #val1;
-      LETC src2Full <- caseDefault [(SignExtendImm, signExtendImm); (ZeroExtendImm, zeroExtendImm);
-                                    (AuiImm, auiImm)]
+      LETC src2Full <- ITE ImmForData #fullImmSXlen
                          (SignExtend 1 (ITE0 (!Src2Zero) #val2));
       LETC adderSrc1 <- ITE CGetLen #cap1Top
                           (ITE ZeroExtendSrc1 (ZeroExtend 1 #src1) (SignExtend 1 #src1));
@@ -869,9 +1166,9 @@ l other values are repeated per lane *)
       LETC adderSrc2Fixed <- ITE InvSrc2 (~#adderSrc2) #adderSrc2;
       LETC carryExt  <- ZeroExtend Xlen (pack InvSrc2);
       LETC adderResFull <- #adderSrc1 + #adderSrc2Fixed + #carryExt;
-      LETC adderResNotZero <- isNotZero #adderResFull;
+      LETC adderResZero <- isZero #adderResFull;
       LETC adderCarryBool <- unpack Bool (TruncMsbTo 1 Xlen #adderResFull);
-      LETC branchTakenPos <- ITE BranchLt #adderCarryBool #adderResNotZero;
+      LETC branchTakenPos <- ITE BranchLt #adderCarryBool #adderResZero;
       LETC branchTaken <- BranchNeg ^^ #branchTakenPos;
       LETC adderRes: Data <- TruncLsbTo Xlen 1 #adderResFull;
       LETC src2 <- TruncLsbTo Xlen 1 #src2Full;
@@ -882,9 +1179,7 @@ l other values are repeated per lane *)
       LETC slRes <- #val1 << #shiftAmt;
       LETC srRes <- TruncLsbTo Xlen 1 (#adderSrc1 >>> #shiftAmt);
 
-      LETC addrImmVal <- Kor [ ITE0 SignExtendImm signExtendImm; ITE0 Branch branchImm; ITE0 CJal jalImm;
-                               ITE0 Store stImm ];
-      LETC resAddrValFullTemp <- (ZeroExtend 1 #src1) + #addrImmVal;
+      LETC resAddrValFullTemp <- (ZeroExtend 1 #src1) + ITE0 ImmForAddr #fullImmSXlen;
       LETC resAddrValFull <- {< TruncMsbTo Xlen 1 #resAddrValFullTemp,
           ITE CJalr $$WO~0 (TruncLsbTo 1 Xlen #resAddrValFullTemp) >};
       LETC resAddrVal <- TruncLsbTo Xlen 1 #resAddrValFull;
@@ -922,9 +1217,9 @@ l other values are repeated per lane *)
       LETC topCheckAddrFinal <- #topCheckAddr + #addrPlus;
       LETC topCheck <-
         (#topCheckAddrFinal <= #topCheckTop) &&
-          (!(#change_addr || CSeal || CUnseal) ||
-             (!(unpack Bool (TruncMsbTo 1 Xlen #topCheckAddrFinal)) ||
-                isZero (TruncLsbTo Xlen 1 #topCheckAddrFinal)));
+          (Kor [!(Kor [#change_addr; CSeal; CUnseal]);
+                !(unpack Bool (TruncMsbTo 1 Xlen #topCheckAddrFinal));
+                isZero (TruncLsbTo Xlen 1 #topCheckAddrFinal)]);
 
       LETC boundsRes <- #baseCheck && #topCheck;
       
@@ -974,7 +1269,7 @@ l other values are repeated per lane *)
            (ITE (#rs1Idx == $ra) (isBackwardSentry #cap1OType) #notSealedOrInheriting)
            (ITE (#rdIdx == $ra) (#cap1NotSealed || isForwardSentry #cap1OType) #notSealedOrInheriting));
 
-      LETC isCsr <- CsrRw || CsrSet || CsrClear;
+      LETC isCsr <- Kor [CsrRw; CsrSet; CsrClear];
 
       LETC validCsr <- Kor [ #immVal == GetCsrIdx Mcycle;
                              #immVal == GetCsrIdx Mtime;
@@ -988,7 +1283,7 @@ l other values are repeated per lane *)
                              #immVal == GetCsrIdx Mcause;
                              #immVal == GetCsrIdx Mtval ];
 
-      LETC capSrException <- (CSpecialRw || MRet || (#isCsr && #validCsr))
+      LETC capSrException <- Kor [CSpecialRw; MRet; #isCsr && #validCsr]
                              && !(pcCap @% "perms" @% "SR");
       LETC isCapMem <- memSz == $LgNumBytesFullCapSz;
       LETC capNotAligned <- isNotZero (TruncLsbTo LgNumBytesFullCapSz (AddrSz - LgNumBytesFullCapSz) #resAddrVal) &&
@@ -996,26 +1291,26 @@ l other values are repeated per lane *)
       LETC clcException <- Load && #capNotAligned;
       LETC cscException <- Store && #capNotAligned;
 
-      LETC validScr <- Kor [ #rs2IdxFixed == $Mtcc;
-                             #rs2IdxFixed == $Mtdc;
-                             #rs2IdxFixed == $Mscratchc;
-                             #rs2IdxFixed == $Mepcc ];
+      LETC validScr <- Kor [ rs2IdxFixed == $Mtcc;
+                             rs2IdxFixed == $Mtdc;
+                             rs2IdxFixed == $Mscratchc;
+                             rs2IdxFixed == $Mepcc ];
 
-      LETC illegal <- Kor [Illegal; #isCsr && !#validCsr; CSpecialRw && !#validScr];
+      LETC wrongRegId <- Kor [ ReadReg1 && regIdxWrong rs1IdxFixed;
+                               ReadReg2 && regIdxWrong rs2IdxFixed;
+                               WriteReg && regIdxWrong rdIdxFixed ];
 
-      LETC wrongRegId <- Kor [ readReg1 && regIdxWrong #rs1IdxFixed;
-                               readReg2 && regIdxWrong #rs2IdxFixed;
-                               writeReg && regIdxWrong #rdIdxFixed ];
+      LETC illegal <- Kor [Illegal; #isCsr && !#validCsr; CSpecialRw && !#validScr; #wrongRegId];
 
       LETC capException <-
         (* Note: Kor is correct because of disjointness of capSrException with rest *)
         Kor [ ITE0 #capSrException (exception $SrViolation) ;
               ITE (#load_store && !#tag1) (exception $TagViolation)
                 (ITE (#load_store && !#cap1NotSealed ||
-                        (CJalr && (!#cJalrSealedCond || !#cap1NotSealed && isNotZero (imm inst))))
+                        (CJalr && (!#cJalrSealedCond || !#cap1NotSealed && isNotZero #immVal)))
                    (exception $SealViolation)
-                   (ITE ((CJalr && !(#cap1Perms @% "EX")) || (Load && !(#cap1Perms @% "LD")) ||
-                           (Store && !(#cap1Perms @% "SD")))
+                   (ITE (Kor [(CJalr && !(#cap1Perms @% "EX")); (Load && !(#cap1Perms @% "LD"));
+                              (Store && !(#cap1Perms @% "SD"))])
                       (exception (Kor [ ITE0 (CJalr && !(#cap1Perms @% "EX")) $ExViolation;
                                         ITE0 (Load && !(#cap1Perms @% "LD")) $LdViolation;
                                         ITE0 (Store && !(#cap1Perms @% "SD")) $SdViolation ]))
@@ -1026,37 +1321,37 @@ l other values are repeated per lane *)
 
       LETC capExceptionVal <- #capException @% "data";
       LETC isCapException <- #capException @% "valid";
-      LETC capExceptionSrc <- ITE0 (!#capSrException) #rs1IdxFixed;
+      LETC capExceptionSrc <- ITE0 (!#capSrException) rs1IdxFixed;
 
       LETC isException <- Kor [!pcTag; BoundsException;
-                               #illegal; EBreak; ECall; #clcException; #cscException; #wrongRegId; #isCapException];
+                               #illegal; EBreak; ECall; #clcException; #cscException; #isCapException];
 
       LETC mcauseExceptionVal: Bit McauseSz <- ITE (!pcTag || BoundsException)
                                                  $CapException
                                                  (caseDefault [ (#illegal, $IllegalException);
                                                                 (EBreak, $EBreakException);
-                                                                (ECall, $ECallException);
-                                                                (#clcException, $LdAlignException);
-                                                                (#cscException, $SdAlignException) ]
-                                                    (caseDefault [(#wrongRegId, $IllegalException)]
+                                                                (ECall, $ECallException) ]
+                                                    (caseDefault [ (#clcException, $LdAlignException);
+                                                                   (#cscException, $SdAlignException) ]
                                                        (ITE0 #isCapException $CapException)));
 
       LETC mtvalExceptionVal: Bit Xlen <-
                                 ITE (!pcTag || BoundsException)
                                   (@ZeroExtendTo _ Xlen CapExceptSz (Kor [ITE0 (!pcTag) $TagViolation;
                                                                           ITE0 BoundsException $BoundsViolation]))
-                                  (caseDefault [ (#illegal, inst);
-                                                 (#clcException || #cscException, #resAddrVal) ]
-                                     (caseDefault [(#wrongRegId, inst)]
-                                        (ITE0 #isCapException (ZeroExtendTo Xlen ({< #capExceptionSrc, #capExceptionVal >})))));
+                                  (ITE (Kor [#illegal; EBreak; ECall])
+                                     (Const ty Default)
+                                     (ITE (#clcException || #cscException) #resAddrVal
+                                        (ITE0 #isCapException
+                                           (ZeroExtendTo Xlen ({< #capExceptionSrc, #capExceptionVal >})))));
 
       LETC saturated <- saturatedMax
                           (Kor [ITE0 CGetBase #cap1Base; ITE0 CGetTop #cap1Top; ITE0 CGetLen #adderResFull;
                                 ITE0 Crrl (#newBounds @% "length") ]);
 
-      LETC linkAddr <- pcVal + if HasComp then $(InstSz/8) else ITE (isCompressed inst) $(InstSz/8) $(CompInstSz/8);
+      LETC linkAddr <- pcVal + if HasComp then $(InstSz/8) else ITE Compressed $(InstSz/8) $(CompInstSz/8);
 
-      LETC resVal <- Kor [ ITE0 Add #adderRes; ITE0 Lui luiImm;
+      LETC resVal <- Kor [ ITE0 Add #adderRes; ITE0 Lui #fullImmXlen;
                            ITE0 Xor #xorRes; ITE0 Or #orRes; ITE0 And #andRes;
                            ITE0 Sl #slRes; ITE0 Sr #srRes;
                            ITE0 CGetPerm (ZeroExtendTo Xlen (pack #cap1Perms));
@@ -1076,14 +1371,14 @@ l other values are repeated per lane *)
                                      #cjal_cjalr ]);
 
       LETC resCap <- Kor [ ITE0 CAndPerm #cAndPermCap;
-                           ITE0 (CClearTag || CMove || CChangeAddr) (ITE Src1Pc pcCap #cap1);
+                           ITE0 (Kor [CClearTag; CMove; CChangeAddr]) (ITE Src1Pc pcCap #cap1);
                            ITE0 CSetHigh #cSetHighCap;
                            ITE0 SetBounds #cSetBoundsCap;
                            ITE0 #cjal_cjalr #cJalJalrCap;
                            ITE0 CSeal #cSealCap;
                            ITE0 CUnseal #cUnsealCap ];
 
-      LETC csrIn <- ITE CsrImm (ZeroExtendTo Xlen #rs1IdxFixed) #val1;
+      LETC csrIn <- ITE CsrImm (ZeroExtendTo Xlen rs1IdxFixed) #val1;
 
       LETC mcycleLsb : Bit Xlen <- TruncLsbTo Xlen Xlen mcycle;
       LETC mcycleMsb : Bit Xlen <- TruncMsbTo Xlen Xlen mcycle;
@@ -1181,9 +1476,9 @@ l other values are repeated per lane *)
                                       "mcause" ::= #newMcause ;
                                       "mtval" ::= #newMtval };
 
-      LETC isScrWrite <- CSpecialRw && isNotZero #rs1IdxFixed;
-      LETC newMtdc <- ITE (!#isException && #isScrWrite && #rs2IdxFixed == $Mtdc) #reg1 mtdc;
-      LETC newMscratchc <- ITE (!#isException && #isScrWrite && #rs2IdxFixed == $Mscratchc) #reg1 mscratch;
+      LETC isScrWrite <- CSpecialRw && isNotZero rs1IdxFixed;
+      LETC newMtdc <- ITE (!#isException && #isScrWrite && rs2IdxFixed == $Mtdc) #reg1 mtdc;
+      LETC newMscratchc <- ITE (!#isException && #isScrWrite && rs2IdxFixed == $Mscratchc) #reg1 mscratch;
       
       LETC newTag <- #tag1 &&
                        (isZero (TruncLsbTo NumLsb0BitsInstAddr (Xlen - NumLsb0BitsInstAddr) #val1)) &&
@@ -1199,9 +1494,9 @@ l other values are repeated per lane *)
                          (STRUCT { "tag" ::= pcTag && !BoundsException;
                                    "ecap" ::= pcCap ;
                                    "addr" ::= pcVal (* + ITE0 (pcTag && !BoundsException && ECall) $(InstSz/8) *) })
-                         (ITE (#isScrWrite && #rs2IdxFixed == $Mepcc) #newCap mepcc);
+                         (ITE (#isScrWrite && rs2IdxFixed == $Mepcc) #newCap mepcc);
 
-      LETC newMtcc <- ITE (!#isException && #isScrWrite && #rs2IdxFixed == $Mtcc) #newCap mtcc;
+      LETC newMtcc <- ITE (!#isException && #isScrWrite && rs2IdxFixed == $Mtcc) #newCap mtcc;
 
       LETC newScrs : Scrs <- STRUCT { "mtcc" ::= #newMtcc ;
                                       "mtdc" ::= #newMtdc ;
@@ -1212,12 +1507,12 @@ l other values are repeated per lane *)
                                              "ecap" ::= #resCap;
                                              "addr" ::= #resVal };
 
-      LETC stall : Bool <- Kor [ readReg1 && #wait1;
-                                 readReg2 && #wait2;
+      LETC stall : Bool <- Kor [ ReadReg1 && #wait1;
+                                 ReadReg2 && #wait2;
                                  #isException && isNotZero (pack waits)] ;
 
-      LETC pcNotLinkAddrTagVal : Bool <- #isException || MRet || (Branch && #branchTaken) || CJal || CJalr;
-      LETC pcNotLinkAddrCap : Bool <- #isException || MRet || CJalr;
+      LETC pcNotLinkAddrTagVal : Bool <- Kor [#isException; MRet; (Branch && #branchTaken); CJal; CJalr];
+      LETC pcNotLinkAddrCap : Bool <- Kor [#isException; MRet; CJalr];
 
       LETC newPcTag : Bool <- ITE #isException
                                 (mtcc @% "tag")
@@ -1235,7 +1530,7 @@ l other values are repeated per lane *)
       LETC newPcVal : Addr <- ITE #isException
                                 (mtcc @% "addr")
                                 (caseDefault [ (MRet, mepcc @% "addr");
-                                               (Branch && #branchTaken || CJal || CJalr, #resAddrVal) ]
+                                               (Kor [Branch && #branchTaken; CJal; CJalr], #resAddrVal) ]
                                    #linkAddr ) ;
 
       LETC newPcc <- STRUCT { "tag" ::= #newPcTag ;
@@ -1243,12 +1538,12 @@ l other values are repeated per lane *)
                               "addr" ::=  #newPcVal };
 
       LETC newRegs : Array NumRegs FullECapWithTag <-
-                       UpdateArrayConst (regs @[ #rdIdx <- ITE (writeReg && !#isException )
+                       UpdateArrayConst (regs @[ #rdIdx <- ITE (WriteReg && !#isException )
                                                              #res
                                                              (regs @[ #rdIdx ]) ]) Fin.F1 #newPcc;
 
       LETC newWaits : Array NumRegs Bool <-
-                        waits @[ #rdIdx <- multiCycle && isNotZero #rdIdx && !#isException ];
+                        waits @[ #rdIdx <- MultiCycle && isNotZero #rdIdx && !#isException ];
       
       LETC ret: AluOut <- STRUCT { "regs" ::= #newRegs ;
                                    "waits" ::= #newWaits ;
@@ -1263,6 +1558,8 @@ l other values are repeated per lane *)
                                    "Branch" ::= Branch && !#isException ;
                                    "CJal" ::= CJal && !#isException ;
                                    "CJalr" ::= CJalr && !#isException ;
+                                   "LoadUnsigned" ::= LoadUnsigned ;
+                                   "memSz" ::= memSz ;
                                    "pcNotLinkAddrTagVal" ::= #pcNotLinkAddrTagVal ;
                                    "pcNotLinkAddrCap" ::= #pcNotLinkAddrCap ;
                                    "stall" ::= #stall ;
