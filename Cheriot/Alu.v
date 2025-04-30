@@ -168,6 +168,7 @@ Section Fields.
   Definition rdFixed := extractFieldFromInst rdFixedField.
   Definition c0 := 0.
   Definition ra := 1.
+  Definition sp := 2.
 
   (* TODO: These should be derived from encoder/decoder *)
   Definition imm := extractFieldFromInst immField.
@@ -605,36 +606,36 @@ Definition DecodeOut :=
               "ReadReg2" :: Bool ;
               "WriteReg" :: Bool ;
  
-            "MultiCycle" :: Bool ; (* CLB, CLH, CLW, CLBU, CLHU, CLC *)
+            "MultiCycle" :: Bool ;
  
-                "Src1Pc" :: Bool ; (* CJAL, BNE, BEq, BLT, BGE, BLTU, BGEU, AUIPCC *)
-               "InvSrc2" :: Bool ; (* SLTI, SLTIU, Sub, SLT, SLTU, CSub, CGetLen *)
-              "Src2Zero" :: Bool ; (* CSetAddr,
-                                      CGetAddr, CSetHigh, CAndPerm, CClearTag, CMove, CSeal, CUnseal,
-                                      CSetBounds, CSetBoundsExact, CSetBoundsRoundDown, CSetBoundsImm *)
-        "ZeroExtendSrc1" :: Bool ; (* SLTIU, SRLI, SLTU, SRL, BLTU, BGEU, AUIPCC,
-                                      CIncAddr, CIncAddrImm, CSetAddr *)
-                "Branch" :: Bool ; (* BEq, BNE, BLT, BGE, BLTU, BGEU *)
-              "BranchLt" :: Bool ; (* BLT, BGE, BLTU, BGEU *)
-             "BranchNeg" :: Bool ; (* BNE, BGE, BGEU *)
-                   "Slt" :: Bool ; (* SLTI, SLTIU, SLT, SLTU *)
-                   "Add" :: Bool ; (* AddI, Add, Sub, CIncAddr, CIncAddrImm, CSetAddr, CSub *)
-                   "Xor" :: Bool ; (* XorI, Xor *)
-                    "Or" :: Bool ; (* OrI, Or,
-                                      CGetAddr, CSetHigh, CAndPerm, CClearTag, CMove, CSeal, CUnseal,
-                                      CSetBounds, CSetBoundsExact, CSetBoundsRoundDown, CSetBoundsImm *)
-                   "And" :: Bool ; (* AndI, And *)
-                    "Sl" :: Bool ; (* SLLI, SLL *)
-                    "Sr" :: Bool ; (* SRLI, SRAI, SRL, SRA *)
-                 "Store" :: Bool ; (* CSB, CSH, CSW, CSC *)
-                  "Load" :: Bool ; (* CLB, CLH, CLW, CLBU, CLHU, CLC *)
-          "LoadUnsigned" :: Bool ; (* CLBU, CLHU *)
-             "SetBounds" :: Bool ; (* CSetBounds, CSetBoundsExact, CSetBoundsImm, CSetBoundsRoundDown *)
-        "SetBoundsExact" :: Bool ; (* CSetBoundsExact *)
-          "BoundsSubset" :: Bool ; (* CBoundsRoundDown *)
-       "BoundsFixedBase" :: Bool ; (* CBoundsRoundDown *)
+                "Src1Pc" :: Bool ;
+               "InvSrc2" :: Bool ;
+              "Src2Zero" :: Bool ;
+                                  
+                                  
+        "ZeroExtendSrc1" :: Bool ;
+                                  
+                "Branch" :: Bool ;
+              "BranchLt" :: Bool ;
+             "BranchNeg" :: Bool ;
+                   "Slt" :: Bool ;
+                   "Add" :: Bool ;
+                   "Xor" :: Bool ;
+                    "Or" :: Bool ;
+                                  
+                                  
+                   "And" :: Bool ;
+                    "Sl" :: Bool ;
+                    "Sr" :: Bool ;
+                 "Store" :: Bool ;
+                  "Load" :: Bool ;
+          "LoadUnsigned" :: Bool ;
+             "SetBounds" :: Bool ;
+        "SetBoundsExact" :: Bool ;
+          "BoundsSubset" :: Bool ;
+       "BoundsFixedBase" :: Bool ;
    
-           "CChangeAddr" :: Bool ; (* CIncAddr, CIncAddrImm, CSetAddr, AUIPCC *)
+           "CChangeAddr" :: Bool ;
                 "AuiPcc" :: Bool ;
               "CGetBase" :: Bool ;
                "CGetTop" :: Bool ;
@@ -656,21 +657,21 @@ Definition DecodeOut :=
      
                   "CJal" :: Bool ;
                  "CJalr" :: Bool ;
-                "AuiAll" :: Bool ; (* AUIPCC, AUICGP *)
+                "AuiAll" :: Bool ;
                    "Lui" :: Bool ;
    
             "CSpecialRw" :: Bool ;
                   "MRet" :: Bool ;
-                 "ECall" :: Bool ; (* ECall, Wfi *)
+                 "ECall" :: Bool ;
                 "EBreak" :: Bool ;
                 "FenceI" :: Bool ;
                  "Fence" :: Bool ;
-               "Illegal" :: Bool ;
+            "NotIllegal" :: Bool ;
    
-                 "CsrRw" :: Bool ; (* CSRRW, CSRRWI *)
-                "CsrSet" :: Bool ; (* CSRRS, CSRRSI *)
-              "CsrClear" :: Bool ; (* CSRRC, CSRRCI *)
-                "CsrImm" :: Bool   (* CSRRWI, CSRRSI, CSRRCI; rs1 field *) }.
+                 "CsrRw" :: Bool ;
+                "CsrSet" :: Bool ;
+              "CsrClear" :: Bool ;
+                "CsrImm" :: Bool }.
 
 Definition AluIn :=
   STRUCT_TYPE {
@@ -838,10 +839,10 @@ Section Decode.
       LETC Crrl: Bool <- #cheriot1Src && #rs2Idx == $8;
       LETC Cram: Bool <- #cheriot1Src && #rs2Idx == $9;
 
-      LETC Multicycle: Bool <- #Load;
+      LETC MultiCycle: Bool <- #Load;
 
       LETC Src1Pc: Bool <- Kor [#CJal; #Branch; #AuiPcc];
-      LETC InvSrc2: Bool <- Kor [#SltI; #SltuI; #Slt; #Sltu; #CSub; #CGetLen];
+      LETC InvSrc2: Bool <- Kor [#SltI; #SltuI; #Slt; #Sltu; #Sub; #CSub; #CGetLen];
       LETC Src2Zero: Bool <- Kor [#CSetAddr; #CGetAddr; #CSetHigh; #CAndPerm; #CClearTag;
                                   #CMove; #CSeal; #CUnseal; #CSetBounds; #CSetBoundsExact;
                                   #CSetBoundsRoundDown; #CSetBoundsImm];
@@ -865,19 +866,20 @@ Section Decode.
       
       LETC isCsr: Bool <- #isSys && isNotZero (#f3$[1:0]);
 
-      LETC SignExtendImm: Bool <- Kor [#AddI; #SltI; #XorI; #OrI; #AndI; #CIncAddrImm; #Load; #CJalr];
+      LETC SignExtendImmNoLoadNoCJalr <- Kor [#AddI; #SltI; #XorI; #OrI; #AndI; #CIncAddrImm];
+      LETC SignExtendImm: Bool <- Kor [#SignExtendImmNoLoadNoCJalr; #Load; #CJalr];
       LETC ZeroExtendImm: Bool <- Kor [#SltuI; #CSetBoundsImm; #SllI; #SrlI; #SraI];
       LETC AuiAll: Bool <- Kor [#AuiPcc; #AuiCgp];
 
       LETC ECallAll: Bool <- Kor [#ECall; #Wfi];
 
-      LETC Illegal: Bool <- !(Kor [#Lui; #AuiAll; #CJal; #CJalr; #Branch; #Load; #Store;
-                                   #AddAll; #SltAll; #XorAll; #OrAll; #AndAll; #SlAll; #SrAll;
-                                   #Fence; #FenceI; #ECallAll; #EBreak; #MRet; #isCsr;
-                                   #CGetPerm; #CGetType; #CGetBase; #CGetLen;
-                                   #CGetTag; #CGetHigh; #CGetTop;
-                                   #CTestSubset; #CSetEqual;
-                                   #CSpecialRw; #Crrl; #Cram]);
+      LETC NotIllegal: Bool <- Kor [#Lui; #AuiAll; #CJal; #CJalr; #Branch; #Load; #Store;
+                                    #AddAll; #SltAll; #XorAll; #OrAll; #AndAll; #SlAll; #SrAll;
+                                    #Fence; #FenceI; #ECallAll; #EBreak; #MRet; #isCsr;
+                                    #CGetPerm; #CGetType; #CGetBase; #CGetLen;
+                                    #CGetTag; #CGetHigh; #CGetTop;
+                                    #CTestSubset; #CSetEqual;
+                                    #CSpecialRw; #Crrl; #Cram];
 
       LETC ReadReg1: Bool <- Kor [#AuiCgp; #CJalr; #Branch; #Load; #Store; #immediate; #nonImmediate;
                                   #isCsr; #cheriot];
@@ -905,10 +907,8 @@ Section Decode.
 
       LETC ImmExtRight: Bool <- Kor [#AuiAll; #Lui];
 
-      LETC ImmForData: Bool <- Kor [#SignExtendImm; #ZeroExtendImm; #AuiAll];
-      LETC ImmForAddr: Bool <- Kor [#SignExtendImm; #Branch; #CJal; #Store];
-
-      LETC Compressed: Bool <- isCompressed inst;
+      LETC ImmForData: Bool <- Kor [#SignExtendImmNoLoadNoCJalr; #ZeroExtendImm; #AuiAll];
+      LETC ImmForAddr: Bool <- Kor [#Branch; #CJal; #CJalr; #Load; #Store];
 
       LETC res: DecodeOut <-
                   STRUCT { "rs1Idx" ::= #rs1Idx ;
@@ -917,7 +917,7 @@ Section Decode.
                            "decImm" ::= #decImm ;
                             "memSz" ::= #memSz ;
 
-                       "Compressed" ::= #Compressed;
+                       "Compressed" ::= $$false;
                       "ImmExtRight" ::= #ImmExtRight ;
                        "ImmForData" ::= #ImmForData ;
                        "ImmForAddr" ::= #ImmForAddr ;                           
@@ -926,7 +926,7 @@ Section Decode.
                          "ReadReg2" ::= #ReadReg2 ;
                          "WriteReg" ::= #WriteReg ;
             
-                       "MultiCycle" ::= #Multicycle ;
+                       "MultiCycle" ::= #MultiCycle ;
             
                            "Src1Pc" ::= #Src1Pc ;
                           "InvSrc2" ::= #InvSrc2 ;
@@ -981,7 +981,7 @@ Section Decode.
                            "EBreak" ::= #EBreak ;
                            "FenceI" ::= #FenceI ;
                             "Fence" ::= #Fence ;
-                          "Illegal" ::= #Illegal ;
+                       "NotIllegal" ::= #NotIllegal ;
               
                             "CsrRw" ::= #CsrRw ;
                            "CsrSet" ::= #CsrSet ;
@@ -990,11 +990,375 @@ Section Decode.
            
       RetE #res).
 
+  Definition decodeCompQ0: DecodeOut ## ty :=
+    ( LETC rdIdx: Bit RegFixedIdSz <- ZeroExtendTo RegFixedIdSz (inst$[4:2]);
+      LETC rs2Idx: Bit RegFixedIdSz <- ZeroExtendTo RegFixedIdSz (inst$[4:2]);
+      LETC f3: Bit 3 <- inst$[15:13];
+      LETC CIncAddrImm: Bool <- isZero #f3;
+      LETC rs1Idx: Bit RegFixedIdSz <- ITE #CIncAddrImm
+                                         $sp
+                                         (ZeroExtendTo RegFixedIdSz (inst$[9:7]));
+      LETC memSz: Bit 2 <- #f3$[1:0];
+      LETC Store: Bool <- unpack Bool (#f3$[2:2]);
+      LETC Load: Bool <- !(#Store || #CIncAddrImm);
+      LETC NotIllegal: Bool <- isNotZero (inst$[15:0]) && (isZero #f3 || unpack Bool (#memSz$[1:1]));
+      LETC immMem_6_3: Bit 4 <- ({< (inst$[5:5]), (inst$[12:10]) >});
+      LETC memDecImm <- ITE (unpack Bool (#memSz$[0:0]))
+                          ({<(inst$[6:6]), #immMem_6_3, $$(wzero 3)>})
+                          ({< $$(WO~0), #immMem_6_3, (inst$[6:6]), $$(wzero 2)>});
+      LETC cIncImm <-  ({<(inst$[10:7]), (inst$[12:11]), (inst$[5:5]), (inst$[6:6]) , $$(wzero 2)>});
+      LETC decImm: Bit DecImmSz <- ITE #CIncAddrImm
+                                     (SignExtendTo DecImmSz #cIncImm)
+                                     (SignExtendTo DecImmSz #memDecImm);
+      LETC res: DecodeOut <-
+                  STRUCT { "rs1Idx" ::= #rs1Idx ;
+                           "rs2Idx" ::= #rs2Idx ;
+                            "rdIdx" ::= #rdIdx ;
+                           "decImm" ::= #decImm ;
+                            "memSz" ::= #memSz ;
+
+                       "Compressed" ::= $$true ;
+                      "ImmExtRight" ::= $$false ;
+                       "ImmForData" ::= #CIncAddrImm ;
+                       "ImmForAddr" ::= !#CIncAddrImm ;
+
+                         "ReadReg1" ::= $$true ;
+                         "ReadReg2" ::= #Store ;
+                         "WriteReg" ::= !#Store ;
+            
+                       "MultiCycle" ::= #Load ;
+            
+                           "Src1Pc" ::= $$false ;
+                          "InvSrc2" ::= $$false ;
+                         "Src2Zero" ::= $$false ;
+                   "ZeroExtendSrc1" ::= #CIncAddrImm ;
+                           "Branch" ::= $$false ;
+                         "BranchLt" ::= $$false ;
+                        "BranchNeg" ::= $$false ;
+                              "Slt" ::= $$false ;
+                              "Add" ::= #CIncAddrImm ;
+                              "Xor" ::= $$false ;
+                               "Or" ::= $$false ;
+                              "And" ::= $$false ;
+                               "Sl" ::= $$false ;
+                               "Sr" ::= $$false ;
+                            "Store" ::= #Store ;
+                             "Load" ::= #Load ;
+                     "LoadUnsigned" ::= $$false ;
+                        "SetBounds" ::= $$false ;
+                   "SetBoundsExact" ::= $$false ;
+                     "BoundsSubset" ::= $$false ;
+                  "BoundsFixedBase" ::= $$false ;
+              
+                      "CChangeAddr" ::= #CIncAddrImm ;
+                           "AuiPcc" ::= $$false ;
+                         "CGetBase" ::= $$false ;
+                          "CGetTop" ::= $$false ;
+                          "CGetLen" ::= $$false ;
+                         "CGetPerm" ::= $$false ;
+                         "CGetType" ::= $$false ;
+                          "CGetTag" ::= $$false ;
+                         "CGetHigh" ::= $$false ;
+                             "Cram" ::= $$false ;
+                             "Crrl" ::= $$false ;
+                        "CSetEqual" ::= $$false ;
+                      "CTestSubset" ::= $$false ;
+                         "CAndPerm" ::= $$false ;
+                        "CClearTag" ::= $$false ;
+                         "CSetHigh" ::= $$false ;
+                            "CMove" ::= $$false ;
+                            "CSeal" ::= $$false ;
+                          "CUnseal" ::= $$false ;
+                
+                             "CJal" ::= $$false ;
+                            "CJalr" ::= $$false ;
+                           "AuiAll" ::= $$false ;
+                              "Lui" ::= $$false ;
+              
+                       "CSpecialRw" ::= $$false ;
+                             "MRet" ::= $$false ;
+                            "ECall" ::= $$false ;
+                           "EBreak" ::= $$false ;
+                           "FenceI" ::= $$false ;
+                            "Fence" ::= $$false ;
+                       "NotIllegal" ::= #NotIllegal ;
+              
+                            "CsrRw" ::= $$false ;
+                           "CsrSet" ::= $$false ;
+                         "CsrClear" ::= $$false ;
+                           "CsrImm" ::= $$false };
+          RetE #res).
+
+  Definition decodeCompQ1: DecodeOut ## ty :=
+    ( LETC f3: Bit 3 <- inst$[15:13];
+      LETC rs1Idx: Bit RegFixedIdSz <- ITE (unpack Bool (#f3$[2:2]))
+                                         (ZeroExtendTo RegFixedIdSz (inst$[9:7]))
+                                         (ITE (#f3$[1:0] == $2) $c0 (inst$[11:7]));
+      LETC rdIdx: Bit RegFixedIdSz <- ITE (unpack Bool (#f3$[2:2]))
+                                         (ITE (#f3$[1:0] == $1) $c0 (ZeroExtendTo RegFixedIdSz (inst$[9:7])))
+                                         (inst$[11:7]);
+      LETC rs2Idx: Bit RegFixedIdSz <- ITE (isNotZero (#f3$[1:0])) $0 (ZeroExtendTo RegFixedIdSz (inst$[4:2]));
+
+      LETC AddI: Bool <- (isZero #f3 || (#f3 == $2));
+      LETC CJal: Bool <- (#f3$[1:0]) == $1;
+
+      LETC cjalImm: Bit DecImmSz <- SignExtendTo DecImmSz ({<(inst$[12:12]), (inst$[8:8]), (inst$[10:9]),
+                                          (inst$[6:6]), (inst$[7:7]), (inst$[2:2]), (inst$[11:11]), (inst$[5:3]),
+                                          $$WO~0>});
+      
+      LETC CIncAddrImm: Bool <- #f3 == $3 && (inst$[11:7] == $2);
+
+      LETC cIncImm: Bit DecImmSz <- SignExtendTo DecImmSz ({< (inst$[12:12]), (inst$[4:3]), (inst$[5:5]),
+                                          (inst$[2:2]), (inst$[6:6]), $$(wzero 4) >});
+
+      LETC Lui: Bool <- #f3 == $3 && (inst$[11:7] != $2);
+
+      LETC alu: Bool <- #f3 == $4;
+      LETC someAlu: Bool <- inst$[12:12] == $0;
+
+      LETC SrlI: Bool <- #alu && (isZero (inst$[11:10])) && #someAlu;
+      LETC SraI: Bool <- #alu && (inst$[11:10] == $1) && #someAlu;
+      LETC AndI: Bool <- #alu && (inst$[11:10] == $2);
+
+      LETC arith: Bool <- #alu && (inst$[11:10] == $3) && #someAlu;
+
+      LETC Sub: Bool <- #arith && isZero (inst$[6:5]);
+      LETC Xor: Bool <- #arith && (inst$[6:5] == $1);
+      LETC  Or: Bool <- #arith && (inst$[6:5] == $2);
+      LETC And: Bool <- #arith && (inst$[6:5] == $3);
+
+      LETC Branch: Bool <- isAllOnes (#f3$[2:1]);
+      LETC BranchNeg: Bool <- unpack Bool (#f3$[0:0]);
+
+      LETC branchImm: Bit DecImmSz <- SignExtendTo DecImmSz ({<(inst$[12:12]), (inst$[6:5]),
+                                            (inst$[2:2]), (inst$[11:10]), (inst$[4:3]), $$WO~0 >});
+
+      LETC normalImm: Bit 6 <- ({< inst$[12:12], (inst$[6:2]) >});
+
+      LETC decImm: Bit DecImmSz <- caseDefault [(#CJal, #cjalImm);
+                                                (#Branch, #branchImm);
+                                                (#CIncAddrImm, #cIncImm);
+                                                (#Lui, SignExtendTo DecImmSz ({<#normalImm, $$WO~0>}))]
+                                     (SignExtendTo DecImmSz #normalImm);
+
+      LETC ImmForData: Bool <- Kor [#AddI; #CIncAddrImm; #Lui; #SrlI; #SraI; #AndI];
+      LETC ImmForAddr: Bool <- Kor [#CJal; #Branch];
+
+      LETC ReadReg1: Bool <- !Kor [#CJal; #Lui];
+      LETC ReadReg2: Bool <- (#f3 == $4) && (inst$[11:10] == $3);
+      LETC WriteReg: Bool <- !#Branch;
+      
+      LETC NotIllegal: Bool <- #f3 == $4 && !(unpack Bool (inst$[12:12]));
+
+      LETC res: DecodeOut <-
+                  STRUCT { "rs1Idx" ::= #rs1Idx ;
+                           "rs2Idx" ::= #rs2Idx ;
+                            "rdIdx" ::= #rdIdx ;
+                           "decImm" ::= #decImm ;
+                            "memSz" ::= $0 ;
+
+                       "Compressed" ::= $$true;
+                      "ImmExtRight" ::= #Lui ;
+                       "ImmForData" ::= #ImmForData ;
+                       "ImmForAddr" ::= #ImmForAddr ;
+
+                         "ReadReg1" ::= #ReadReg1 ;
+                         "ReadReg2" ::= #ReadReg2 ;
+                         "WriteReg" ::= #WriteReg ;
+            
+                       "MultiCycle" ::= $$false ;
+            
+                           "Src1Pc" ::= Kor [#CJal; #Branch] ;
+                          "InvSrc2" ::= #Sub ;
+                         "Src2Zero" ::= $$false ;
+                   "ZeroExtendSrc1" ::= #CIncAddrImm ;
+                           "Branch" ::= #Branch ;
+                         "BranchLt" ::= $$false ;
+                        "BranchNeg" ::= #BranchNeg ;
+                              "Slt" ::= $$false ;
+                              "Add" ::= Kor [#AddI; #CIncAddrImm; #Sub] ;
+                              "Xor" ::= #Xor ;
+                               "Or" ::= $$false ;
+                              "And" ::= #And ;
+                               "Sl" ::= $$false ;
+                               "Sr" ::= (#SrlI || #SraI) ;
+                            "Store" ::= $$false ;
+                             "Load" ::= $$false ;
+                     "LoadUnsigned" ::= $$false ;
+                        "SetBounds" ::= $$false ;
+                   "SetBoundsExact" ::= $$false ;
+                     "BoundsSubset" ::= $$false ;
+                  "BoundsFixedBase" ::= $$false ;
+              
+                      "CChangeAddr" ::= #CIncAddrImm ;
+                           "AuiPcc" ::= $$false ;
+                         "CGetBase" ::= $$false ;
+                          "CGetTop" ::= $$false ;
+                          "CGetLen" ::= $$false ;
+                         "CGetPerm" ::= $$false ;
+                         "CGetType" ::= $$false ;
+                          "CGetTag" ::= $$false ;
+                         "CGetHigh" ::= $$false ;
+                             "Cram" ::= $$false ;
+                             "Crrl" ::= $$false ;
+                        "CSetEqual" ::= $$false ;
+                      "CTestSubset" ::= $$false ;
+                         "CAndPerm" ::= $$false ;
+                        "CClearTag" ::= $$false ;
+                         "CSetHigh" ::= $$false ;
+                            "CMove" ::= $$false ;
+                            "CSeal" ::= $$false ;
+                          "CUnseal" ::= $$false ;
+                
+                             "CJal" ::= #CJal ;
+                            "CJalr" ::= $$false ;
+                           "AuiAll" ::= $$false ;
+                              "Lui" ::= $$false ;
+              
+                       "CSpecialRw" ::= $$false ;
+                             "MRet" ::= $$false ;
+                            "ECall" ::= $$false ;
+                           "EBreak" ::= $$false ;
+                           "FenceI" ::= $$false ;
+                            "Fence" ::= $$false ;
+                       "NotIllegal" ::= #NotIllegal ;
+              
+                            "CsrRw" ::= $$false ;
+                           "CsrSet" ::= $$false ;
+                         "CsrClear" ::= $$false ;
+                           "CsrImm" ::= $$false };
+      RetE #res).
+
+  Definition decodeCompQ2: DecodeOut ## ty :=
+    ( LETC f3: Bit 3 <- inst$[15:13];
+
+      LETC rs2Idx: Bit RegFixedIdSz <- inst$[6:2];
+      LETC rs1Idx: Bit RegFixedIdSz <- ITE (unpack Bool (#f3$[1:1]))
+                                         $sp
+                                         (ITE (#f3 == $4 && !(unpack Bool (inst$[12:12])) && isNotZero #rs2Idx)
+                                            $c0
+                                            inst$[11:7]);
+      LETC rdIdx: Bit RegFixedIdSz <- ITE (#f3 == $4 && isZero #rs2Idx && !(unpack Bool (inst$[12:12])))
+                                        $c0
+                                        (inst$[11:7]);
+      
+      LETC SllI: Bool <- isZero #f3;
+
+      LETC Load: Bool <- #f3$[2:1] == $1;
+      LETC Store: Bool <- #f3$[2:1] == $3;
+
+      LETC memSz: Bit MemSzSz <- ({< $$WO~1, (#f3$[0:0])>});
+
+      LETC Add: Bool <- #f3 == $4 && isNotZero #rs2Idx && isNotZero (inst$[11:7]);
+      LETC CJalr: Bool <- #f3 == $4 && isZero #rs2Idx && isNotZero (inst$[11:7]);
+      LETC EBreak: Bool <- #f3 == $4 && isZero #rs2Idx && isZero (inst$[11:7]) && unpack Bool (inst$[12:12]);
+
+      LETC sllImm: Bit DecImmSz <- ZeroExtendTo DecImmSz #rs2Idx;
+      LETC ldImm: Bit 9 <- ({< ITE0 (unpack Bool (#f3$[0:0])) (inst$[4:4]), (inst$[3:2]), (inst$[12:12]),
+                               (inst$[6:5]), ITE0 (!(unpack Bool (#f3$[0:0]))) (inst$[4:4]), $$(wzero 2) >});
+
+      LETC stImm: Bit 9 <- ({< ITE0 (unpack Bool (#f3$[0:0])) (inst$[9:9]), (inst$[8:7]), (inst$[12:10]),
+                               ITE0 (!(unpack Bool (#f3$[0:0]))) (inst$[9:9]), $$(wzero 2) >});
+
+      LETC decImm: Bit DecImmSz <- Kor [ITE0 #SllI #sllImm;
+                                        ITE0 (#Load || #Store) (ZeroExtendTo DecImmSz (ITE #Load #ldImm #stImm))];
+
+      LETC res: DecodeOut <-
+                  STRUCT { "rs1Idx" ::= #rs1Idx ;
+                           "rs2Idx" ::= #rs2Idx ;
+                            "rdIdx" ::= #rdIdx ;
+                           "decImm" ::= #decImm ;
+                            "memSz" ::= #memSz ;
+
+                       "Compressed" ::= $$true;
+                      "ImmExtRight" ::= $$false ;
+                       "ImmForData" ::= #SllI ;
+                       "ImmForAddr" ::= Kor [#Load; #Store; #CJalr] ;
+
+                         "ReadReg1" ::= !#EBreak ;
+                         "ReadReg2" ::= (unpack Bool (#f3$[2:2]) && !#EBreak) ;
+                         "WriteReg" ::= !(Kor [#EBreak; #Store]) ;
+            
+                       "MultiCycle" ::= $$false ;
+            
+                           "Src1Pc" ::= $$false ;
+                          "InvSrc2" ::= $$false ;
+                         "Src2Zero" ::= $$false ;
+                   "ZeroExtendSrc1" ::= $$false ;
+                           "Branch" ::= $$false ;
+                         "BranchLt" ::= $$false ;
+                        "BranchNeg" ::= $$false ;
+                              "Slt" ::= $$false ;
+                              "Add" ::= #Add ;
+                              "Xor" ::= $$false ;
+                               "Or" ::= $$false ;
+                              "And" ::= $$false ;
+                               "Sl" ::= #SllI ;
+                               "Sr" ::= $$false ;
+                            "Store" ::= #Store ;
+                             "Load" ::= #Load ;
+                     "LoadUnsigned" ::= $$false ;
+                        "SetBounds" ::= $$false ;
+                   "SetBoundsExact" ::= $$false ;
+                     "BoundsSubset" ::= $$false ;
+                  "BoundsFixedBase" ::= $$false ;
+              
+                      "CChangeAddr" ::= $$false ;
+                           "AuiPcc" ::= $$false ;
+                         "CGetBase" ::= $$false ;
+                          "CGetTop" ::= $$false ;
+                          "CGetLen" ::= $$false ;
+                         "CGetPerm" ::= $$false ;
+                         "CGetType" ::= $$false ;
+                          "CGetTag" ::= $$false ;
+                         "CGetHigh" ::= $$false ;
+                             "Cram" ::= $$false ;
+                             "Crrl" ::= $$false ;
+                        "CSetEqual" ::= $$false ;
+                      "CTestSubset" ::= $$false ;
+                         "CAndPerm" ::= $$false ;
+                        "CClearTag" ::= $$false ;
+                         "CSetHigh" ::= $$false ;
+                            "CMove" ::= $$false ;
+                            "CSeal" ::= $$false ;
+                          "CUnseal" ::= $$false ;
+                
+                             "CJal" ::= $$false ;
+                            "CJalr" ::= #CJalr ;
+                           "AuiAll" ::= $$false ;
+                              "Lui" ::= $$false ;
+              
+                       "CSpecialRw" ::= $$false ;
+                             "MRet" ::= $$false ;
+                            "ECall" ::= $$false ;
+                           "EBreak" ::= #EBreak ;
+                           "FenceI" ::= $$false ;
+                            "Fence" ::= $$false ;
+                       "NotIllegal" ::= $$false ;
+              
+                            "CsrRw" ::= $$false ;
+                           "CsrSet" ::= $$false ;
+                         "CsrClear" ::= $$false ;
+                           "CsrImm" ::= $$false };
+      RetE #res).
+
   Definition decode : DecodeOut ## ty :=
-    ( RetE (Const ty Default)).
+    ( LETE compQ0: DecodeOut <- decodeCompQ0;
+      LETE compQ1: DecodeOut <- decodeCompQ1;
+      LETE compQ2: DecodeOut <- decodeCompQ2;
+      LETE fullInst: DecodeOut <- decodeFullInst;
+      LETC instSz: Bit 2 <- TruncLsbTo 2 _ inst;
+      LETC res: DecodeOut <- ITE (unpack Bool (#instSz$[1:1]))
+                               (ITE (unpack Bool (#instSz$[0:0]))
+                                  #fullInst
+                                  #compQ2)
+                               (ITE (unpack Bool (#instSz$[0:0]))
+                                  #compQ1
+                                  #compQ0);
+      RetE #res).
 End Decode.
 
-(* Decode, Load, LoadCap, Store, Fetch *)
+(* MemBanks, Clut, Pipelines (Load, LoadCap, Store, Fetch) *)
 Section Alu.
   Variable ty: Kind -> Type.
 
@@ -1107,7 +1471,7 @@ Section Alu.
   Local Definition           EBreak: Bool @# ty := aluIn @% "decodeOut" @% "EBreak".
   Local Definition           FenceI: Bool @# ty := aluIn @% "decodeOut" @% "FenceI".
   Local Definition            Fence: Bool @# ty := aluIn @% "decodeOut" @% "Fence".
-  Local Definition          Illegal: Bool @# ty := aluIn @% "decodeOut" @% "Illegal".
+  Local Definition       NotIllegal: Bool @# ty := aluIn @% "decodeOut" @% "NotIllegal".
 
   Local Definition            CsrRw: Bool @# ty := aluIn @% "decodeOut" @% "CsrRw".
   Local Definition           CsrSet: Bool @# ty := aluIn @% "decodeOut" @% "CsrSet".
@@ -1158,7 +1522,8 @@ Section Alu.
       LETC cap2NotSealed <- isNotSealed #cap2OType;
 
       LETC src1 <- ITE Src1Pc pcVal #val1;
-      LETC src2Full <- ITE ImmForData #fullImmSXlen
+      LETC src2Full <- ITE ImmForData
+                         #fullImmSXlen
                          (SignExtend 1 (ITE0 (!Src2Zero) #val2));
       LETC adderSrc1 <- ITE CGetLen #cap1Top
                           (ITE ZeroExtendSrc1 (ZeroExtend 1 #src1) (SignExtend 1 #src1));
@@ -1300,7 +1665,7 @@ Section Alu.
                                ReadReg2 && regIdxWrong rs2IdxFixed;
                                WriteReg && regIdxWrong rdIdxFixed ];
 
-      LETC illegal <- Kor [Illegal; #isCsr && !#validCsr; CSpecialRw && !#validScr; #wrongRegId];
+      LETC illegal <- Kor [!NotIllegal; #isCsr && !#validCsr; CSpecialRw && !#validScr; #wrongRegId];
 
       LETC capException <-
         (* Note: Kor is correct because of disjointness of capSrException with rest *)
