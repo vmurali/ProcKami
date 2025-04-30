@@ -157,10 +157,10 @@ End Clut.
 (* The SRAM containing the Clut entries *)
 Definition ClutRegFile := {|rfIsWrMask := false;
                             rfNum := 1;
-                            rfDataArray := "clutEntries";
-                            rfRead := Async ["read"];
-                            rfWrite := "write";
-                            rfIdxNum := LgClutSz;
+                            rfDataArray := @^"clutEntries";
+                            rfRead := Async [@^"read"];
+                            rfWrite := @^"write";
+                            rfIdxNum := ClutSz;
                             rfData := ClutEntry;
                             rfInit := RFNonFile _ None |}.
 
@@ -182,7 +182,7 @@ Definition Clut: Mod :=
 (* The combination of the Clut module and SRAM *)
 Definition FullClut := HideMeth (HideMeth (ConcatMod Clut (BaseRegFile ClutRegFile)) @^"write") @^"read".
 
-Set Extraction Output Directory "./extraction".
+Set Extraction Output Directory ".".
 
 Separate Extraction
 

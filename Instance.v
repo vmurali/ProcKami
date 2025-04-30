@@ -4,7 +4,7 @@
   in generating the model's Verilog.
 *)
 
-Require Import Kami.All Kami.Compiler.Compiler Kami.Compiler.Rtl.
+Require Import Kami.All Kami.Compiler.Compiler Kami.Compiler.Rtl Kami.LibMisc.
 Require Import ProcKami.FU.
 Require Import ProcKami.Pipeline.ProcessorCore.
 Require Import ProcKami.MemOps.
@@ -230,4 +230,8 @@ Separate Extraction
          init_state
          sim_step
          initialize_files_zero
+
+         ZeroExtendTo
+         TruncLsbTo
+         TruncMsbTo
          .
