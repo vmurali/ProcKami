@@ -145,7 +145,7 @@ Section Clut.
                                                               "base" ::= #base;
                                                               "ReadPerm" ::= #ReadPerm;
                                                               "WritePerm" ::= #WritePerm});
-                          Write @^"topOrClutIdx": ReqAddr <- ZeroExtendTo (size ReqAddr) #newClutIdx;
+                          Write @^"topOrClutIdx": ReqAddr <- ZeroExtendTo ReqAddrSz #newClutIdx;
                           Retv
                         );
                    Retv );
